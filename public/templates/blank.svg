@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="400" viewBox="0 0 640 400">
+  <defs>
+    <linearGradient id="gblank" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#78716c"/>
+      <stop offset="55%" stop-color="#1c1917"/>
+      <stop offset="100%" stop-color="#000000"/>
+    </linearGradient>
+    <linearGradient id="sblank" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.18"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <rect width="640" height="400" rx="32" fill="url(#gblank)"/>
+  <rect width="640" height="400" rx="32" fill="url(#sblank)"/>
+  <circle cx="540" cy="70" r="90" fill="#ffffff" opacity="0.06"/>
+  <circle cx="580" cy="320" r="120" fill="#78716c" opacity="0.25"/>
+  <rect x="48" y="48" width="120" height="10" rx="5" fill="#fff" opacity="0.85"/>
+  <rect x="48" y="78" width="280" height="28" rx="10" fill="#fff" opacity="0.92"/>
+  <rect x="48" y="118" width="220" height="12" rx="6" fill="#fff" opacity="0.4"/>
+  <rect x="48" y="180" width="160" height="100" rx="18" fill="#fff" opacity="0.14"/>
+  <rect x="228" y="180" width="160" height="100" rx="18" fill="#fff" opacity="0.11"/>
+  <rect x="408" y="180" width="160" height="100" rx="18" fill="#fff" opacity="0.08"/>
+  <rect x="48" y="300" width="96" height="32" rx="16" fill="#fff" opacity="0.9"/>
+  <text x="48" y="362" fill="#fff" font-family="system-ui,sans-serif" font-size="26" font-weight="700">فارغ</text>
+  <text x="48" y="384" fill="#fff" opacity="0.65" font-family="system-ui,sans-serif" font-size="13">SiteForge · Blank</text>
+</svg>

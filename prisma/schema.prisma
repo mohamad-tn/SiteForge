@@ -1,0 +1,155 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum DomainStatus {
+  none
+  pending
+  active
+  error
+}
+
+model User {
+  id           String    @id @default(cuid())
+  name         String?
+  email        String    @unique
+  passwordHash String
+  role         Role      @default(USER)
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  sites        Site[]
+
+  @@index([role])
+  @@index([createdAt])
+  @@index([lastLoginAt])
+}
+
+model Template {
+  id            String   @id @default(cuid())
+  slug          String   @unique
+  name          String
+  nameAr        String
+  description   String
+  descriptionAr String
+  category      String
+  thumbnail     String?
+  content       Json
+  createdAt     DateTime @default(now())
+
+  @@index([category])
+}
+
+model Site {
+  id               String      @id @default(cuid())
+  name             String
+  slug             String      @unique
+  ownerId          String
+  owner            User        @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  draftContent     Json
+  publishedContent Json?
+  publishedAt      DateTime?
+  seoTitle         String?
+  seoDescription   String?
+  ogImage          String?
+  favicon          String?
+  customCss        String?
+  customDomain     String?       @unique
+  domainStatus     DomainStatus  @default(none)
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+  events           SiteEvent[]
+  collections      Collection[]
+  formSubmissions  FormSubmission[]
+  secrets          SiteSecret[]
+
+  @@index([ownerId])
+  @@index([customDomain])
+  @@index([domainStatus])
+  @@index([ownerId, updatedAt])
+  @@index([ownerId, name])
+  @@index([publishedAt])
+  @@index([updatedAt])
+  @@index([createdAt])
+}
+
+model SiteEvent {
+  id        String   @id @default(cuid())
+  siteId    String
+  site      Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  type      String
+  path      String?
+  locale    String?
+  meta      Json?
+  createdAt DateTime @default(now())
+
+  @@index([siteId, createdAt])
+  @@index([siteId, type])
+  @@index([createdAt])
+}
+
+model Collection {
+  id        String           @id @default(cuid())
+  siteId    String
+  site      Site             @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  name      String
+  slug      String
+  fields    Json
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  items     CollectionItem[]
+
+  @@unique([siteId, slug])
+  @@index([siteId])
+}
+
+model CollectionItem {
+  id           String     @id @default(cuid())
+  collectionId String
+  collection   Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  data         Json
+  sort         Int        @default(0)
+  published    Boolean    @default(true)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@index([collectionId, sort])
+  @@index([collectionId, published])
+}
+
+model FormSubmission {
+  id        String   @id @default(cuid())
+  siteId    String
+  site      Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  blockId   String?
+  data      Json
+  createdAt DateTime @default(now())
+
+  @@index([siteId, createdAt])
+  @@index([siteId, blockId])
+}
+
+model SiteSecret {
+  id        String   @id @default(cuid())
+  siteId    String
+  site      Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  /// Unique per site; referenced as secret:NAME or {{secret:NAME}} in httpAction
+  name      String
+  /// AES-256-GCM ciphertext (never returned by owner APIs after write)
+  valueEnc  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([siteId, name])
+  @@index([siteId])
+}

@@ -1,0 +1,53 @@
+SiteForge STATUS
+Updated: 2026-09-09 16:07 Asia/Damascus (UTC+3)
+Dev: http://localhost:3000
+Tenant: demo@siteforge.local / demo1234
+Admin: admin@siteforge.local / admin1234 (/admin)
+Public: http://localhost:3000/s/demo-studio (published only)
+
+Readiness: ~8.9 / 10 editor chrome + templates + effects (NOT Framer freeform canvas)
+
+## Pass focus — Seam collapse + templates + تأثيرات (2026-09-09)
+
+### 1) Collapse UX (Figma/Linear seam)
+- Removed misplaced collapse from header, inspector header, «…» menu, and floating top-corner restore buttons
+- Unified affordance: slim seam pills centered on the panel↔canvas edge (xl+)
+- When collapsed: consistent vertical rail/edge tab re-opens the panel
+- Prefs still in localStorage (sf-editor-left-collapsed / sf-editor-right-collapsed)
+
+### 2) Design depth + Selects
+- Deeper sf-panel chrome (refined borders/shadows, dark-mode contrast)
+- Content language in editor header → polished Radix Select (no native <select>)
+- Theme/font Selects in properties use denser trigger styling + AR/EN theme labels
+- Canvas inset polish
+
+### 3) Ready-made templates (GitHub-marketing aesthetics)
+- Rebuilt CV / Portfolio / Landing / Business / Restaurant in prisma/seed.ts
+- Stronger palettes (deep blacks, teal/violet/amber/orange accents), spacing, hero copy
+- Cohesive navbar → hero → features/gallery → footer; light effect presets on key sections
+- Thumbnail SVGs refreshed under public/templates/*.svg
+- DB re-seeded via `pnpm db:seed` (demo-studio uses upgraded portfolio)
+
+### 4) Site effects — تأثيرات (friendly)
+- Presets: بدون / تلاشي ناعم / انزلاق لأعلى / تكبير تدريجي / طفو / توهج عند التمرير / رفع عند التمرير / ظهور من ضباب
+  (none, soft-fade, slide-up, scale-in, float, glow-hover, lift-hover, blur-in)
+- Optional «ظهور عند التمرير» (IntersectionObserver) on published/public view
+- Whole-block scope clarified when a text part is selected
+- prefers-reduced-motion respected (CSS + IO short-circuit)
+- Inspector tab renamed to تأثيرات / Effects with plain help text
+
+### 5) GitHub push
+- NOT handled this pass (deferred to parent)
+
+### QA
+- vitest: 52 passed (incl. effect preset mapping)
+- tsc --noEmit: clean
+- Do NOT run next build while pnpm dev on :3000
+
+### How to test (AR)
+1) سجّل demo@siteforge.local / demo1234 → افتح محرر demo-studio
+2) على شاشة واسعة: اطوِ اللوحات من حبوب الحافة وسط الحد بين اللوحة والكانفس — ليس من الهيدر
+3) عند الطي: شريط جانبي رفيع يعيد الفتح؛ التفضيل يبقى بعد إعادة التحميل
+4) لغة المحتوى في الشريط العلوي = قائمة Radix أنيقة (وليست قائمة أصلية)
+5) الخصائص → تأثيرات: اختر مسبقاً جاهزاً + «عند التمرير للعنصر» ثم انشر وجرّب /s/demo-studio
+6) لوحة التحكم → قوالب جديدة: سيرة / معرض / هبوط / أعمال / مطعم بمظهر أعمق

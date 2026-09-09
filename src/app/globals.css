@@ -1,0 +1,477 @@
+@import "tailwindcss";
+
+/*
+  SiteForge design tokens — quiet chrome / Vercel+shadcn member-surface idiom.
+  Radii ladder: control (lg) → panel (xl) → card (2xl) → soft (2xl+)
+*/
+
+:root {
+  --background: #f4f1eb;
+  --foreground: #1c1917;
+  --surface: #faf8f5;
+  --border: #e7e1d6;
+  --border-strong: #d6d0c4;
+  --accent: #0f766e;
+  --accent-fg: #ffffff;
+  --card: #ffffff;
+  --muted: #78716c;
+  --ring: color-mix(in oklab, var(--accent) 28%, transparent);
+  --shadow-xs: 0 1px 2px rgba(28, 25, 23, 0.04);
+  --shadow-sm: 0 8px 24px -18px rgba(28, 25, 23, 0.28);
+  --shadow-md: 0 20px 50px -32px rgba(28, 25, 23, 0.38);
+  --radius-sm: 0.65rem;
+  --radius-md: 0.85rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.25rem;
+  --radius-2xl: 1.5rem;
+  --radius-card: 1.65rem;
+  --control-h: 2.5rem;
+  --canvas: linear-gradient(180deg, #f7f4ef 0%, #ebe6dc 100%);
+}
+
+html.dark,
+html[data-theme="dark"] {
+  --background: #0c0a09;
+  --foreground: #fafaf9;
+  --surface: #1c1917;
+  --border: #3f3a36;
+  --border-strong: #57534e;
+  --accent: #2dd4bf;
+  --accent-fg: #042f2e;
+  --card: #171412;
+  --muted: #a8a29e;
+  --ring: color-mix(in oklab, var(--accent) 35%, transparent);
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --shadow-sm: 0 8px 24px -16px rgba(0, 0, 0, 0.55);
+  --shadow-md: 0 24px 60px -28px rgba(0, 0, 0, 0.7);
+  --canvas: linear-gradient(180deg, #0c0a09 0%, #151210 100%);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-cairo), var(--font-geist-sans), system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-cairo), var(--font-geist-sans), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+::selection {
+  background: color-mix(in oklab, var(--accent) 28%, transparent);
+}
+
+input[type="range"] {
+  accent-color: var(--accent);
+}
+
+details > summary {
+  list-style: none;
+}
+details > summary::-webkit-details-marker {
+  display: none;
+}
+
+/* App canvas */
+.sf-canvas {
+  min-height: 100vh;
+  background: var(--canvas);
+  color: var(--foreground);
+}
+
+.sf-soft-card {
+  border-radius: var(--radius-card);
+  border: 1px solid color-mix(in oklab, var(--border) 92%, transparent);
+  background: color-mix(in oklab, var(--card) 97%, transparent);
+  color: var(--foreground);
+  box-shadow: var(--shadow-md);
+  backdrop-filter: blur(14px);
+}
+
+html.dark .sf-soft-card,
+html[data-theme="dark"] .sf-soft-card {
+  background: color-mix(in oklab, var(--card) 94%, transparent);
+  border-color: color-mix(in oklab, var(--border) 95%, transparent);
+}
+
+/* Framed toolbar row */
+.sf-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.7rem;
+  border-radius: var(--radius-xl);
+  border: 1px solid color-mix(in oklab, var(--border) 95%, transparent);
+  background: color-mix(in oklab, var(--surface) 55%, var(--card));
+  box-shadow: var(--shadow-xs);
+}
+
+html.dark .sf-toolbar,
+html[data-theme="dark"] .sf-toolbar {
+  background: color-mix(in oklab, var(--surface) 80%, #000);
+}
+
+/* Segmented control */
+.sf-segment {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.15rem;
+  padding: 0.2rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in oklab, var(--border) 95%, transparent);
+  background: color-mix(in oklab, var(--surface) 75%, transparent);
+}
+
+.sf-segment button {
+  border: 0;
+  background: transparent;
+  border-radius: 999px;
+  padding: 0.4rem 0.85rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--muted);
+  white-space: nowrap;
+  transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.sf-segment button[data-active="true"] {
+  background: var(--foreground);
+  color: var(--card);
+  box-shadow: var(--shadow-xs);
+}
+
+html.dark .sf-segment button[data-active="true"],
+html[data-theme="dark"] .sf-segment button[data-active="true"] {
+  background: #fafaf9;
+  color: #1c1917;
+}
+
+.sf-segment button:hover:not([data-active="true"]) {
+  color: var(--foreground);
+  background: color-mix(in oklab, var(--foreground) 6%, transparent);
+}
+
+.sf-select {
+  background-image: none;
+}
+
+/* Search field with leading icon — logical inset for RTL/LTR */
+.sf-search {
+  position: relative;
+  min-width: 0;
+  flex: 1 1 12rem;
+}
+
+.sf-search > svg {
+  position: absolute;
+  inset-inline-start: 0.8rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 0.95rem;
+  height: 0.95rem;
+  color: var(--muted);
+  opacity: 0.75;
+  pointer-events: none;
+}
+
+.sf-search > input {
+  padding-inline-start: 2.4rem !important;
+}
+
+/* Shared field chrome used by Input/Select/Textarea */
+.sf-field {
+  border: 1px solid color-mix(in oklab, var(--border) 95%, transparent);
+  background: var(--card);
+  color: var(--foreground);
+  box-shadow: var(--shadow-xs);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+
+.sf-field:hover {
+  border-color: var(--border-strong);
+}
+
+.sf-field:focus-visible {
+  outline: none;
+  border-color: color-mix(in oklab, var(--accent) 45%, var(--border));
+  box-shadow: 0 0 0 3px var(--ring);
+}
+
+.sf-field::placeholder {
+  color: color-mix(in oklab, var(--muted) 80%, transparent);
+}
+
+.sf-field:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* Sticky app header */
+.sf-app-header {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  border-bottom: 1px solid color-mix(in oklab, var(--border) 80%, transparent);
+  background: color-mix(in oklab, var(--background) 78%, transparent);
+  backdrop-filter: blur(16px);
+}
+
+.sf-panel {
+  border-radius: var(--radius-xl);
+  border: 1px solid color-mix(in oklab, var(--border) 88%, transparent);
+  background: color-mix(in oklab, var(--card) 94%, transparent);
+  box-shadow:
+    var(--shadow-sm),
+    0 0 0 1px color-mix(in oklab, var(--foreground) 3%, transparent);
+}
+
+html.dark .sf-panel,
+html[data-theme="dark"] .sf-panel {
+  background: color-mix(in oklab, var(--card) 90%, transparent);
+  border-color: color-mix(in oklab, var(--border) 95%, transparent);
+  box-shadow:
+    0 10px 32px -20px rgba(0, 0, 0, 0.65),
+    0 0 0 1px color-mix(in oklab, #fff 4%, transparent);
+}
+
+/* Figma/Linear-style seam collapse pills + collapsed rails */
+.sf-seam-toggle {
+  position: absolute;
+  top: 50%;
+  z-index: 35;
+  display: none;
+  height: 2.25rem;
+  width: 1.15rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid color-mix(in oklab, var(--border) 95%, transparent);
+  background: color-mix(in oklab, var(--card) 96%, transparent);
+  color: var(--muted);
+  box-shadow:
+    0 6px 18px -10px rgba(28, 25, 23, 0.45),
+    0 0 0 1px color-mix(in oklab, var(--foreground) 4%, transparent);
+  transform: translateY(-50%);
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.sf-seam-toggle[data-side="start"] {
+  inset-inline-end: 0;
+  margin-inline-end: -0.575rem;
+}
+.sf-seam-toggle[data-side="end"] {
+  inset-inline-start: 0;
+  margin-inline-start: -0.575rem;
+}
+@media (min-width: 1280px) {
+  .sf-seam-toggle { display: inline-flex; }
+}
+.sf-seam-toggle:hover {
+  color: var(--foreground);
+  background: var(--card);
+  border-color: color-mix(in oklab, var(--accent) 35%, var(--border));
+  box-shadow: 0 8px 22px -12px rgba(15, 118, 110, 0.45);
+}
+.sf-seam-toggle:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--ring);
+}
+html.dark .sf-seam-toggle,
+html[data-theme="dark"] .sf-seam-toggle {
+  background: color-mix(in oklab, var(--card) 92%, transparent);
+  color: #a8a29e;
+  border-color: color-mix(in oklab, var(--border) 100%, transparent);
+}
+html.dark .sf-seam-toggle:hover,
+html[data-theme="dark"] .sf-seam-toggle:hover {
+  color: #fafaf9;
+  border-color: color-mix(in oklab, var(--accent) 40%, var(--border));
+}
+
+.sf-panel-rail {
+  display: none;
+  width: 2.5rem;
+  flex-shrink: 0;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: var(--radius-card);
+  border: 1px solid color-mix(in oklab, var(--border) 90%, transparent);
+  background: color-mix(in oklab, var(--card) 94%, transparent);
+  color: var(--muted);
+  box-shadow: var(--shadow-sm);
+  font-size: 10px;
+  font-weight: 700;
+  transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+}
+@media (min-width: 1280px) {
+  .sf-panel-rail { display: flex; }
+}
+.sf-panel-rail:hover {
+  color: var(--foreground);
+  border-color: color-mix(in oklab, var(--accent) 30%, var(--border));
+}
+html.dark .sf-panel-rail,
+html[data-theme="dark"] .sf-panel-rail {
+  background: color-mix(in oklab, var(--card) 90%, transparent);
+  color: #a8a29e;
+}
+html.dark .sf-panel-rail:hover,
+html[data-theme="dark"] .sf-panel-rail:hover {
+  color: #fafaf9;
+}
+
+
+/* —— Motion tokens (public renderer; respects prefers-reduced-motion) —— */
+:root {
+  --sf-anim-dur: 600ms;
+  --sf-anim-delay: 0ms;
+  --sf-ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.sf-anim {
+  animation-duration: var(--sf-anim-dur);
+  animation-delay: var(--sf-anim-delay);
+  animation-fill-mode: both;
+  animation-timing-function: var(--sf-ease);
+}
+
+.sf-anim-fade {
+  animation-name: sf-fade-in;
+}
+.sf-anim-slide-up {
+  animation-name: sf-slide-up;
+}
+.sf-anim-slide-left {
+  animation-name: sf-slide-left;
+}
+.sf-anim-scale {
+  animation-name: sf-scale-in;
+}
+.sf-anim-float {
+  animation-name: sf-float-in;
+}
+.sf-anim-blur-in {
+  animation-name: sf-blur-in;
+}
+
+/* Scroll-triggered: hold off until .sf-anim-in */
+.sf-anim-scroll:not(.sf-anim-in) {
+  opacity: 0 !important;
+  animation: none !important;
+}
+.sf-anim-scroll.sf-anim-in {
+  /* animation from .sf-anim-* runs once revealed */
+}
+
+@keyframes sf-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes sf-slide-up {
+  from { opacity: 0; transform: translateY(22px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes sf-slide-left {
+  from { opacity: 0; transform: translateX(18px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes sf-scale-in {
+  from { opacity: 0; transform: scale(0.94); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes sf-float-in {
+  from { opacity: 0; transform: translateY(28px); }
+  60% { opacity: 1; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes sf-blur-in {
+  from { opacity: 0; filter: blur(10px); transform: translateY(8px); }
+  to { opacity: 1; filter: blur(0); transform: translateY(0); }
+}
+
+.sf-hover-scale-sm,
+.sf-hover-scale-md,
+.sf-hover-shadow,
+.sf-hover-glow {
+  transition: transform 0.28s var(--sf-ease), box-shadow 0.28s var(--sf-ease), filter 0.28s var(--sf-ease);
+}
+.sf-hover-scale-sm:hover {
+  transform: scale(1.02);
+}
+.sf-hover-scale-md:hover {
+  transform: scale(1.04) translateY(-2px);
+}
+.sf-hover-shadow:hover {
+  box-shadow: 0 18px 44px rgba(28, 25, 23, 0.16);
+}
+.sf-hover-glow:hover {
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--sf-site-primary, #0f766e) 35%, transparent),
+    0 12px 36px color-mix(in oklab, var(--sf-site-primary, #0f766e) 28%, transparent);
+  filter: brightness(1.03);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sf-anim,
+  .sf-anim-scroll {
+    animation: none !important;
+    opacity: 1 !important;
+    filter: none !important;
+    transform: none !important;
+  }
+  .sf-hover-scale-sm:hover,
+  .sf-hover-scale-md:hover {
+    transform: none;
+  }
+  .sf-hover-shadow:hover,
+  .sf-hover-glow:hover {
+    box-shadow: none;
+    filter: none;
+  }
+  html {
+    scroll-behavior: auto;
+  }
+}
+
+
+/* Published / preview tenant root — site content dir lives here, not on app chrome */
+.sf-tenant-root {
+  isolation: isolate;
+}
+
+[data-sf-preview="content"] {
+  isolation: isolate;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sf-tenant-root *,
+  [data-sf-preview="content"] * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+
+/* Preview isolation: site theme lives on the canvas, not platform chrome */
+[data-sf-preview="content"],
+[data-sf-site-surface] {
+  /* SiteRenderer sets background/color inline from site tokens */
+  isolation: isolate;
+}
