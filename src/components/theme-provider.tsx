@@ -70,6 +70,7 @@ export function ThemeToggleButton({ className = "" }: { className?: string }) {
         className
       )}
       title={theme === "light" ? darkLabel : lightLabel}
+      aria-label={theme === "light" ? darkLabel : lightLabel}
     >
       <span aria-hidden>{theme === "light" ? "☾" : "☀"}</span>
       <span className="hidden sm:inline">{theme === "light" ? darkLabel : lightLabel}</span>

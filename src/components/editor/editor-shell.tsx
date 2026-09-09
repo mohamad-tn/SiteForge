@@ -59,6 +59,7 @@ import {
   Plus,
   Redo2,
   Save,
+  Settings2,
   Smartphone,
   Sun,
   Tablet,
@@ -533,90 +534,192 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
   return (
     <div className="sf-canvas flex h-screen flex-col" dir={uiDir} lang={uiLang} data-sf-chrome="platform">
       <CommandPalette items={commands} />
-      <header className="relative z-40 flex shrink-0 items-center gap-2 overflow-x-auto overflow-y-visible px-2 py-2 sm:px-3 sm:py-2.5">
-        <div className="sf-panel flex min-w-0 shrink-0 items-center gap-1 rounded-[var(--radius-2xl)] px-1.5 py-1 backdrop-blur-xl">
-          <Button asChild variant="ghost" size="sm" className="rounded-full px-2 text-stone-600 dark:text-stone-300" title={t("backDashboard")}>
-            <Link href="/dashboard"><span className="sm:hidden">←</span><span className="hidden sm:inline">{t("backDashboard")}</span></Link>
+      <header className="relative z-40 flex shrink-0 items-center gap-1.5 overflow-x-auto overflow-y-visible px-2 py-2 sm:gap-2 sm:px-3 sm:py-2.5">
+        {/* 1) Nav / site identity */}
+        <div className="sf-toolbar-group shrink-0 pe-1.5 ps-0.5" data-tone="nav" title={site.name}>
+          <Button
+            asChild
+            variant="ghost"
+            size="sm"
+            className="rounded-full px-2 text-stone-600 focus-visible:ring-[3px] dark:text-stone-300"
+            title={t("backDashboard")}
+            aria-label={t("backDashboard")}
+          >
+            <Link href="/dashboard">
+              <span className="sm:hidden" aria-hidden>←</span>
+              <span className="hidden sm:inline">{t("backDashboard")}</span>
+            </Link>
           </Button>
-          <div className="hidden h-5 w-px bg-stone-200 dark:bg-stone-700 sm:block" />
-          <div className="min-w-0 pe-1">
-            <div className="max-w-[7rem] truncate text-sm font-semibold tracking-tight sm:max-w-[12rem]">{site.name}</div>
+          <div className="sf-toolbar-divider hidden sm:block" aria-hidden />
+          <div className="min-w-0 pe-1.5">
+            <div className="max-w-[7rem] truncate text-sm font-semibold tracking-tight sm:max-w-[11rem]">{site.name}</div>
             <div className="hidden truncate font-mono text-[10px] text-stone-500 sm:block" dir="ltr">/s/{site.slug}</div>
           </div>
         </div>
 
-        <div className="sf-panel flex shrink-0 items-center gap-0.5 p-1 backdrop-blur-xl" title={t("helpViewport")}>
-          {(
-            [
-              ["mobile", Smartphone, t("viewportMobile")],
-              ["tablet", Tablet, t("viewportTablet")],
-              ["laptop", Monitor, t("viewportLaptop")],
-            ] as const
-          ).map(([key, Icon, label]) => (
-            <button
-              key={key}
-              type="button"
-              title={label}
-              onClick={() => setViewport(key)}
-              className={`inline-flex items-center justify-center rounded-full p-2 text-xs transition ${
-                viewport === key
-                  ? "bg-stone-900 text-white shadow-sm dark:bg-stone-100 dark:text-stone-900"
-                  : "text-stone-500 hover:text-stone-800 dark:hover:text-stone-200"
-              }`}
-            >
-              <Icon className="h-3.5 w-3.5" />
-            </button>
-          ))}
+        {/* 2) CONTENT — page / locale / device / undo / insert */}
+        <div className="sf-toolbar-group hidden min-w-0 sm:inline-flex" data-tone="content" title={t("toolbarContentHint")}>
+          <span className="sf-toolbar-label">{t("toolbarContent")}</span>
+          <label className="flex items-center gap-1 ps-0.5">
+            <span className="sr-only">{t("pageSelect")}</span>
+            <Select
+              value={pageId}
+              onValueChange={(id) => {
+                setPageId(id);
+                setSelectedId(null);
+                setSelectedPart(null);
+              }}
+              aria-label={t("pageSelect")}
+              triggerClassName="h-8 w-auto min-w-[5.5rem] max-w-[9rem] rounded-full border-0 bg-white/80 px-2.5 text-[11px] font-bold shadow-none dark:bg-stone-950/50"
+              wrapperClassName="w-auto"
+              options={content.pages.map((p) => ({ value: p.id, label: p.title }))}
+            />
+          </label>
+          <div className="sf-toolbar-divider" aria-hidden />
+          <label className="flex items-center gap-1">
+            <span className="sr-only">{t("contentLang")}</span>
+            <Select
+              value={editLocale}
+              onValueChange={setEditLocale}
+              aria-label={t("contentLang")}
+              triggerClassName="h-8 w-auto min-w-[5.5rem] max-w-[8rem] rounded-full border-0 bg-teal-50/90 px-2.5 text-[11px] font-bold text-teal-950 shadow-none dark:bg-teal-950/45 dark:text-teal-50"
+              wrapperClassName="w-auto"
+              options={locales.map((code) => ({
+                value: code,
+                label: isLocaleCode(code) ? LOCALE_META[code].nativeLabel : code,
+              }))}
+            />
+          </label>
+          <div className="sf-toolbar-divider" aria-hidden />
+          <div className="inline-flex items-center gap-0.5 rounded-full bg-white/55 p-0.5 dark:bg-stone-950/40" role="group" aria-label={t("helpViewport")}>
+            {(
+              [
+                ["mobile", Smartphone, t("viewportMobile")],
+                ["tablet", Tablet, t("viewportTablet")],
+                ["laptop", Monitor, t("viewportLaptop")],
+              ] as const
+            ).map(([key, Icon, label]) => (
+              <button
+                key={key}
+                type="button"
+                title={label}
+                aria-label={label}
+                aria-pressed={viewport === key}
+                onClick={() => setViewport(key)}
+                className={`inline-flex items-center justify-center rounded-full p-2 text-xs transition focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--ring)] ${
+                  viewport === key
+                    ? "bg-stone-900 text-white shadow-sm dark:bg-stone-100 dark:text-stone-900"
+                    : "text-stone-500 hover:text-stone-800 dark:hover:text-stone-200"
+                }`}
+              >
+                <Icon className="h-3.5 w-3.5" aria-hidden />
+              </button>
+            ))}
+          </div>
           <button
             type="button"
             onClick={() => setPreviewMode((m) => (m === "light" ? "dark" : "light"))}
-            className="inline-flex items-center justify-center rounded-full p-2 text-xs text-stone-600 dark:text-stone-300"
+            className="inline-flex items-center justify-center rounded-full p-2 text-xs text-stone-600 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--ring)] dark:text-stone-300"
             title={t("previewTheme")}
+            aria-label={t("previewTheme")}
           >
-            {previewMode === "light" ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
+            {previewMode === "light" ? <Sun className="h-3.5 w-3.5" aria-hidden /> : <Moon className="h-3.5 w-3.5" aria-hidden />}
           </button>
+          <div className="sf-toolbar-divider hidden md:block" aria-hidden />
+          <Button variant="ghost" size="icon" className="hidden h-8 w-8 rounded-full md:inline-flex" onClick={undo} disabled={!canUndo} title={t("undo")} aria-label={t("undo")}>
+            <Undo2 className="h-4 w-4" aria-hidden />
+          </Button>
+          <Button variant="ghost" size="icon" className="hidden h-8 w-8 rounded-full md:inline-flex" onClick={redo} disabled={!canRedo} title={t("redo")} aria-label={t("redo")}>
+            <Redo2 className="h-4 w-4" aria-hidden />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="hidden h-8 rounded-full px-2.5 text-[11px] font-bold lg:inline-flex"
+            title={t("helpInsert")}
+            aria-label={t("openInsert")}
+            onClick={() => {
+              setLeftCollapsed(false);
+              writeCollapsedPref(LEFT_COLLAPSED_KEY, false);
+              setLeftTab("insert");
+              setMobilePanel("left");
+            }}
+          >
+            <Plus className="h-3.5 w-3.5" aria-hidden />
+            <span className="hidden xl:inline">{t("openInsert")}</span>
+          </Button>
         </div>
 
-        <div className="ms-auto flex min-w-0 shrink-0 items-center gap-1">
-          <div className="sf-panel flex max-w-[40vw] items-center gap-1 overflow-x-auto p-1 backdrop-blur-xl sm:max-w-none" title={t("helpContentLang")}>
-            <label className="flex items-center gap-1.5 ps-1">
-              <span className="hidden text-[9px] font-bold uppercase tracking-[0.08em] text-teal-800/80 md:inline dark:text-teal-300/90">{t("contentLang")}</span>
-              <Select
-                value={editLocale}
-                onValueChange={setEditLocale}
-                aria-label={t("contentLang")}
-                triggerClassName="h-8 w-auto min-w-[6.5rem] max-w-[8.5rem] rounded-full border-0 bg-teal-50/90 px-2.5 text-[11px] font-bold text-teal-950 shadow-none dark:bg-teal-950/45 dark:text-teal-50"
-                wrapperClassName="w-auto"
-                options={locales.map((code) => ({
-                  value: code,
-                  label: isLocaleCode(code) ? LOCALE_META[code].nativeLabel : code,
-                }))}
-              />
-            </label>
-            <div className="hidden md:block" title={t("appUiLangHint")}>
-              <PlatformLangSwitcher size="compact" />
-            </div>
-            <Button variant="ghost" size="icon" className="hidden h-8 w-8 rounded-full sm:inline-flex" onClick={undo} disabled={!canUndo} title={t("undo")}>
-              <Undo2 className="h-4 w-4" />
-            </Button>
-            <Button variant="ghost" size="icon" className="hidden h-8 w-8 rounded-full sm:inline-flex" onClick={redo} disabled={!canRedo} title={t("redo")}>
-              <Redo2 className="h-4 w-4" />
-            </Button>
-            <div className="hidden sm:block"><ThemeToggleButton /></div>
-            {message ? <span className="hidden max-w-[8rem] truncate text-[11px] font-medium text-teal-700 xl:inline dark:text-teal-300">{message}</span> : null}
+        {/* 3) SITE — settings / CMS / chrome theme */}
+        <div className="sf-toolbar-group hidden min-w-0 md:inline-flex" data-tone="site" title={t("toolbarSiteHint")}>
+          <span className="sf-toolbar-label">{t("toolbarSite")}</span>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 rounded-full px-2.5 text-[11px] font-bold"
+            title={t("helpSite")}
+            aria-label={t("openSiteSettings")}
+            onClick={() => {
+              setRightCollapsed(false);
+              writeCollapsedPref(RIGHT_COLLAPSED_KEY, false);
+              setRightTab("site");
+              setMobilePanel("right");
+            }}
+          >
+            <Settings2 className="h-3.5 w-3.5" aria-hidden />
+            <span className="hidden xl:inline">{t("openSiteSettings")}</span>
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 rounded-full px-2.5 text-[11px] font-bold"
+            title={t("helpCms")}
+            aria-label={t("openCms")}
+            onClick={() => {
+              setLeftCollapsed(false);
+              writeCollapsedPref(LEFT_COLLAPSED_KEY, false);
+              setLeftTab("cms");
+              setMobilePanel("left");
+            }}
+          >
+            <Library className="h-3.5 w-3.5" aria-hidden />
+            <span className="hidden xl:inline">{t("openCms")}</span>
+          </Button>
+          <div className="sf-toolbar-divider" aria-hidden />
+          <div className="px-0.5" title={t("chromeTheme")}>
+            <ThemeToggleButton />
           </div>
+          <div className="hidden px-0.5 lg:block" title={t("appUiLangHint")}>
+            <PlatformLangSwitcher size="compact" />
+          </div>
+        </div>
 
-          <div className="sf-panel flex items-center gap-1 p-1 backdrop-blur-xl">
-            <Button asChild variant="outline" size="sm" className="rounded-full" title={t("previewDraftHint")}>
+        <div className="ms-auto flex min-w-0 shrink-0 items-center gap-1.5">
+          {/* 4) ACTIONS — save status / preview / publish */}
+          <div className="sf-toolbar-group" data-tone="actions" title={t("toolbarActionsHint")}>
+            <span className="sf-toolbar-label">{t("toolbarActions")}</span>
+            <span
+              className="sf-save-pill hidden sm:inline-flex"
+              data-state={saveState === "saving" || saving ? "saving" : saveState}
+              title={message || undefined}
+            >
+              <span className="sf-save-dot" aria-hidden />
+              {saving || saveState === "saving"
+                ? t("saveStatusSaving")
+                : saveState === "dirty"
+                  ? t("saveStatusDirty")
+                  : t("saveStatusSaved")}
+            </span>
+            <Button asChild variant="outline" size="sm" className="rounded-full" title={t("previewDraftHint")} aria-label={t("preview")}>
               <Link href={`/editor/${site.id}/preview`} target="_blank">
-                <Eye className="h-3.5 w-3.5" />
+                <Eye className="h-3.5 w-3.5" aria-hidden />
                 <span className="hidden lg:inline">{t("preview")}</span>
               </Link>
             </Button>
             {publishedAt ? (
-              <Button asChild variant="outline" size="sm" className="hidden rounded-full sm:inline-flex" title={t("view")}>
+              <Button asChild variant="outline" size="sm" className="hidden rounded-full sm:inline-flex" title={t("view")} aria-label={t("view")}>
                 <Link href={`/s/${site.slug}`} target="_blank">
-                  <Eye className="h-3.5 w-3.5" />
+                  <Eye className="h-3.5 w-3.5" aria-hidden />
                   <span className="hidden xl:inline">{t("view")}</span>
                 </Link>
               </Button>
@@ -627,23 +730,25 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
                 className="hidden rounded-full opacity-50 sm:inline-flex"
                 disabled
                 title={t("viewPublicDisabled")}
+                aria-label={t("viewPublicDisabled")}
               >
-                <EyeOff className="h-3.5 w-3.5" />
+                <EyeOff className="h-3.5 w-3.5" aria-hidden />
                 <span className="hidden xl:inline">{t("view")}</span>
               </Button>
             )}
-            <Button variant="outline" size="sm" className="rounded-full" onClick={() => save(false)} disabled={saving || publishing} title={t("helpSave")}>
-              <Save className="h-3.5 w-3.5" />
+            <Button variant="outline" size="sm" className="rounded-full" onClick={() => save(false)} disabled={saving || publishing} title={t("helpSave")} aria-label={saving ? t("saving") : t("save")}>
+              <Save className="h-3.5 w-3.5" aria-hidden />
               <span className="hidden sm:inline">{saving ? t("saving") : t("save")}</span>
             </Button>
             <Button
               size="sm"
-              className="rounded-full bg-teal-800 hover:bg-teal-700"
+              className="rounded-full bg-teal-800 shadow-sm hover:bg-teal-700"
               onClick={() => save(true)}
               disabled={publishing || saving || saveState === "saving"}
               title={saving || saveState === "saving" ? t("publishDisabledSaving") : t("helpPublish")}
+              aria-label={publishing ? t("publishing") : t("publish")}
             >
-              <Upload className="h-3.5 w-3.5" />
+              <Upload className="h-3.5 w-3.5" aria-hidden />
               <span className="hidden sm:inline">{publishing ? t("publishing") : t("publish")}</span>
             </Button>
 
@@ -653,55 +758,101 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
                 size="icon"
                 className="h-8 w-8 rounded-full"
                 title={t("moreActions")}
+                aria-label={t("moreActions")}
+                aria-expanded={moreOpen}
                 onClick={() => setMoreOpen((o) => !o)}
               >
-                <MoreHorizontal className="h-4 w-4" />
+                <MoreHorizontal className="h-4 w-4" aria-hidden />
               </Button>
               {moreOpen ? (
-                <div className="absolute end-0 top-full z-50 mt-1 w-52 rounded-2xl border border-stone-200/80 bg-white p-1.5 shadow-xl dark:border-stone-700 dark:bg-stone-900">
-                  <button type="button" className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-start text-xs font-semibold hover:bg-stone-50 dark:hover:bg-stone-800 md:hidden" onClick={() => { setMoreOpen(false); }}>
-                    <span className="flex-1">{t("appUiLang")}</span>
+                <div className="absolute end-0 top-full z-50 mt-1 w-56 rounded-2xl border border-stone-200/80 bg-white p-1.5 shadow-xl dark:border-stone-700 dark:bg-stone-900">
+                  <div className="px-2.5 py-1.5 text-[9px] font-bold uppercase tracking-[0.12em] text-stone-400 sm:hidden">{t("toolbarContent")}</div>
+                  <div className="space-y-0.5 sm:hidden">
+                    <div className="px-2 py-1">
+                      <Select
+                        value={pageId}
+                        onValueChange={(id) => { setPageId(id); setMoreOpen(false); }}
+                        aria-label={t("pageSelect")}
+                        triggerClassName="h-8 w-full rounded-xl text-[11px] font-bold"
+                        options={content.pages.map((p) => ({ value: p.id, label: p.title }))}
+                      />
+                    </div>
+                    <div className="px-2 py-1">
+                      <Select
+                        value={editLocale}
+                        onValueChange={(v) => { setEditLocale(v); setMoreOpen(false); }}
+                        aria-label={t("contentLang")}
+                        triggerClassName="h-8 w-full rounded-xl text-[11px] font-bold"
+                        options={locales.map((code) => ({
+                          value: code,
+                          label: isLocaleCode(code) ? LOCALE_META[code].nativeLabel : code,
+                        }))}
+                      />
+                    </div>
+                    <button type="button" className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-start text-xs font-semibold hover:bg-stone-50 disabled:opacity-40 dark:hover:bg-stone-800" onClick={() => { undo(); setMoreOpen(false); }} disabled={!canUndo}>
+                      <Undo2 className="h-3.5 w-3.5" aria-hidden /> {t("undo")}
+                    </button>
+                    <button type="button" className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-start text-xs font-semibold hover:bg-stone-50 disabled:opacity-40 dark:hover:bg-stone-800" onClick={() => { redo(); setMoreOpen(false); }} disabled={!canRedo}>
+                      <Redo2 className="h-3.5 w-3.5" aria-hidden /> {t("redo")}
+                    </button>
+                  </div>
+                  <div className="my-1 h-px bg-stone-200/80 dark:bg-stone-700 md:hidden" />
+                  <div className="px-2.5 py-1.5 text-[9px] font-bold uppercase tracking-[0.12em] text-stone-400 md:hidden">{t("toolbarSite")}</div>
+                  <button type="button" className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-start text-xs font-semibold hover:bg-stone-50 md:hidden dark:hover:bg-stone-800" onClick={() => { setRightCollapsed(false); writeCollapsedPref(RIGHT_COLLAPSED_KEY, false); setRightTab("site"); setMobilePanel("right"); setMoreOpen(false); }}>
+                    <Settings2 className="h-3.5 w-3.5" aria-hidden /> {t("openSiteSettings")}
+                  </button>
+                  <button type="button" className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-start text-xs font-semibold hover:bg-stone-50 md:hidden dark:hover:bg-stone-800" onClick={() => { setLeftCollapsed(false); writeCollapsedPref(LEFT_COLLAPSED_KEY, false); setLeftTab("cms"); setMobilePanel("left"); setMoreOpen(false); }}>
+                    <Library className="h-3.5 w-3.5" aria-hidden /> {t("openCms")}
+                  </button>
+                  <div className="flex items-center justify-between gap-2 rounded-xl px-3 py-2 md:hidden">
+                    <span className="text-xs font-semibold">{t("chromeTheme")}</span>
+                    <ThemeToggleButton />
+                  </div>
+                  <div className="flex items-center justify-between gap-2 rounded-xl px-3 py-2 lg:hidden">
+                    <span className="text-xs font-semibold">{t("appUiLang")}</span>
                     <PlatformLangSwitcher size="compact" />
-                  </button>
-                  <button type="button" className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-start text-xs font-semibold hover:bg-stone-50 sm:hidden dark:hover:bg-stone-800" onClick={() => { undo(); setMoreOpen(false); }} disabled={!canUndo}>
-                    <Undo2 className="h-3.5 w-3.5" /> {t("undo")}
-                  </button>
-                  <button type="button" className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-start text-xs font-semibold hover:bg-stone-50 sm:hidden dark:hover:bg-stone-800" onClick={() => { redo(); setMoreOpen(false); }} disabled={!canRedo}>
-                    <Redo2 className="h-3.5 w-3.5" /> {t("redo")}
-                  </button>
-                  <div className="sm:hidden px-3 py-2"><ThemeToggleButton /></div>
+                  </div>
+                  <div className="my-1 h-px bg-stone-200/80 dark:bg-stone-700" />
                   {publishedAt ? (
                     <Link href={`/s/${site.slug}`} target="_blank" className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold hover:bg-stone-50 sm:hidden dark:hover:bg-stone-800" onClick={() => setMoreOpen(false)}>
-                      <Eye className="h-3.5 w-3.5" /> {t("view")}
+                      <Eye className="h-3.5 w-3.5" aria-hidden /> {t("view")}
                     </Link>
                   ) : (
                     <div className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-stone-400 sm:hidden" title={t("viewPublicDisabled")}>
-                      <EyeOff className="h-3.5 w-3.5" /> {t("viewPublicDisabled")}
+                      <EyeOff className="h-3.5 w-3.5" aria-hidden /> {t("viewPublicDisabled")}
                     </div>
                   )}
-                  <button type="button" className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-start text-xs font-semibold hover:bg-stone-50 xl:hidden dark:hover:bg-stone-800" onClick={() => { setMobilePanel("left"); setMoreOpen(false); }}>
-                    <PanelLeft className="h-3.5 w-3.5" /> {t("mobileLeft")}
-                  </button>
-                  <button type="button" className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-start text-xs font-semibold hover:bg-stone-50 xl:hidden dark:hover:bg-stone-800" onClick={() => { setMobilePanel("right"); setMoreOpen(false); }}>
-                    <PanelRight className="h-3.5 w-3.5" /> {t("mobileRight")}
-                  </button>
                   <Link href={`/editor/${site.id}/preview`} target="_blank" className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold hover:bg-stone-50 dark:hover:bg-stone-800" onClick={() => setMoreOpen(false)}>
-                    <Eye className="h-3.5 w-3.5" /> {t("previewDraft")}
+                    <Eye className="h-3.5 w-3.5" aria-hidden /> {t("previewDraft")}
                   </Link>
                 </div>
               ) : null}
             </div>
           </div>
-        </div>
 
-        {/* Mobile panel toggles — single row, never wraps primary Publish */}
-        <div className="flex shrink-0 items-center gap-1 xl:hidden">
-          <button type="button" onClick={() => setMobilePanel((m) => (m === "left" ? "none" : "left"))} className="sf-panel inline-flex items-center gap-1 rounded-full px-2.5 py-1.5 text-[11px] font-semibold" title={t("helpInsert")}>
-            <PanelLeft className="h-3.5 w-3.5" />
-          </button>
-          <button type="button" onClick={() => setMobilePanel((m) => (m === "right" ? "none" : "right"))} className="sf-panel inline-flex items-center gap-1 rounded-full px-2.5 py-1.5 text-[11px] font-semibold" title={t("helpInspect")}>
-            <PanelRight className="h-3.5 w-3.5" />
-          </button>
+          {/* Mobile panel toggles — keep separate from Publish */}
+          <div className="flex shrink-0 items-center gap-1 xl:hidden">
+            <button
+              type="button"
+              onClick={() => setMobilePanel((m) => (m === "left" ? "none" : "left"))}
+              className="sf-panel inline-flex items-center gap-1 rounded-full px-2.5 py-1.5 text-[11px] font-semibold focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--ring)]"
+              title={t("helpInsert")}
+              aria-label={t("mobileLeft")}
+              aria-pressed={mobilePanel === "left"}
+            >
+              <PanelLeft className="h-3.5 w-3.5" aria-hidden />
+            </button>
+            <button
+              type="button"
+              onClick={() => setMobilePanel((m) => (m === "right" ? "none" : "right"))}
+              className="sf-panel inline-flex items-center gap-1 rounded-full px-2.5 py-1.5 text-[11px] font-semibold focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--ring)]"
+              title={t("helpInspect")}
+              aria-label={t("mobileRight")}
+              aria-pressed={mobilePanel === "right"}
+            >
+              <PanelRight className="h-3.5 w-3.5" aria-hidden />
+            </button>
+          </div>
         </div>
       </header>
 
@@ -1004,13 +1155,16 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
         </div>
 
         {/* Canvas */}
-        <main className="relative flex-1 overflow-auto rounded-[1.75rem] border border-stone-300/30 bg-[#dfd9cf]/55 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.35)] md:p-8 dark:border-stone-800 dark:bg-stone-950/40 dark:shadow-none" onClick={() => { setSelectedId(null); setSelectedPart(null); }}>
+        <main className="relative flex-1 overflow-auto rounded-[1.75rem] border border-stone-300/25 bg-[#dfd9cf]/45 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.28)] md:p-8 dark:border-stone-800 dark:bg-stone-950/40 dark:shadow-none" onClick={() => { setSelectedId(null); setSelectedPart(null); }}>
           <div
-            className="mx-auto transition-all duration-300 ease-out"
-            style={{ width: typeof canvasWidth === "number" ? canvasWidth : canvasWidth, maxWidth: "100%" }}
+            className="sf-device-shell"
+            style={{
+              width: typeof canvasWidth === "number" ? canvasWidth + (viewport === "mobile" ? 28 : viewport === "tablet" ? 36 : 0) : canvasWidth,
+              maxWidth: "100%",
+            }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="mb-3 flex items-center justify-between text-[10px] text-stone-500 px-1">
+            <div className="mb-3 flex items-center justify-between px-1 text-[10px] text-stone-500">
               <span>
                 {page.title}
                 <span className="font-mono ms-2" dir="ltr">/{page.slug}</span>
@@ -1018,29 +1172,56 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
                   {isLocaleCode(editLocale) ? LOCALE_META[editLocale].nativeLabel : editLocale}
                 </span>
               </span>
-              <span className="font-mono" dir="ltr">
-                {typeof canvasWidth === "number" ? `${canvasWidth}px` : "fluid · laptop"}
+              <span className="font-mono" dir="ltr" title={t("deviceFrame")}>
+                {typeof canvasWidth === "number" ? `${canvasWidth}px · ${viewport}` : "fluid · laptop"}
               </span>
             </div>
-            <div
-              className="overflow-hidden rounded-[1.75rem] border border-stone-300/40 bg-white shadow-[0_30px_80px_-36px_rgba(28,25,23,0.55)] dark:border-stone-700"
-              lang={editLocale}
-              dir={localeDir(editLocale)}
-              data-sf-preview="content"
-            >
-              <SiteRenderer
-                content={content}
-                pageId={page.id}
-                selectedBlockId={selectedId}
-                selectedPart={selectedPart}
-                hoveredBlockId={hoveredId}
-                onSelectBlock={selectBlock}
-                onSelectPart={selectTarget}
-                onHoverBlock={setHoveredId}
-                locale={editLocale}
-                colorMode={previewMode}
-              />
-            </div>
+            {viewport === "laptop" ? (
+              <div
+                className="overflow-hidden rounded-[1.75rem] border border-stone-300/40 bg-white shadow-[0_30px_80px_-36px_rgba(28,25,23,0.5)] dark:border-stone-700"
+                lang={editLocale}
+                dir={localeDir(editLocale)}
+                data-sf-preview="content"
+              >
+                <SiteRenderer
+                  content={content}
+                  pageId={page.id}
+                  selectedBlockId={selectedId}
+                  selectedPart={selectedPart}
+                  hoveredBlockId={hoveredId}
+                  onSelectBlock={selectBlock}
+                  onSelectPart={selectTarget}
+                  onHoverBlock={setHoveredId}
+                  locale={editLocale}
+                  colorMode={previewMode}
+                />
+              </div>
+            ) : (
+              <div className="sf-device-chrome" data-device={viewport} aria-label={t("deviceFrame")}>
+                {viewport === "mobile" ? <div className="sf-device-notch" aria-hidden /> : null}
+                <div
+                  className="sf-device-screen"
+                  lang={editLocale}
+                  dir={localeDir(editLocale)}
+                  data-sf-preview="content"
+                  style={{ width: typeof canvasWidth === "number" ? canvasWidth : "100%", maxWidth: "100%", marginInline: "auto" }}
+                >
+                  <SiteRenderer
+                    content={content}
+                    pageId={page.id}
+                    selectedBlockId={selectedId}
+                    selectedPart={selectedPart}
+                    hoveredBlockId={hoveredId}
+                    onSelectBlock={selectBlock}
+                    onSelectPart={selectTarget}
+                    onHoverBlock={setHoveredId}
+                    locale={editLocale}
+                    colorMode={previewMode}
+                  />
+                </div>
+                {viewport === "mobile" ? <div className="sf-device-home" aria-hidden /> : null}
+              </div>
+            )}
           </div>
         </main>
 
@@ -1141,12 +1322,13 @@ function IconBtn({
     <button
       type="button"
       title={title}
+      aria-label={title}
       disabled={disabled}
       onClick={(e) => {
         e.stopPropagation();
         onClick();
       }}
-      className={`h-7 w-7 inline-flex items-center justify-center rounded-full disabled:opacity-30 ${
+      className={`h-7 w-7 inline-flex items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--ring)] disabled:opacity-30 ${
         danger
           ? "text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-950/50"
           : "text-stone-500 hover:bg-stone-100 hover:text-stone-800 dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-stone-100"
