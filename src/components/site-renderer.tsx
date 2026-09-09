@@ -1623,8 +1623,31 @@ export function SiteRenderer({
         );
       })}
       {page.blocks.length === 0 ? (
-        <div className="flex items-center justify-center min-h-[320px] text-sm" style={{ color: tokens.colors.muted }}>
-          لا توجد عناصر — أضف قسماً أو عنصراً من اللوحة اليسرى
+        <div className="flex min-h-[320px] items-center justify-center px-6 py-12">
+          <div
+            className="w-full max-w-sm rounded-3xl border border-dashed px-6 py-10 text-center"
+            style={{
+              color: tokens.colors.muted,
+              borderColor: `${tokens.colors.muted}44`,
+              background: `${tokens.colors.surface}88`,
+            }}
+          >
+            <div
+              className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-2xl text-sm font-bold"
+              style={{ background: `${tokens.colors.primary}18`, color: tokens.colors.primary }}
+              aria-hidden
+            >
+              +
+            </div>
+            <p className="text-sm font-semibold" style={{ color: tokens.colors.text }}>
+              {tokens.rtl ? "صفحة فارغة" : "Empty page"}
+            </p>
+            <p className="mt-1.5 text-xs leading-5">
+              {tokens.rtl
+                ? "أضف قسماً أو عنصراً من لوحة الإدراج للبدء"
+                : "Add a section or element from the Insert panel to start"}
+            </p>
+          </div>
         </div>
       ) : null}
     </div>

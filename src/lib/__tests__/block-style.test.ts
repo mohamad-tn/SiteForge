@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { blockFrameStyle, defaultStyleProps, STYLE_KEYS, blockMotionAttrs, detectEffectPreset, effectPresetProps } from "@/lib/block-style";
+import { blockFrameStyle, defaultStyleProps, STYLE_KEYS, blockMotionAttrs, detectEffectPreset, effectPresetProps, resolveEaseCss, EASE_PRESETS } from "@/lib/block-style";
 
 describe("block-style encode", () => {
   it("defaultStyleProps covers STYLE_KEYS", () => {
@@ -69,4 +69,26 @@ describe("block motion / effects", () => {
     expect(stagger.style["--sf-stagger-ms"]).toBe("100ms");
     expect(stagger.style["--sf-anim-delay"]).toBe("40ms");
   });
+
+  it("maps easing presets to --sf-ease CSS vars", () => {
+    expect(resolveEaseCss("ease-out")).toBe(EASE_PRESETS["ease-out"]);
+    expect(resolveEaseCss("springy")).toBe(EASE_PRESETS.springy);
+    expect(resolveEaseCss("soft")).toBe(EASE_PRESETS.soft);
+    expect(resolveEaseCss("unknown")).toBe(EASE_PRESETS["ease-out"]);
+
+    const springy = blockMotionAttrs({
+      ...effectPresetProps("soft-fade"),
+      animEase: "springy",
+    });
+    expect(springy.style["--sf-ease"]).toBe(EASE_PRESETS.springy);
+
+    const softStagger = blockMotionAttrs({
+      entranceAnim: "none",
+      staggerChildren: "true",
+      animEase: "soft",
+    });
+    expect(softStagger.className).toContain("sf-stagger");
+    expect(softStagger.style["--sf-ease"]).toBe(EASE_PRESETS.soft);
+  });
+
 });

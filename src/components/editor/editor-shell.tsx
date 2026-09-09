@@ -795,6 +795,42 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
               <span className="hidden sm:inline">{publishing ? t("publishing") : t("publish")}</span>
             </Button>
 
+            {/* Mobile Site shortcuts — always visible below md (not only in overflow) */}
+            <div
+              className="inline-flex items-center gap-0.5 rounded-full bg-white/55 p-0.5 dark:bg-stone-950/40 md:hidden"
+              role="group"
+              aria-label={t("siteShortcuts")}
+              title={t("siteShortcutsHint")}
+            >
+              <button
+                type="button"
+                className="inline-flex items-center justify-center rounded-full p-2 text-xs text-stone-600 transition hover:bg-white/80 hover:text-stone-900 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--ring)] dark:text-stone-300 dark:hover:bg-stone-800 dark:hover:text-stone-50"
+                title={t("tipOpenSeo")}
+                aria-label={t("openSeo")}
+                onClick={() => openSiteSection("seo")}
+              >
+                <Search className="h-3.5 w-3.5" aria-hidden />
+              </button>
+              <button
+                type="button"
+                className="inline-flex items-center justify-center rounded-full p-2 text-xs text-stone-600 transition hover:bg-white/80 hover:text-stone-900 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--ring)] dark:text-stone-300 dark:hover:bg-stone-800 dark:hover:text-stone-50"
+                title={t("tipOpenDomain")}
+                aria-label={t("openDomain")}
+                onClick={() => openSiteSection("domain")}
+              >
+                <Globe className="h-3.5 w-3.5" aria-hidden />
+              </button>
+              <button
+                type="button"
+                className="inline-flex items-center justify-center rounded-full p-2 text-xs text-stone-600 transition hover:bg-white/80 hover:text-stone-900 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--ring)] dark:text-stone-300 dark:hover:bg-stone-800 dark:hover:text-stone-50"
+                title={t("tipOpenSecrets")}
+                aria-label={t("openSecrets")}
+                onClick={() => openSiteSection("secrets")}
+              >
+                <KeyRound className="h-3.5 w-3.5" aria-hidden />
+              </button>
+            </div>
+
             <div className="relative" ref={moreRef}>
               <Button
                 variant="ghost"
@@ -844,6 +880,8 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
                   <button type="button" className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-start text-xs font-semibold hover:bg-stone-50 md:hidden dark:hover:bg-stone-800" onClick={() => { openSiteSection(null); setMoreOpen(false); }}>
                     <Settings2 className="h-3.5 w-3.5" aria-hidden /> {t("openSiteSettings")}
                   </button>
+                  <div className="px-2.5 pb-0.5 pt-1 text-[9px] font-bold uppercase tracking-[0.12em] text-teal-700/80 md:hidden dark:text-teal-300/80">{t("siteShortcuts")}</div>
+                  <p className="px-2.5 pb-1 text-[10px] leading-4 text-stone-400 md:hidden">{t("siteShortcutsHint")}</p>
                   <button type="button" className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-start text-xs font-semibold hover:bg-stone-50 md:hidden dark:hover:bg-stone-800" onClick={() => { openSiteSection("seo"); setMoreOpen(false); }}>
                     <Search className="h-3.5 w-3.5" aria-hidden /> {t("openSeo")}
                   </button>
@@ -1012,6 +1050,19 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
                     + {t("add")}
                   </button>
                 </div>
+                {page.blocks.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-stone-300/80 bg-stone-50/60 px-4 py-8 text-center dark:border-stone-700 dark:bg-stone-950/40">
+                    <p className="text-xs font-semibold text-stone-600 dark:text-stone-300">{t("layersEmpty")}</p>
+                    <p className="mt-1 text-[11px] leading-5 text-stone-400">{t("layersEmptyHint")}</p>
+                    <button
+                      type="button"
+                      className="mt-3 inline-flex items-center gap-1 rounded-full bg-teal-800 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-teal-700"
+                      onClick={() => setLeftTab("insert")}
+                    >
+                      <Plus className="h-3.5 w-3.5" aria-hidden /> {t("openInsert")}
+                    </button>
+                  </div>
+                ) : null}
                 {page.blocks.map((b, i) => {
                   const parts = listBlockParts(b, editLocale, content.defaultLocale || "ar");
                   const blockSelected = selectedId === b.id;

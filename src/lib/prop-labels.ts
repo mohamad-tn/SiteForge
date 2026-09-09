@@ -115,6 +115,7 @@ export const STYLE_LABELS_I18N: Record<StyleKey | "linkMode" | "linkPageSlug" | 
 export const MOTION_LABELS_I18N: Record<MotionKey, Bi> = {
   effectPreset: { ar: "التأثير", en: "Effect" },
   entranceAnim: { ar: "حركة الدخول", en: "Entrance" },
+  animEase: { ar: "منحنى الحركة", en: "Easing" },
   animDuration: { ar: "المدة (مللي ثانية)", en: "Duration (ms)" },
   animDelay: { ar: "تأخير العنصر (مللي ثانية)", en: "Block delay (ms)" },
   staggerChildren: { ar: "تتابع الأبناء", en: "Stagger children" },
@@ -123,6 +124,17 @@ export const MOTION_LABELS_I18N: Record<MotionKey, Bi> = {
   hoverShadow: { ar: "ظل عند التمرير", en: "Hover shadow" },
   scrollReveal: { ar: "ظهور عند التمرير للأسفل", en: "Reveal on scroll" },
 };
+
+export const EASE_PRESET_LABELS: Record<string, Bi> = {
+  "ease-out": { ar: "خروج ناعم", en: "Ease out" },
+  springy: { ar: "مرن", en: "Springy" },
+  soft: { ar: "ناعم", en: "Soft" },
+};
+
+export function easePresetLabel(id: string, lang: PlatformLang): string {
+  const row = EASE_PRESET_LABELS[id];
+  return row?.[lang] || row?.en || id;
+}
 
 export const EFFECT_PRESET_LABELS: Record<string, Bi> = {
   none: { ar: "بدون", en: "None" },

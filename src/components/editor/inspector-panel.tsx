@@ -12,8 +12,8 @@ import {
   type Block,
   type SiteContent,
 } from "@/lib/design";
-import { STYLE_KEYS, LINK_KEYS, MOTION_KEYS, EFFECT_PRESETS, detectEffectPreset, effectPresetProps, type EffectPresetId } from "@/lib/block-style";
-import { propLabel, styleLabel, motionLabel, effectPresetLabel } from "@/lib/prop-labels";
+import { STYLE_KEYS, LINK_KEYS, MOTION_KEYS, EFFECT_PRESETS, EASE_PRESETS, detectEffectPreset, effectPresetProps, type EffectPresetId, type EasePresetId } from "@/lib/block-style";
+import { propLabel, styleLabel, motionLabel, effectPresetLabel, easePresetLabel } from "@/lib/prop-labels";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -426,9 +426,13 @@ export function InspectorPanel({
       </details>
 
       {!selected ? (
-        <div className="rounded-2xl border border-dashed border-stone-300/80 p-6 text-center dark:border-stone-700">
+        <div className="rounded-2xl border border-dashed border-stone-300/80 bg-stone-50/50 p-6 text-center dark:border-stone-700 dark:bg-stone-950/40">
+          <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-2xl bg-teal-50 text-teal-800 dark:bg-teal-950/60 dark:text-teal-200">
+            <span className="text-lg font-bold" aria-hidden>◇</span>
+          </div>
           <p className="text-sm font-medium text-stone-600 dark:text-stone-300">{t("noSelection")}</p>
-          <p className="mt-1 text-xs text-stone-400">
+          <p className="mt-1 text-xs text-stone-400">{t("noSelectionHint")}</p>
+          <p className="mt-2 text-[11px] text-stone-400">
             {t("editingIn")} <span className="font-semibold text-teal-800 dark:text-teal-300">{localeLabel}</span>
           </p>
         </div>
@@ -791,6 +795,19 @@ export function InspectorPanel({
                   ]}
                   triggerClassName="h-9 rounded-xl text-xs font-semibold"
                 />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-[11px] text-stone-500 dark:text-stone-400">{motionLabel("animEase", uiLang)}</Label>
+                <Select
+                  value={String(selected.props.animEase || "ease-out")}
+                  onValueChange={(v) => onUpdateProp(selected.id, "animEase", v)}
+                  options={(Object.keys(EASE_PRESETS) as EasePresetId[]).map((id) => ({
+                    value: id,
+                    label: easePresetLabel(id, uiLang),
+                  }))}
+                  triggerClassName="h-9 rounded-xl text-xs font-semibold"
+                />
+                <p className="text-[10px] leading-4 text-stone-400 dark:text-stone-500">{t("easeHelp")}</p>
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div className="space-y-1.5">

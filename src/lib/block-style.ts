@@ -260,6 +260,7 @@ export const STYLE_LABELS: Record<string, string> = {
 export const MOTION_KEYS = [
   "effectPreset",
   "entranceAnim",
+  "animEase",
   "animDuration",
   "animDelay",
   "staggerChildren",
@@ -316,6 +317,20 @@ export const EFFECT_PRESETS: EffectPresetDef[] = [
   { id: "reveal-lift", entranceAnim: "blur-in", hoverScale: "md", hoverShadow: "true" },
 ];
 
+/** Optional easing presets mapped to CSS timing functions (inspector keeps this small). */
+export type EasePresetId = "ease-out" | "springy" | "soft";
+
+export const EASE_PRESETS: Record<EasePresetId, string> = {
+  "ease-out": "cubic-bezier(0.22, 1, 0.36, 1)",
+  springy: "cubic-bezier(0.34, 1.45, 0.64, 1)",
+  soft: "cubic-bezier(0.4, 0, 0.2, 1)",
+};
+
+export function resolveEaseCss(id: string | undefined): string {
+  const key = (id || "ease-out") as EasePresetId;
+  return EASE_PRESETS[key] || EASE_PRESETS["ease-out"];
+}
+
 export function effectPresetProps(id: EffectPresetId): Record<string, string> {
   const row = EFFECT_PRESETS.find((p) => p.id === id) || EFFECT_PRESETS[0];
   return {
@@ -343,6 +358,7 @@ export function defaultMotionProps(): Record<string, string> {
   return {
     effectPreset: "none",
     entranceAnim: "none",
+    animEase: "ease-out",
     animDuration: "600",
     animDelay: "0",
     staggerChildren: "false",
@@ -356,6 +372,7 @@ export function defaultMotionProps(): Record<string, string> {
 export const MOTION_LABELS: Record<string, string> = {
   effectPreset: "التأثير",
   entranceAnim: "حركة الدخول",
+  animEase: "منحنى الحركة",
   animDuration: "المدة (مللي ثانية)",
   animDelay: "تأخير العنصر (مللي ثانية)",
   staggerChildren: "تتابع الأبناء",
@@ -387,6 +404,7 @@ export function blockMotionAttrs(p: Record<string, unknown>): {
   hasEntrance: boolean;
 } {
   const anim = strProp(p, "entranceAnim", "none");
+  const ease = strProp(p, "animEase", "ease-out");
   const dur = strProp(p, "animDuration", "600");
   const delay = strProp(p, "animDelay", "0");
   const staggerChildren = strProp(p, "staggerChildren", "false") === "true";
@@ -413,9 +431,11 @@ export function blockMotionAttrs(p: Record<string, unknown>): {
   if (entrance || staggerChildren) {
     if (Number.isFinite(d) && d > 0) style["--sf-anim-dur"] = `${d}ms`;
     if (Number.isFinite(dl) && dl >= 0) style["--sf-anim-delay"] = `${dl}ms`;
+    style["--sf-ease"] = resolveEaseCss(ease);
   }
   if (staggerChildren && Number.isFinite(sm) && sm >= 0) {
     style["--sf-stagger-ms"] = `${sm}ms`;
+    if (!style["--sf-ease"]) style["--sf-ease"] = resolveEaseCss(ease);
   }
   return { className: classes.join(" "), style, scrollReveal, hasEntrance };
 }

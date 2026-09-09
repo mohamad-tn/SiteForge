@@ -1,11 +1,27 @@
 SiteForge STATUS
-Updated: 2026-09-09 16:07 Asia/Damascus (UTC+3)
+Updated: 2026-09-09 18:45 Asia/Damascus (UTC+3)
 Dev: http://localhost:3000
 Tenant: demo@siteforge.local / demo1234
 Admin: admin@siteforge.local / admin1234 (/admin)
 Public: http://localhost:3000/s/demo-studio (published only)
 
-Readiness: ~8.9 / 10 editor chrome + templates + effects (NOT Framer freeform canvas)
+Readiness: ~9.2 / 10 editor chrome + motion polish (NOT Framer freeform canvas)
+
+
+## Wave 3 — stagger widen + mobile Site shortcuts + easing (2026-09-09)
+
+### Shipped
+1) Child stagger now targets grids AND common flex/stack containers (`space-y-*`, `flex-wrap`, `flex-col`) — reduced-motion still kills animations
+2) Mobile Site shortcuts: compact SEO/Domain/Secrets icon row always visible below md; clearer overflow section labels
+3) Optional easing preset (ease-out / springy / soft) → `--sf-ease` CSS; one clean inspector select
+4) Visual polish: insert palette i18n + hover, layers empty CTA, inspector no-selection, canvas empty card
+
+### Gaps still open
+- Nested flex-col inside staggered cards can cascade internal children (usually OK, not depth-limited)
+- Canvas empty copy is RTL/LTR via tokens.rtl (not full platform i18n on public renderer)
+- Still not Framer freeform canvas / timeline editor
+- next build skipped (:3000 busy with next-server)
+
 
 ## Pass focus — Seam collapse + templates + تأثيرات (2026-09-09)
 
