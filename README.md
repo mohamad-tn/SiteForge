@@ -45,3 +45,5 @@ Any **button**, **form**, or **CTA** (navbar / hero / cta) can call the customer
 
 Key paths: src/lib/http-action.ts, src/lib/site-secrets.ts, src/app/api/sites/[id]/secrets/route.ts, src/app/api/s/[slug]/http/route.ts, src/components/editor/site-secrets-panel.tsx, src/components/editor/api-action-editor.tsx.
 
+## Production deploy (free)
+See [docs/DEPLOY.md](docs/DEPLOY.md) — Neon Postgres + Render auto-deploy from GitHub.

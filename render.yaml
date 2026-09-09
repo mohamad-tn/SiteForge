@@ -1,0 +1,30 @@
+# Render Blueprint — SiteForge
+# Connect this GitHub repo in Render Dashboard → New → Blueprint
+# Or create a Web Service pointing at this repo (auto-deploy on push to main).
+#
+# Postgres: use free Neon (https://neon.tech) and paste DATABASE_URL into env.
+# Seed once after first deploy: from Render Shell run `pnpm db:seed:prod`
+# (do NOT seed on every deploy — it would duplicate demo data).
+
+services:
+  - type: web
+    name: siteforge
+    runtime: node
+    plan: free
+    region: frankfurt
+    rootDir: .
+    buildCommand: pnpm install --frozen-lockfile && pnpm build
+    startCommand: pnpm start
+    healthCheckPath: /login
+    autoDeployTrigger: commit
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      - key: DATABASE_URL
+        sync: false
+      - key: NEXTAUTH_URL
+        sync: false
+      - key: NEXTAUTH_SECRET
+        generateValue: true
+      - key: SECRETS_VAULT_KEY
+        generateValue: true
