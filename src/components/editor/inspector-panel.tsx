@@ -772,6 +772,55 @@ export function InspectorPanel({
                 <p className="text-[10px] leading-4 text-stone-400 dark:text-stone-500">{t("tipMotion")}</p>
               </div>
               <div className="space-y-1.5">
+                <Label className="text-[11px] text-stone-500 dark:text-stone-400">{motionLabel("entranceAnim", uiLang)}</Label>
+                <Select
+                  value={String(selected.props.entranceAnim || "none")}
+                  onValueChange={(v) => onUpdateProp(selected.id, "entranceAnim", v)}
+                  options={[
+                    { value: "none", label: uiLang === "ar" ? "بدون" : "None" },
+                    { value: "fade", label: uiLang === "ar" ? "تلاشي" : "Fade" },
+                    { value: "slide-up", label: uiLang === "ar" ? "انزلاق لأعلى" : "Slide up" },
+                    { value: "slide-down", label: uiLang === "ar" ? "انزلاق لأسفل" : "Slide down" },
+                    { value: "slide-left", label: uiLang === "ar" ? "انزلاق لليسار" : "Slide left" },
+                    { value: "slide-right", label: uiLang === "ar" ? "انزلاق لليمين" : "Slide right" },
+                    { value: "scale", label: uiLang === "ar" ? "تكبير" : "Scale" },
+                    { value: "float", label: uiLang === "ar" ? "طفو" : "Float" },
+                    { value: "blur-in", label: uiLang === "ar" ? "ضباب" : "Blur in" },
+                    { value: "bounce-in", label: uiLang === "ar" ? "ارتداد" : "Bounce" },
+                    { value: "zoom-fade", label: uiLang === "ar" ? "تكبير مع تلاشي" : "Zoom fade" },
+                  ]}
+                  triggerClassName="h-9 rounded-xl text-xs font-semibold"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1.5">
+                  <Label className="text-[11px] text-stone-500 dark:text-stone-400">{motionLabel("hoverScale", uiLang)}</Label>
+                  <Select
+                    value={String(selected.props.hoverScale || "none")}
+                    onValueChange={(v) => onUpdateProp(selected.id, "hoverScale", v)}
+                    options={[
+                      { value: "none", label: uiLang === "ar" ? "بدون" : "None" },
+                      { value: "sm", label: uiLang === "ar" ? "خفيف" : "Subtle" },
+                      { value: "md", label: uiLang === "ar" ? "واضح" : "Medium" },
+                    ]}
+                    triggerClassName="h-9 rounded-xl text-xs font-semibold"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-[11px] text-stone-500 dark:text-stone-400">{motionLabel("hoverShadow", uiLang)}</Label>
+                  <Select
+                    value={String(selected.props.hoverShadow || "false")}
+                    onValueChange={(v) => onUpdateProp(selected.id, "hoverShadow", v)}
+                    options={[
+                      { value: "false", label: uiLang === "ar" ? "بدون" : "None" },
+                      { value: "true", label: uiLang === "ar" ? "ظل" : "Shadow" },
+                      { value: "glow", label: uiLang === "ar" ? "توهج" : "Glow" },
+                    ]}
+                    triggerClassName="h-9 rounded-xl text-xs font-semibold"
+                  />
+                </div>
+              </div>
+              <div className="space-y-1.5">
                 <Label className="text-[11px] text-stone-500 dark:text-stone-400">{motionLabel("scrollReveal", uiLang)}</Label>
                 <Select
                   value={String(selected.props.scrollReveal || "false")}

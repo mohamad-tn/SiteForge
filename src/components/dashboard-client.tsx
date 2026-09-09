@@ -235,7 +235,7 @@ export function DashboardClient({
             <div className="truncate text-lg font-bold tracking-tight text-teal-900 dark:text-teal-300">
               SiteForge
             </div>
-            <div className="truncate text-xs text-stone-500 dark:text-stone-400">
+            <div className="truncate text-xs leading-5 text-stone-500 dark:text-stone-400">
               {t.welcome} {userName || userEmail}
             </div>
           </div>
@@ -258,7 +258,7 @@ export function DashboardClient({
         </div>
       </AppHeader>
 
-      <main className="mx-auto max-w-6xl space-y-8 px-4 py-8 sm:px-6">
+      <main className="mx-auto max-w-6xl space-y-7 px-4 py-7 sm:px-6 sm:py-9">
         {total === 0 ? (
           <SoftCard className="p-6">
             <h2 className="text-lg font-semibold tracking-tight">{t.startTitle}</h2>

@@ -39,11 +39,11 @@ export default function LoginPage() {
         <PlatformLangSwitcher size="compact" />
         <ThemeToggleButton />
       </div>
-      <SoftCard className="w-full max-w-md p-8">
-        <div className="mb-6">
-          <div className="text-sm font-semibold text-teal-800 dark:text-teal-300">SiteForge</div>
+      <SoftCard className="w-full max-w-md p-8 shadow-[0_24px_60px_-36px_rgba(28,25,23,0.45)]">
+        <div className="mb-7">
+          <div className="text-sm font-semibold tracking-tight text-teal-800 dark:text-teal-300">SiteForge</div>
           <h1 className="mt-2 text-2xl font-bold tracking-tight">{t("login")}</h1>
-          <p className="mt-1 text-sm text-[var(--muted)]">{t("welcomeBack")}</p>
+          <p className="mt-1.5 text-sm leading-6 text-[var(--muted)]">{t("welcomeBack")}</p>
         </div>
         <form onSubmit={onSubmit} className="space-y-4">
           <div className="space-y-2">

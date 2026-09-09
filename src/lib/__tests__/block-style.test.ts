@@ -33,6 +33,13 @@ describe("block motion / effects", () => {
 
     const blur = blockMotionAttrs(effectPresetProps("blur-in"));
     expect(blur.className).toContain("sf-anim-blur-in");
+
+    const bounce = blockMotionAttrs(effectPresetProps("bounce-in"));
+    expect(bounce.className).toContain("sf-anim-bounce-in");
+
+    const softLift = blockMotionAttrs(effectPresetProps("soft-lift"));
+    expect(softLift.className).toContain("sf-anim-slide-up");
+    expect(softLift.className).toContain("sf-hover-scale-sm");
   });
 
   it("detects presets and scrollReveal flag", () => {

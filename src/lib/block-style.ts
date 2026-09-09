@@ -274,11 +274,19 @@ export type EffectPresetId =
   | "none"
   | "soft-fade"
   | "slide-up"
+  | "slide-down"
+  | "slide-left"
+  | "slide-right"
   | "scale-in"
   | "float"
+  | "blur-in"
+  | "bounce-in"
+  | "zoom-fade"
   | "glow-hover"
   | "lift-hover"
-  | "blur-in";
+  | "soft-lift"
+  | "fade-glow"
+  | "reveal-lift";
 
 export type EffectPresetDef = {
   id: EffectPresetId;
@@ -291,11 +299,19 @@ export const EFFECT_PRESETS: EffectPresetDef[] = [
   { id: "none", entranceAnim: "none", hoverScale: "none", hoverShadow: "false" },
   { id: "soft-fade", entranceAnim: "fade", hoverScale: "none", hoverShadow: "false" },
   { id: "slide-up", entranceAnim: "slide-up", hoverScale: "none", hoverShadow: "false" },
+  { id: "slide-down", entranceAnim: "slide-down", hoverScale: "none", hoverShadow: "false" },
+  { id: "slide-left", entranceAnim: "slide-left", hoverScale: "none", hoverShadow: "false" },
+  { id: "slide-right", entranceAnim: "slide-right", hoverScale: "none", hoverShadow: "false" },
   { id: "scale-in", entranceAnim: "scale", hoverScale: "none", hoverShadow: "false" },
   { id: "float", entranceAnim: "float", hoverScale: "none", hoverShadow: "false" },
+  { id: "blur-in", entranceAnim: "blur-in", hoverScale: "none", hoverShadow: "false" },
+  { id: "bounce-in", entranceAnim: "bounce-in", hoverScale: "none", hoverShadow: "false" },
+  { id: "zoom-fade", entranceAnim: "zoom-fade", hoverScale: "none", hoverShadow: "false" },
   { id: "glow-hover", entranceAnim: "none", hoverScale: "none", hoverShadow: "glow" },
   { id: "lift-hover", entranceAnim: "none", hoverScale: "md", hoverShadow: "true" },
-  { id: "blur-in", entranceAnim: "blur-in", hoverScale: "none", hoverShadow: "false" },
+  { id: "soft-lift", entranceAnim: "slide-up", hoverScale: "sm", hoverShadow: "true" },
+  { id: "fade-glow", entranceAnim: "fade", hoverScale: "none", hoverShadow: "glow" },
+  { id: "reveal-lift", entranceAnim: "blur-in", hoverScale: "md", hoverShadow: "true" },
 ];
 
 export function effectPresetProps(id: EffectPresetId): Record<string, string> {
@@ -347,10 +363,14 @@ const ENTRANCE_CLASS: Record<string, string> = {
   none: "",
   fade: "sf-anim-fade",
   "slide-up": "sf-anim-slide-up",
+  "slide-down": "sf-anim-slide-down",
   "slide-left": "sf-anim-slide-left",
+  "slide-right": "sf-anim-slide-right",
   scale: "sf-anim-scale",
   float: "sf-anim-float",
   "blur-in": "sf-anim-blur-in",
+  "bounce-in": "sf-anim-bounce-in",
+  "zoom-fade": "sf-anim-zoom-fade",
 };
 
 /** CSS class + style vars for public renderer motion (respects prefers-reduced-motion via CSS). */

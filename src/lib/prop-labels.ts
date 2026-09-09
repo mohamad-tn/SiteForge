@@ -126,11 +126,19 @@ export const EFFECT_PRESET_LABELS: Record<string, Bi> = {
   none: { ar: "بدون", en: "None" },
   "soft-fade": { ar: "تلاشي ناعم", en: "Soft fade" },
   "slide-up": { ar: "انزلاق لأعلى", en: "Slide up" },
+  "slide-down": { ar: "انزلاق لأسفل", en: "Slide down" },
+  "slide-left": { ar: "انزلاق لليسار", en: "Slide left" },
+  "slide-right": { ar: "انزلاق لليمين", en: "Slide right" },
   "scale-in": { ar: "تكبير تدريجي", en: "Scale in" },
   float: { ar: "طفو خفيف", en: "Float" },
+  "blur-in": { ar: "ظهور من ضباب", en: "Blur in" },
+  "bounce-in": { ar: "ارتداد خفيف", en: "Bounce in" },
+  "zoom-fade": { ar: "تكبير مع تلاشي", en: "Zoom fade" },
   "glow-hover": { ar: "توهج عند التمرير", en: "Glow on hover" },
   "lift-hover": { ar: "رفع عند التمرير", en: "Lift on hover" },
-  "blur-in": { ar: "ظهور من ضباب", en: "Blur in" },
+  "soft-lift": { ar: "انزلاق ثم رفع", en: "Soft lift" },
+  "fade-glow": { ar: "تلاشي ثم توهج", en: "Fade + glow" },
+  "reveal-lift": { ar: "ضباب ثم رفع", en: "Reveal + lift" },
 };
 
 export function effectPresetLabel(id: string, lang: PlatformLang): string {
