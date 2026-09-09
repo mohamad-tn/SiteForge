@@ -1,11 +1,24 @@
 SiteForge STATUS
-Updated: 2026-09-09 18:45 Asia/Damascus (UTC+3)
+Updated: 2026-09-09 18:49 Asia/Damascus (UTC+3)
 Dev: http://localhost:3000
 Tenant: demo@siteforge.local / demo1234
 Admin: admin@siteforge.local / admin1234 (/admin)
 Public: http://localhost:3000/s/demo-studio (published only)
 
 Readiness: ~9.2 / 10 editor chrome + motion polish (NOT Framer freeform canvas)
+
+
+## Cleanup — stagger depth + canvas empty i18n (2026-09-09)
+
+### Shipped
+1) Stagger CSS depth-limited to outermost grid/flex/stack under `.sf-stagger` (nested `flex-col`/`space-y` inside cards no longer cascade)
+2) Canvas empty card uses `canvasEmptyTitle` / `canvasEmptyBody` via `usePlatformLangOptional` (not tokens.rtl hardcode)
+3) `staggerHelp` AR/EN copy mentions one-level / no nested stacks
+
+### QA
+- vitest targeted + tsc --noEmit
+- next build skipped (:3000 busy)
+
 
 
 ## Wave 3 — stagger widen + mobile Site shortcuts + easing (2026-09-09)
@@ -17,8 +30,6 @@ Readiness: ~9.2 / 10 editor chrome + motion polish (NOT Framer freeform canvas)
 4) Visual polish: insert palette i18n + hover, layers empty CTA, inspector no-selection, canvas empty card
 
 ### Gaps still open
-- Nested flex-col inside staggered cards can cascade internal children (usually OK, not depth-limited)
-- Canvas empty copy is RTL/LTR via tokens.rtl (not full platform i18n on public renderer)
 - Still not Framer freeform canvas / timeline editor
 - next build skipped (:3000 busy with next-server)
 

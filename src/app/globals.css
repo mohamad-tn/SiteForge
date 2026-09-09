@@ -526,7 +526,7 @@ html[data-theme="dark"] .sf-device-screen {
   /* animation from .sf-anim-* runs once revealed */
 }
 
-/* Optional child stagger — grids + common flex/stack containers (navbar rows, FAQ/list stacks) */
+/* Optional child stagger — outermost grid/flex/stack under the motion root only (no nested card cascades) */
 .sf-stagger :is(
   .grid,
   [class*="grid-cols-"],
@@ -534,6 +534,10 @@ html[data-theme="dark"] .sf-device-screen {
   [class*="flex-wrap"],
   .flex.flex-col,
   [class*="flex-col"]
+):not(
+  .sf-stagger
+  :is(.grid, [class*="grid-cols-"], [class*="space-y-"], [class*="flex-wrap"], .flex.flex-col, [class*="flex-col"])
+  :is(.grid, [class*="grid-cols-"], [class*="space-y-"], [class*="flex-wrap"], .flex.flex-col, [class*="flex-col"])
 ) > * {
   animation-duration: var(--sf-anim-dur);
   animation-fill-mode: both;
@@ -541,19 +545,19 @@ html[data-theme="dark"] .sf-device-screen {
   animation-name: sf-fade-in;
   animation-delay: calc(var(--sf-anim-delay, 0ms) + (var(--sf-stagger-i, 0) * var(--sf-stagger-ms, 80ms)));
 }
-.sf-stagger :is(.grid, [class*="grid-cols-"], [class*="space-y-"], [class*="flex-wrap"], .flex.flex-col, [class*="flex-col"]) > *:nth-child(1) { --sf-stagger-i: 0; }
-.sf-stagger :is(.grid, [class*="grid-cols-"], [class*="space-y-"], [class*="flex-wrap"], .flex.flex-col, [class*="flex-col"]) > *:nth-child(2) { --sf-stagger-i: 1; }
-.sf-stagger :is(.grid, [class*="grid-cols-"], [class*="space-y-"], [class*="flex-wrap"], .flex.flex-col, [class*="flex-col"]) > *:nth-child(3) { --sf-stagger-i: 2; }
-.sf-stagger :is(.grid, [class*="grid-cols-"], [class*="space-y-"], [class*="flex-wrap"], .flex.flex-col, [class*="flex-col"]) > *:nth-child(4) { --sf-stagger-i: 3; }
-.sf-stagger :is(.grid, [class*="grid-cols-"], [class*="space-y-"], [class*="flex-wrap"], .flex.flex-col, [class*="flex-col"]) > *:nth-child(5) { --sf-stagger-i: 4; }
-.sf-stagger :is(.grid, [class*="grid-cols-"], [class*="space-y-"], [class*="flex-wrap"], .flex.flex-col, [class*="flex-col"]) > *:nth-child(6) { --sf-stagger-i: 5; }
-.sf-stagger :is(.grid, [class*="grid-cols-"], [class*="space-y-"], [class*="flex-wrap"], .flex.flex-col, [class*="flex-col"]) > *:nth-child(7) { --sf-stagger-i: 6; }
-.sf-stagger :is(.grid, [class*="grid-cols-"], [class*="space-y-"], [class*="flex-wrap"], .flex.flex-col, [class*="flex-col"]) > *:nth-child(8) { --sf-stagger-i: 7; }
-.sf-stagger :is(.grid, [class*="grid-cols-"], [class*="space-y-"], [class*="flex-wrap"], .flex.flex-col, [class*="flex-col"]) > *:nth-child(9) { --sf-stagger-i: 8; }
-.sf-stagger :is(.grid, [class*="grid-cols-"], [class*="space-y-"], [class*="flex-wrap"], .flex.flex-col, [class*="flex-col"]) > *:nth-child(10) { --sf-stagger-i: 9; }
-.sf-stagger :is(.grid, [class*="grid-cols-"], [class*="space-y-"], [class*="flex-wrap"], .flex.flex-col, [class*="flex-col"]) > *:nth-child(11) { --sf-stagger-i: 10; }
-.sf-stagger :is(.grid, [class*="grid-cols-"], [class*="space-y-"], [class*="flex-wrap"], .flex.flex-col, [class*="flex-col"]) > *:nth-child(12) { --sf-stagger-i: 11; }
-.sf-anim-scroll.sf-stagger:not(.sf-anim-in) :is(.grid, [class*="grid-cols-"], [class*="space-y-"], [class*="flex-wrap"], .flex.flex-col, [class*="flex-col"]) > * {
+.sf-stagger :is(.grid, [class*="grid-cols-"], [class*="space-y-"], [class*="flex-wrap"], .flex.flex-col, [class*="flex-col"]):not(.sf-stagger :is(.grid, [class*="grid-cols-"], [class*="space-y-"], [class*="flex-wrap"], .flex.flex-col, [class*="flex-col"]) :is(.grid, [class*="grid-cols-"], [class*="space-y-"], [class*="flex-wrap"], .flex.flex-col, [class*="flex-col"])) > *:nth-child(1) { --sf-stagger-i: 0; }
+.sf-stagger :is(.grid, [class*="grid-cols-"], [class*="space-y-"], [class*="flex-wrap"], .flex.flex-col, [class*="flex-col"]):not(.sf-stagger :is(.grid, [class*="grid-cols-"], [class*="space-y-"], [class*="flex-wrap"], .flex.flex-col, [class*="flex-col"]) :is(.grid, [class*="grid-cols-"], [class*="space-y-"], [class*="flex-wrap"], .flex.flex-col, [class*="flex-col"])) > *:nth-child(2) { --sf-stagger-i: 1; }
+.sf-stagger :is(.grid, [class*="grid-cols-"], [class*="space-y-"], [class*="flex-wrap"], .flex.flex-col, [class*="flex-col"]):not(.sf-stagger :is(.grid, [class*="grid-cols-"], [class*="space-y-"], [class*="flex-wrap"], .flex.flex-col, [class*="flex-col"]) :is(.grid, [class*="grid-cols-"], [class*="space-y-"], [class*="flex-wrap"], .flex.flex-col, [class*="flex-col"])) > *:nth-child(3) { --sf-stagger-i: 2; }
+.sf-stagger :is(.grid, [class*="grid-cols-"], [class*="space-y-"], [class*="flex-wrap"], .flex.flex-col, [class*="flex-col"]):not(.sf-stagger :is(.grid, [class*="grid-cols-"], [class*="space-y-"], [class*="flex-wrap"], .flex.flex-col, [class*="flex-col"]) :is(.grid, [class*="grid-cols-"], [class*="space-y-"], [class*="flex-wrap"], .flex.flex-col, [class*="flex-col"])) > *:nth-child(4) { --sf-stagger-i: 3; }
+.sf-stagger :is(.grid, [class*="grid-cols-"], [class*="space-y-"], [class*="flex-wrap"], .flex.flex-col, [class*="flex-col"]):not(.sf-stagger :is(.grid, [class*="grid-cols-"], [class*="space-y-"], [class*="flex-wrap"], .flex.flex-col, [class*="flex-col"]) :is(.grid, [class*="grid-cols-"], [class*="space-y-"], [class*="flex-wrap"], .flex.flex-col, [class*="flex-col"])) > *:nth-child(5) { --sf-stagger-i: 4; }
+.sf-stagger :is(.grid, [class*="grid-cols-"], [class*="space-y-"], [class*="flex-wrap"], .flex.flex-col, [class*="flex-col"]):not(.sf-stagger :is(.grid, [class*="grid-cols-"], [class*="space-y-"], [class*="flex-wrap"], .flex.flex-col, [class*="flex-col"]) :is(.grid, [class*="grid-cols-"], [class*="space-y-"], [class*="flex-wrap"], .flex.flex-col, [class*="flex-col"])) > *:nth-child(6) { --sf-stagger-i: 5; }
+.sf-stagger :is(.grid, [class*="grid-cols-"], [class*="space-y-"], [class*="flex-wrap"], .flex.flex-col, [class*="flex-col"]):not(.sf-stagger :is(.grid, [class*="grid-cols-"], [class*="space-y-"], [class*="flex-wrap"], .flex.flex-col, [class*="flex-col"]) :is(.grid, [class*="grid-cols-"], [class*="space-y-"], [class*="flex-wrap"], .flex.flex-col, [class*="flex-col"])) > *:nth-child(7) { --sf-stagger-i: 6; }
+.sf-stagger :is(.grid, [class*="grid-cols-"], [class*="space-y-"], [class*="flex-wrap"], .flex.flex-col, [class*="flex-col"]):not(.sf-stagger :is(.grid, [class*="grid-cols-"], [class*="space-y-"], [class*="flex-wrap"], .flex.flex-col, [class*="flex-col"]) :is(.grid, [class*="grid-cols-"], [class*="space-y-"], [class*="flex-wrap"], .flex.flex-col, [class*="flex-col"])) > *:nth-child(8) { --sf-stagger-i: 7; }
+.sf-stagger :is(.grid, [class*="grid-cols-"], [class*="space-y-"], [class*="flex-wrap"], .flex.flex-col, [class*="flex-col"]):not(.sf-stagger :is(.grid, [class*="grid-cols-"], [class*="space-y-"], [class*="flex-wrap"], .flex.flex-col, [class*="flex-col"]) :is(.grid, [class*="grid-cols-"], [class*="space-y-"], [class*="flex-wrap"], .flex.flex-col, [class*="flex-col"])) > *:nth-child(9) { --sf-stagger-i: 8; }
+.sf-stagger :is(.grid, [class*="grid-cols-"], [class*="space-y-"], [class*="flex-wrap"], .flex.flex-col, [class*="flex-col"]):not(.sf-stagger :is(.grid, [class*="grid-cols-"], [class*="space-y-"], [class*="flex-wrap"], .flex.flex-col, [class*="flex-col"]) :is(.grid, [class*="grid-cols-"], [class*="space-y-"], [class*="flex-wrap"], .flex.flex-col, [class*="flex-col"])) > *:nth-child(10) { --sf-stagger-i: 9; }
+.sf-stagger :is(.grid, [class*="grid-cols-"], [class*="space-y-"], [class*="flex-wrap"], .flex.flex-col, [class*="flex-col"]):not(.sf-stagger :is(.grid, [class*="grid-cols-"], [class*="space-y-"], [class*="flex-wrap"], .flex.flex-col, [class*="flex-col"]) :is(.grid, [class*="grid-cols-"], [class*="space-y-"], [class*="flex-wrap"], .flex.flex-col, [class*="flex-col"])) > *:nth-child(11) { --sf-stagger-i: 10; }
+.sf-stagger :is(.grid, [class*="grid-cols-"], [class*="space-y-"], [class*="flex-wrap"], .flex.flex-col, [class*="flex-col"]):not(.sf-stagger :is(.grid, [class*="grid-cols-"], [class*="space-y-"], [class*="flex-wrap"], .flex.flex-col, [class*="flex-col"]) :is(.grid, [class*="grid-cols-"], [class*="space-y-"], [class*="flex-wrap"], .flex.flex-col, [class*="flex-col"])) > *:nth-child(12) { --sf-stagger-i: 11; }
+.sf-anim-scroll.sf-stagger:not(.sf-anim-in) :is(.grid, [class*="grid-cols-"], [class*="space-y-"], [class*="flex-wrap"], .flex.flex-col, [class*="flex-col"]):not(.sf-stagger :is(.grid, [class*="grid-cols-"], [class*="space-y-"], [class*="flex-wrap"], .flex.flex-col, [class*="flex-col"]) :is(.grid, [class*="grid-cols-"], [class*="space-y-"], [class*="flex-wrap"], .flex.flex-col, [class*="flex-col"])) > * {
   opacity: 0 !important;
   animation: none !important;
 }
@@ -625,7 +629,7 @@ html[data-theme="dark"] .sf-device-screen {
 @media (prefers-reduced-motion: reduce) {
   .sf-anim,
   .sf-anim-scroll,
-  .sf-stagger :is(.grid, [class*="grid-cols-"], [class*="space-y-"], [class*="flex-wrap"], .flex.flex-col, [class*="flex-col"]) > * {
+  .sf-stagger :is(.grid, [class*="grid-cols-"], [class*="space-y-"], [class*="flex-wrap"], .flex.flex-col, [class*="flex-col"]):not(.sf-stagger :is(.grid, [class*="grid-cols-"], [class*="space-y-"], [class*="flex-wrap"], .flex.flex-col, [class*="flex-col"]) :is(.grid, [class*="grid-cols-"], [class*="space-y-"], [class*="flex-wrap"], .flex.flex-col, [class*="flex-col"])) > * {
     animation: none !important;
     opacity: 1 !important;
     filter: none !important;

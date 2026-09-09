@@ -26,6 +26,7 @@ import { MotionBlock } from "@/components/motion-block";
 import { PublicForm } from "@/components/public-form";
 import { CollectionListView } from "@/components/collection-list-view";
 import { ActionableControl } from "@/components/public-http-action";
+import { usePlatformLangOptional } from "@/components/platform-lang-provider";
 
 function str(p: Record<string, unknown>, key: string, fallback = ""): string {
   const v = p[key];
@@ -1494,6 +1495,7 @@ export function SiteRenderer({
   const fallbackLocale = content.defaultLocale || content.locales?.[0] || "ar";
   const tokens = tokensForRender(content.tokens, colorMode, activeLocale);
   const editable = Boolean(onSelectBlock);
+  const { t } = usePlatformLangOptional();
 
   return (
     <div
@@ -1640,13 +1642,9 @@ export function SiteRenderer({
               +
             </div>
             <p className="text-sm font-semibold" style={{ color: tokens.colors.text }}>
-              {tokens.rtl ? "صفحة فارغة" : "Empty page"}
+              {t("canvasEmptyTitle")}
             </p>
-            <p className="mt-1.5 text-xs leading-5">
-              {tokens.rtl
-                ? "أضف قسماً أو عنصراً من لوحة الإدراج للبدء"
-                : "Add a section or element from the Insert panel to start"}
-            </p>
+            <p className="mt-1.5 text-xs leading-5">{t("canvasEmptyBody")}</p>
           </div>
         </div>
       ) : null}
