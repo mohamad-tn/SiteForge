@@ -1,4 +1,3 @@
-import { withAuth } from "next-auth/middleware";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
@@ -14,6 +13,23 @@ function hostOf(req: NextRequest): string {
   const xf = req.headers.get("x-forwarded-host");
   const raw = (xf || req.headers.get("host") || "").split(",")[0].trim().toLowerCase();
   return raw.replace(/:\d+$/, "");
+}
+
+function isPlatformHost(host: string): boolean {
+  if (!host) return true;
+  if (PLATFORM_HOSTS.has(host)) return true;
+  if (host.endsWith(".localhost")) return true;
+  // Hosted app URLs must serve the platform UI, not tenant custom-domain rewrite.
+  if (host.endsWith(".onrender.com")) return true;
+  if (host.endsWith(".vercel.app")) return true;
+  if (host.endsWith(".netlify.app")) return true;
+  try {
+    const authUrl = process.env.NEXTAUTH_URL;
+    if (authUrl && new URL(authUrl).hostname.toLowerCase() === host) return true;
+  } catch {
+    /* ignore bad NEXTAUTH_URL */
+  }
+  return false;
 }
 
 export default async function middleware(req: NextRequest) {
@@ -37,8 +53,7 @@ export default async function middleware(req: NextRequest) {
   const host = hostOf(req);
   if (
     host &&
-    !PLATFORM_HOSTS.has(host) &&
-    !host.endsWith(".localhost") &&
+    !isPlatformHost(host) &&
     !path.startsWith("/api") &&
     !path.startsWith("/_next") &&
     !path.startsWith("/s/") &&
