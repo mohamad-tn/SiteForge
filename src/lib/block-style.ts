@@ -262,6 +262,8 @@ export const MOTION_KEYS = [
   "entranceAnim",
   "animDuration",
   "animDelay",
+  "staggerChildren",
+  "staggerMs",
   "hoverScale",
   "hoverShadow",
   "scrollReveal",
@@ -343,6 +345,8 @@ export function defaultMotionProps(): Record<string, string> {
     entranceAnim: "none",
     animDuration: "600",
     animDelay: "0",
+    staggerChildren: "false",
+    staggerMs: "80",
     hoverScale: "none",
     hoverShadow: "false",
     scrollReveal: "false",
@@ -353,7 +357,9 @@ export const MOTION_LABELS: Record<string, string> = {
   effectPreset: "التأثير",
   entranceAnim: "حركة الدخول",
   animDuration: "المدة (مللي ثانية)",
-  animDelay: "التأخير (مللي ثانية)",
+  animDelay: "تأخير العنصر (مللي ثانية)",
+  staggerChildren: "تتابع الأبناء",
+  staggerMs: "فاصل التتابع (مللي ثانية)",
   hoverScale: "تكبير عند التمرير",
   hoverShadow: "ظل عند التمرير",
   scrollReveal: "ظهور عند التمرير",
@@ -383,14 +389,17 @@ export function blockMotionAttrs(p: Record<string, unknown>): {
   const anim = strProp(p, "entranceAnim", "none");
   const dur = strProp(p, "animDuration", "600");
   const delay = strProp(p, "animDelay", "0");
+  const staggerChildren = strProp(p, "staggerChildren", "false") === "true";
+  const staggerMs = strProp(p, "staggerMs", "80");
   const hoverScale = strProp(p, "hoverScale", "none");
   const hoverShadow = strProp(p, "hoverShadow", "false");
   const scrollReveal = strProp(p, "scrollReveal", "false") === "true";
 
   const classes: string[] = [];
   const entrance = ENTRANCE_CLASS[anim] || "";
-  const hasEntrance = Boolean(entrance);
+  const hasEntrance = Boolean(entrance) || staggerChildren;
   if (entrance) classes.push("sf-anim", entrance);
+  if (staggerChildren) classes.push("sf-stagger");
 
   if (hoverScale === "sm") classes.push("sf-hover-scale-sm");
   else if (hoverScale === "md") classes.push("sf-hover-scale-md");
@@ -398,11 +407,15 @@ export function blockMotionAttrs(p: Record<string, unknown>): {
   else if (hoverShadow === "glow") classes.push("sf-hover-glow");
 
   const style: Record<string, string | number> = {};
-  if (entrance) {
-    const d = Number(dur);
-    const dl = Number(delay);
+  const d = Number(dur);
+  const dl = Number(delay);
+  const sm = Number(staggerMs);
+  if (entrance || staggerChildren) {
     if (Number.isFinite(d) && d > 0) style["--sf-anim-dur"] = `${d}ms`;
     if (Number.isFinite(dl) && dl >= 0) style["--sf-anim-delay"] = `${dl}ms`;
+  }
+  if (staggerChildren && Number.isFinite(sm) && sm >= 0) {
+    style["--sf-stagger-ms"] = `${sm}ms`;
   }
   return { className: classes.join(" "), style, scrollReveal, hasEntrance };
 }

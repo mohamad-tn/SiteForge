@@ -851,6 +851,30 @@ export function InspectorPanel({
                 step={50}
                 hint="ms"
               />
+              <div className="space-y-1.5 rounded-2xl border border-stone-200/80 p-3 dark:border-stone-800">
+                <Label className="text-[11px] text-stone-500 dark:text-stone-400">{motionLabel("staggerChildren", uiLang)}</Label>
+                <Select
+                  value={String(selected.props.staggerChildren || "false")}
+                  onValueChange={(v) => onUpdateProp(selected.id, "staggerChildren", v)}
+                  options={[
+                    { value: "false", label: uiLang === "ar" ? "إيقاف" : "Off" },
+                    { value: "true", label: uiLang === "ar" ? "تشغيل" : "On" },
+                  ]}
+                  triggerClassName="h-9 rounded-xl text-xs font-semibold"
+                />
+                <p className="text-[10px] leading-4 text-stone-400 dark:text-stone-500">{t("staggerHelp")}</p>
+                {String(selected.props.staggerChildren) === "true" ? (
+                  <NumField
+                    label={motionLabel("staggerMs", uiLang)}
+                    value={String(selected.props.staggerMs ?? "80")}
+                    onChange={(v) => onUpdateProp(selected.id, "staggerMs", v)}
+                    min={40}
+                    max={400}
+                    step={20}
+                    hint="ms"
+                  />
+                ) : null}
+              </div>
             </div>
           ) : null}
 

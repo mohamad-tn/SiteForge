@@ -48,4 +48,25 @@ describe("block motion / effects", () => {
     expect(m.scrollReveal).toBe(true);
     expect(m.hasEntrance).toBe(true);
   });
+
+  it("wires per-block delay and optional child stagger", () => {
+    const delayed = blockMotionAttrs({
+      ...effectPresetProps("soft-fade"),
+      animDelay: "120",
+      animDuration: "500",
+    });
+    expect(delayed.style["--sf-anim-delay"]).toBe("120ms");
+    expect(delayed.style["--sf-anim-dur"]).toBe("500ms");
+
+    const stagger = blockMotionAttrs({
+      entranceAnim: "none",
+      staggerChildren: "true",
+      staggerMs: "100",
+      animDelay: "40",
+    });
+    expect(stagger.className).toContain("sf-stagger");
+    expect(stagger.hasEntrance).toBe(true);
+    expect(stagger.style["--sf-stagger-ms"]).toBe("100ms");
+    expect(stagger.style["--sf-anim-delay"]).toBe("40ms");
+  });
 });

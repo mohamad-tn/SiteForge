@@ -14,7 +14,7 @@ import { SignOutButton } from "@/components/sign-out-button";
 import { CommandPalette, type CommandItem } from "@/components/command-palette";
 import { PlatformLangSwitcher, usePlatformLang } from "@/components/platform-lang-provider";
 import { CATEGORY_LABELS } from "@/lib/platform-i18n";
-import { Copy, Download, Search, Upload } from "lucide-react";
+import { Copy, Download, Search, Upload, Plus, LayoutTemplate, ArrowRight } from "lucide-react";
 
 type Template = {
   slug: string;
@@ -225,6 +225,9 @@ export function DashboardClient({
     { done: total > 0, label: t.step2 },
     { done: sites.some((s) => s.publishedAt), label: t.step3 },
   ];
+  const publishedCount = sites.filter((s) => s.publishedAt).length;
+  const publishedShown = status === "published" ? total : status === "draft" ? 0 : publishedCount;
+  const draftShown = status === "draft" ? total : status === "published" ? 0 : Math.max(0, total - publishedCount);
 
   return (
     <AppCanvas dir={dir} lang={uiLang}>
@@ -259,30 +262,85 @@ export function DashboardClient({
       </AppHeader>
 
       <main className="mx-auto max-w-6xl space-y-7 px-4 py-7 sm:px-6 sm:py-9">
-        {total === 0 ? (
-          <SoftCard className="p-6">
-            <h2 className="text-lg font-semibold tracking-tight">{t.startTitle}</h2>
-            <ul className="mt-4 space-y-2.5">
-              {checklist.map((c) => (
-                <li
-                  key={c.label}
-                  className="flex items-start gap-2.5 text-sm text-stone-600 dark:text-stone-300"
-                >
-                  <span
-                    className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] ${
-                      c.done ? "bg-teal-700 text-white" : "bg-stone-200 text-stone-500 dark:bg-stone-800"
-                    }`}
-                  >
-                    {c.done ? "✓" : ""}
-                  </span>
-                  <span className="min-w-0 leading-6">{c.label}</span>
-                </li>
-              ))}
-            </ul>
+        <section className="relative overflow-hidden rounded-[1.75rem] border border-stone-200/70 bg-[var(--card)]/85 px-5 py-7 shadow-[var(--shadow-xs)] sm:px-8 sm:py-8 dark:border-stone-800">
+          <div aria-hidden className="pointer-events-none absolute -end-10 -top-12 h-40 w-40 rounded-full bg-teal-500/10 blur-3xl" />
+          <div className="relative flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+            <div className="min-w-0 max-w-2xl">
+              <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.14em] text-teal-800/80 dark:text-teal-300/90">
+                Dashboard
+              </p>
+              <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{tp("dashHeroTitle")}</h1>
+              <p className="mt-2 text-sm leading-7 text-stone-500 dark:text-stone-400">{tp("dashHeroBody")}</p>
+            </div>
+            <Button
+              type="button"
+              className="shrink-0 rounded-full shadow-sm"
+              onClick={() => document.getElementById("create")?.scrollIntoView({ behavior: "smooth" })}
+            >
+              <Plus className="h-4 w-4" aria-hidden />
+              {tp("dashCtaCreate")}
+            </Button>
+          </div>
+          <div className="relative mt-6 grid gap-3 sm:grid-cols-3">
+            {[
+              [tp("dashMetricSites"), String(total)],
+              [tp("dashMetricPublished"), String(publishedShown)],
+              [tp("dashMetricDrafts"), String(draftShown)],
+            ].map(([label, value]) => (
+              <div
+                key={label}
+                className="rounded-2xl border border-stone-200/60 bg-white/70 px-4 py-3.5 dark:border-stone-800 dark:bg-stone-950/45"
+              >
+                <div className="text-[11px] font-medium text-stone-400">{label}</div>
+                <div className="mt-1 text-2xl font-bold tabular-nums tracking-tight text-stone-900 dark:text-stone-50">
+                  {loading ? "…" : value}
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {total === 0 && !loading ? (
+          <SoftCard className="border-dashed border-stone-300/80 bg-stone-50/50 p-6 dark:border-stone-700 dark:bg-stone-950/30">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0">
+                <div className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-teal-50 text-teal-800 dark:bg-teal-950/50 dark:text-teal-300">
+                  <LayoutTemplate className="h-4 w-4" aria-hidden />
+                </div>
+                <h2 className="text-lg font-semibold tracking-tight">{t.startTitle}</h2>
+                <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">{tp("dashEmptyCta")}</p>
+                <ul className="mt-4 space-y-2.5">
+                  {checklist.map((c) => (
+                    <li
+                      key={c.label}
+                      className="flex items-start gap-2.5 text-sm text-stone-600 dark:text-stone-300"
+                    >
+                      <span
+                        className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] ${
+                          c.done ? "bg-teal-700 text-white" : "bg-stone-200 text-stone-500 dark:bg-stone-800"
+                        }`}
+                      >
+                        {c.done ? "✓" : ""}
+                      </span>
+                      <span className="min-w-0 leading-6">{c.label}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                className="shrink-0 rounded-full"
+                onClick={() => document.getElementById("create")?.scrollIntoView({ behavior: "smooth" })}
+              >
+                {tp("dashCtaCreate")}
+                <ArrowRight className="h-3.5 w-3.5 rtl:rotate-180" aria-hidden />
+              </Button>
+            </div>
           </SoftCard>
         ) : null}
 
-        <SoftCard id="create" className="scroll-mt-24 p-5 sm:p-6">
+        <SoftCard id="create" className="scroll-mt-24 border-stone-200/60 p-5 shadow-[var(--shadow-xs)] sm:p-6 dark:border-stone-800">
           <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div className="min-w-0">
               <h2 className="text-lg font-semibold tracking-tight">{t.marketTitle}</h2>
@@ -448,23 +506,46 @@ export function DashboardClient({
           </SoftCard>
 
           {loading ? (
-            <SoftCard className="p-8 text-sm text-stone-500">{t.loading}</SoftCard>
+            <SoftCard className="border-stone-200/60 p-8 text-sm text-stone-500 shadow-[var(--shadow-xs)] dark:border-stone-800">
+              {t.loading}
+            </SoftCard>
           ) : sites.length === 0 ? (
-            <SoftCard className="p-8">
-              <h3 className="font-semibold">{t.emptyTitle}</h3>
-              <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">{t.emptyBody}</p>
+            <SoftCard className="border-dashed border-stone-300/80 bg-stone-50/40 p-8 text-center dark:border-stone-700 dark:bg-stone-950/30">
+              <h3 className="font-semibold tracking-tight">{t.emptyTitle}</h3>
+              <p className="mx-auto mt-1 max-w-md text-sm text-stone-500 dark:text-stone-400">{t.emptyBody}</p>
+              <Button
+                type="button"
+                className="mt-5 rounded-full"
+                onClick={() => document.getElementById("create")?.scrollIntoView({ behavior: "smooth" })}
+              >
+                {tp("dashCtaCreate")}
+              </Button>
             </SoftCard>
           ) : (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-3.5 md:grid-cols-2 lg:grid-cols-3">
               {sites.map((site) => (
-                <SoftCard key={site.id} className="flex min-w-0 flex-col p-5">
+                <SoftCard
+                  key={site.id}
+                  className="flex min-w-0 flex-col border-stone-200/60 bg-[var(--card)]/90 p-5 shadow-[var(--shadow-xs)] transition hover:shadow-[var(--shadow-sm)] dark:border-stone-800"
+                >
                   <div className="mb-4 min-w-0">
+                    <div className="mb-2 flex items-center gap-2">
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
+                          site.publishedAt
+                            ? "bg-teal-50 text-teal-800 dark:bg-teal-950/50 dark:text-teal-300"
+                            : "bg-stone-100 text-stone-500 dark:bg-stone-800 dark:text-stone-400"
+                        }`}
+                      >
+                        {site.publishedAt ? t.published : t.draft}
+                      </span>
+                    </div>
                     <h3 className="truncate text-base font-semibold tracking-tight">{site.name}</h3>
                     <p className="mt-1 truncate font-mono text-xs text-stone-500" dir="ltr">
                       /s/{site.slug}
                     </p>
                     <p className="mt-2 text-[11px] leading-5 text-stone-400">
-                      {site.publishedAt ? t.published : t.draft} · {t.updated}{" "}
+                      {t.updated}{" "}
                       {new Date(site.updatedAt).toLocaleString(uiLang === "ar" ? "ar" : "en")}
                     </p>
                   </div>

@@ -18,7 +18,7 @@ import {
   type LocaleCode,
   type SiteContent,
 } from "@/lib/design";
-import { listBlockParts, partLabel } from "@/lib/block-parts";
+import { listBlockParts } from "@/lib/block-parts";
 import { withEditableDefaults } from "@/lib/block-style";
 import { SiteRenderer } from "@/components/site-renderer";
 import { Button } from "@/components/ui/button";
@@ -27,7 +27,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { InsertPalette } from "@/components/editor/insert-palette";
 import { InspectorPanel } from "@/components/editor/inspector-panel";
-import { SiteSettingsPanel, type SiteSettings } from "@/components/editor/site-settings-panel";
+import { SiteSettingsPanel, type SiteSettings, type SiteSettingsFocus } from "@/components/editor/site-settings-panel";
 import { CollectionsPanel } from "@/components/editor/collections-panel";
 import { SubmissionsPanel } from "@/components/editor/submissions-panel";
 import { MediaField } from "@/components/editor/media-field";
@@ -71,6 +71,9 @@ import {
   X,
   Library,
   BookmarkPlus,
+  Search,
+  Globe,
+  KeyRound,
 } from "lucide-react";
 
 type SiteMeta = {
@@ -123,6 +126,8 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
     domainStatus: site.domainStatus || "none",
   });
   const [rightTab, setRightTab] = useState<RightTab>("inspect");
+  const [siteFocus, setSiteFocus] = useState<SiteSettingsFocus>(null);
+  const [siteFocusNonce, setSiteFocusNonce] = useState(0);
   const [mobilePanel, setMobilePanel] = useState<"none" | "left" | "right">("none");
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [rightCollapsed, setRightCollapsed] = useState(false);
@@ -164,15 +169,20 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
 
   const pageIndex = Math.max(0, content.pages.findIndex((p) => p.id === pageId));
   const page = content.pages[pageIndex] ?? content.pages[0];
-  const locales = content.locales?.length ? content.locales : [content.defaultLocale || "ar"];
+  const locales = useMemo(
+    () => (content.locales?.length ? content.locales : [content.defaultLocale || "ar"]),
+    [content.locales, content.defaultLocale]
+  );
+  const pageTitle = page?.title;
+  const pageStableId = page?.id;
 
   useEffect(() => {
     if (!content.pages.find((p) => p.id === pageId) && content.pages[0]) setPageId(content.pages[0].id);
   }, [content.pages, pageId]);
 
   useEffect(() => {
-    if (page) setPageTitleDraft(page.title);
-  }, [page?.id, page?.title]);
+    if (pageTitle != null) setPageTitleDraft(pageTitle);
+  }, [pageStableId, pageTitle]);
 
   useEffect(() => {
     if (!locales.includes(editLocale)) setEditLocale(locales[0]);
@@ -517,12 +527,21 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [content, settings, saveState]);
 
+  function openSiteSection(section: SiteSettingsFocus = null) {
+    setRightCollapsed(false);
+    writeCollapsedPref(RIGHT_COLLAPSED_KEY, false);
+    setRightTab("site");
+    setSiteFocus(section);
+    setSiteFocusNonce((n) => n + 1);
+    setMobilePanel("right");
+  }
+
   const commands: CommandItem[] = [
     { id: "save", label: t("savedDraft"), action: () => save(false) },
     { id: "publish", label: t("publish"), action: () => save(true) },
     { id: "insert", label: t("cmdInsert"), action: () => setLeftTab("insert") },
     { id: "pages", label: t("cmdPages"), action: () => setLeftTab("pages") },
-    { id: "settings", label: t("cmdSettings"), action: () => setRightTab("site") },
+    { id: "settings", label: t("cmdSettings"), action: () => openSiteSection(null) },
     { id: "replies", label: t("cmdReplies"), action: () => setRightTab("replies") },
     { id: "cms", label: t("cmdCms"), action: () => setLeftTab("cms") },
     { id: "dashboard", label: t("cmdDashboard"), action: () => { window.location.href = "/dashboard"; } },
@@ -650,7 +669,7 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
           </Button>
         </div>
 
-        {/* 3) SITE — settings / CMS / chrome theme */}
+        {/* 3) SITE — settings / SEO / domain / secrets / CMS / chrome theme */}
         <div className="sf-toolbar-group hidden min-w-0 md:inline-flex" data-tone="site" title={t("toolbarSiteHint")}>
           <span className="sf-toolbar-label">{t("toolbarSite")}</span>
           <Button
@@ -659,16 +678,40 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
             className="h-8 rounded-full px-2.5 text-[11px] font-bold"
             title={t("helpSite")}
             aria-label={t("openSiteSettings")}
-            onClick={() => {
-              setRightCollapsed(false);
-              writeCollapsedPref(RIGHT_COLLAPSED_KEY, false);
-              setRightTab("site");
-              setMobilePanel("right");
-            }}
+            onClick={() => openSiteSection(null)}
           >
             <Settings2 className="h-3.5 w-3.5" aria-hidden />
             <span className="hidden xl:inline">{t("openSiteSettings")}</span>
           </Button>
+          <div className="inline-flex items-center gap-0.5 rounded-full bg-white/55 p-0.5 dark:bg-stone-950/40" role="group" aria-label={t("toolbarSite")}>
+            <button
+              type="button"
+              className="inline-flex items-center justify-center rounded-full p-2 text-xs text-stone-600 transition hover:text-stone-900 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--ring)] dark:text-stone-300 dark:hover:text-stone-50"
+              title={t("tipOpenSeo")}
+              aria-label={t("openSeo")}
+              onClick={() => openSiteSection("seo")}
+            >
+              <Search className="h-3.5 w-3.5" aria-hidden />
+            </button>
+            <button
+              type="button"
+              className="inline-flex items-center justify-center rounded-full p-2 text-xs text-stone-600 transition hover:text-stone-900 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--ring)] dark:text-stone-300 dark:hover:text-stone-50"
+              title={t("tipOpenDomain")}
+              aria-label={t("openDomain")}
+              onClick={() => openSiteSection("domain")}
+            >
+              <Globe className="h-3.5 w-3.5" aria-hidden />
+            </button>
+            <button
+              type="button"
+              className="inline-flex items-center justify-center rounded-full p-2 text-xs text-stone-600 transition hover:text-stone-900 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--ring)] dark:text-stone-300 dark:hover:text-stone-50"
+              title={t("tipOpenSecrets")}
+              aria-label={t("openSecrets")}
+              onClick={() => openSiteSection("secrets")}
+            >
+              <KeyRound className="h-3.5 w-3.5" aria-hidden />
+            </button>
+          </div>
           <Button
             variant="ghost"
             size="sm"
@@ -798,8 +841,17 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
                   </div>
                   <div className="my-1 h-px bg-stone-200/80 dark:bg-stone-700 md:hidden" />
                   <div className="px-2.5 py-1.5 text-[9px] font-bold uppercase tracking-[0.12em] text-stone-400 md:hidden">{t("toolbarSite")}</div>
-                  <button type="button" className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-start text-xs font-semibold hover:bg-stone-50 md:hidden dark:hover:bg-stone-800" onClick={() => { setRightCollapsed(false); writeCollapsedPref(RIGHT_COLLAPSED_KEY, false); setRightTab("site"); setMobilePanel("right"); setMoreOpen(false); }}>
+                  <button type="button" className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-start text-xs font-semibold hover:bg-stone-50 md:hidden dark:hover:bg-stone-800" onClick={() => { openSiteSection(null); setMoreOpen(false); }}>
                     <Settings2 className="h-3.5 w-3.5" aria-hidden /> {t("openSiteSettings")}
+                  </button>
+                  <button type="button" className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-start text-xs font-semibold hover:bg-stone-50 md:hidden dark:hover:bg-stone-800" onClick={() => { openSiteSection("seo"); setMoreOpen(false); }}>
+                    <Search className="h-3.5 w-3.5" aria-hidden /> {t("openSeo")}
+                  </button>
+                  <button type="button" className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-start text-xs font-semibold hover:bg-stone-50 md:hidden dark:hover:bg-stone-800" onClick={() => { openSiteSection("domain"); setMoreOpen(false); }}>
+                    <Globe className="h-3.5 w-3.5" aria-hidden /> {t("openDomain")}
+                  </button>
+                  <button type="button" className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-start text-xs font-semibold hover:bg-stone-50 md:hidden dark:hover:bg-stone-800" onClick={() => { openSiteSection("secrets"); setMoreOpen(false); }}>
+                    <KeyRound className="h-3.5 w-3.5" aria-hidden /> {t("openSecrets")}
                   </button>
                   <button type="button" className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-start text-xs font-semibold hover:bg-stone-50 md:hidden dark:hover:bg-stone-800" onClick={() => { setLeftCollapsed(false); writeCollapsedPref(LEFT_COLLAPSED_KEY, false); setLeftTab("cms"); setMobilePanel("left"); setMoreOpen(false); }}>
                     <Library className="h-3.5 w-3.5" aria-hidden /> {t("openCms")}
@@ -1261,7 +1313,7 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
             </div>
             <div className="flex gap-1 rounded-2xl bg-stone-100/80 p-1 dark:bg-stone-950">
               <button type="button" title={t("helpInspect")} onClick={() => setRightTab("inspect")} className={`flex-1 rounded-xl py-1.5 text-[10px] font-semibold ${rightTab === "inspect" ? "bg-white text-stone-900 shadow-sm dark:bg-stone-800 dark:text-stone-50" : "text-stone-500 dark:text-stone-400"}`}>{t("inspect")}</button>
-              <button type="button" title={t("helpSite")} onClick={() => setRightTab("site")} className={`flex-1 rounded-xl py-1.5 text-[10px] font-semibold ${rightTab === "site" ? "bg-white text-stone-900 shadow-sm dark:bg-stone-800 dark:text-stone-50" : "text-stone-500 dark:text-stone-400"}`}>{t("site")}</button>
+              <button type="button" title={t("helpSite")} onClick={() => { setRightTab("site"); setSiteFocus(null); }} className={`flex-1 rounded-xl py-1.5 text-[10px] font-semibold ${rightTab === "site" ? "bg-white text-stone-900 shadow-sm dark:bg-stone-800 dark:text-stone-50" : "text-stone-500 dark:text-stone-400"}`}>{t("site")}</button>
               <button type="button" title={t("helpReplies")} onClick={() => setRightTab("replies")} className={`flex-1 rounded-xl py-1.5 text-[10px] font-semibold ${rightTab === "replies" ? "bg-white text-stone-900 shadow-sm dark:bg-stone-800 dark:text-stone-50" : "text-stone-500 dark:text-stone-400"}`}>{t("replies")}</button>
             </div>
           </div>
@@ -1283,7 +1335,7 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
             ) : rightTab === "replies" ? (
               <SubmissionsPanel siteId={site.id} />
             ) : (
-              <SiteSettingsPanel siteId={site.id} settings={settings} onChange={(patch) => setSettings((s) => ({ ...s, ...patch }))} />
+              <SiteSettingsPanel siteId={site.id} settings={settings} focusSection={siteFocus} focusNonce={siteFocusNonce} onChange={(patch) => setSettings((s) => ({ ...s, ...patch }))} />
             )}
           </div>
           </aside>

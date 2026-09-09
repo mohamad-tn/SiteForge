@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -25,17 +25,39 @@ export type SiteSettings = {
   domainStatus: "none" | "pending" | "active" | "error";
 };
 
+export type SiteSettingsFocus = "seo" | "domain" | "secrets" | null;
+
 export function SiteSettingsPanel({
   siteId,
   settings,
   onChange,
+  focusSection = null,
+  focusNonce = 0,
 }: {
   siteId: string;
   settings: SiteSettings;
   onChange: (patch: Partial<SiteSettings>) => void;
+  focusSection?: SiteSettingsFocus;
+  focusNonce?: number;
 }) {
   const { t, lang } = usePlatformLang();
+  const seoRef = useRef<HTMLDivElement | null>(null);
+  const domainRef = useRef<HTMLDivElement | null>(null);
+  const secretsRef = useRef<HTMLDivElement | null>(null);
   const previewCss = sanitizeCustomCss(settings.customCss);
+
+  useEffect(() => {
+    if (!focusSection) return;
+    const map = { seo: seoRef, domain: domainRef, secrets: secretsRef } as const;
+    const el = map[focusSection]?.current;
+    if (!el) return;
+    const timer = window.setTimeout(() => {
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+      el.classList.add("ring-2", "ring-teal-600/40");
+      window.setTimeout(() => el.classList.remove("ring-2", "ring-teal-600/40"), 1200);
+    }, 60);
+    return () => window.clearTimeout(timer);
+  }, [focusSection, focusNonce]);
   const srcDoc = useMemo(() => {
     const css = previewCss || "/* add CSS to preview */";
     const sampleTitle = lang === "ar" ? "معاينة قسم" : "Section preview";
@@ -71,6 +93,11 @@ ${css}
 
   return (
     <div className="space-y-4">
+      <div
+        id="sf-site-seo"
+        ref={seoRef}
+        className="scroll-mt-4 space-y-4 rounded-2xl transition-[box-shadow] duration-300"
+      >
       <div className="rounded-2xl border border-teal-700/15 bg-teal-50/60 px-3 py-2.5 dark:bg-teal-950/30">
         <h3 className="text-[10px] font-bold uppercase tracking-[0.14em] text-teal-800 dark:text-teal-200">
           {t("seoSiteTitle")}
@@ -121,7 +148,13 @@ ${css}
         accept="image/*"
       />
 
-      <div className="space-y-3 rounded-2xl border border-stone-200/80 p-3 dark:border-stone-800">
+      </div>
+
+      <div
+        id="sf-site-domain"
+        ref={domainRef}
+        className="scroll-mt-4 space-y-3 rounded-2xl border border-stone-200/80 p-3 transition-[box-shadow] duration-300 dark:border-stone-800"
+      >
         <div className="flex items-center justify-between gap-2">
           <h3 className="text-[10px] font-bold uppercase tracking-[0.14em] text-stone-400">
             {t("customDomainTitle")}
@@ -174,7 +207,9 @@ ${css}
         ) : null}
       </div>
 
-      <SiteSecretsPanel siteId={siteId} />
+      <div id="sf-site-secrets" ref={secretsRef} className="scroll-mt-4 rounded-2xl transition-[box-shadow] duration-300">
+        <SiteSecretsPanel siteId={siteId} />
+      </div>
 
       <div className="space-y-1.5">
         <Label className="text-[11px] text-stone-500">{t("customCssLabel")}</Label>
