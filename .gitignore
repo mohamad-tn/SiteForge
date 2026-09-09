@@ -47,3 +47,5 @@ next-env.d.ts
 STATUS.bak.txt
 _upd_docs.py
 report.txt
+
+.env.render
