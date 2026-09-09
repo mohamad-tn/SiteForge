@@ -16,7 +16,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "db:migrate:deploy": "prisma migrate deploy",
-    "db:seed:prod": "tsx prisma/seed.ts"
+    "db:seed:prod": "tsx prisma/seed.ts",
+    "build:render": "corepack enable && prisma generate && prisma migrate deploy && next build"
   },
   "dependencies": {
     "@prisma/client": "5.22.0",
@@ -57,5 +58,6 @@
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
-  }
+  },
+  "packageManager": "pnpm@9.15.0"
 }

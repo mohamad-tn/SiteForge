@@ -13,7 +13,7 @@ services:
     plan: free
     region: frankfurt
     rootDir: .
-    buildCommand: pnpm install --frozen-lockfile && pnpm build
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm build
     startCommand: pnpm start
     healthCheckPath: /login
     autoDeployTrigger: commit
