@@ -233,18 +233,18 @@ export function DashboardClient({
     <AppCanvas dir={dir} lang={uiLang}>
       <CommandPalette items={commands} />
       <AppHeader>
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3.5 sm:px-6">
-          <div className="min-w-0">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2 px-4 py-3.5 sm:gap-3 sm:px-6">
+          <div className="min-w-0 flex-1 basis-[12rem]">
             <div className="truncate text-lg font-bold tracking-tight text-teal-900 dark:text-teal-300">
               SiteForge
             </div>
-            <div className="truncate text-xs leading-5 text-stone-500 dark:text-stone-400">
+            <div className="truncate text-xs leading-5 text-[var(--muted)]">
               {t.welcome} {userName || userEmail}
             </div>
           </div>
-          <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5 sm:gap-2">
+          <div className="flex min-w-0 max-w-full flex-wrap items-center justify-end gap-1.5 sm:gap-2">
             <PlatformLangSwitcher size="compact" />
-            <span className="hidden text-[11px] text-stone-400 lg:inline">{t.cmd}</span>
+            <span className="hidden text-[11px] text-[var(--muted)] lg:inline">{t.cmd}</span>
             <ThemeToggleButton />
             {isAdmin ? (
               <Button asChild variant="outline" size="sm" className="rounded-full">
@@ -270,7 +270,7 @@ export function DashboardClient({
                 Dashboard
               </p>
               <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{tp("dashHeroTitle")}</h1>
-              <p className="mt-2 text-sm leading-7 text-stone-500 dark:text-stone-400">{tp("dashHeroBody")}</p>
+              <p className="mt-2 text-sm leading-7 text-[var(--muted)]">{tp("dashHeroBody")}</p>
             </div>
             <Button
               type="button"
@@ -291,7 +291,7 @@ export function DashboardClient({
                 key={label}
                 className="rounded-2xl border border-stone-200/60 bg-white/70 px-4 py-3.5 dark:border-stone-800 dark:bg-stone-950/45"
               >
-                <div className="text-[11px] font-medium text-stone-400">{label}</div>
+                <div className="text-[11px] font-medium text-[var(--muted)]">{label}</div>
                 <div className="mt-1 text-2xl font-bold tabular-nums tracking-tight text-stone-900 dark:text-stone-50">
                   {loading ? "…" : value}
                 </div>
@@ -308,7 +308,7 @@ export function DashboardClient({
                   <LayoutTemplate className="h-4 w-4" aria-hidden />
                 </div>
                 <h2 className="text-lg font-semibold tracking-tight">{t.startTitle}</h2>
-                <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">{tp("dashEmptyCta")}</p>
+                <p className="mt-1 text-sm text-[var(--muted)]">{tp("dashEmptyCta")}</p>
                 <ul className="mt-4 space-y-2.5">
                   {checklist.map((c) => (
                     <li
@@ -344,7 +344,7 @@ export function DashboardClient({
           <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div className="min-w-0">
               <h2 className="text-lg font-semibold tracking-tight">{t.marketTitle}</h2>
-              <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">{t.marketSub}</p>
+              <p className="mt-1 text-sm text-[var(--muted)]">{t.marketSub}</p>
             </div>
             <label className="inline-flex shrink-0 cursor-pointer items-center gap-2 rounded-full border border-stone-200/90 bg-white px-3.5 py-2 text-xs font-medium shadow-[0_1px_2px_rgba(28,25,23,0.04)] transition hover:bg-stone-50 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-50 dark:hover:bg-stone-800">
               <Upload className="h-3.5 w-3.5 shrink-0" />
@@ -414,7 +414,7 @@ export function DashboardClient({
                   <div className="mt-1 truncate font-medium text-stone-900 dark:text-stone-50">
                     {tpl.nameAr}
                   </div>
-                  <div className="mt-1 line-clamp-2 text-xs leading-5 text-stone-500 dark:text-stone-400">
+                  <div className="mt-1 line-clamp-2 text-xs leading-5 text-[var(--muted)]">
                     {tpl.descriptionAr}
                   </div>
                 </button>
@@ -432,7 +432,7 @@ export function DashboardClient({
             <div className="flex flex-col gap-1 border-b border-stone-200/70 px-5 py-4 dark:border-stone-800 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
               <div className="min-w-0">
                 <h2 className="truncate text-xl font-bold tracking-tight sm:text-2xl">{t.mySites}</h2>
-                <p className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">{t.sitesCount(total)}</p>
+                <p className="mt-0.5 text-xs text-[var(--muted)]">{t.sitesCount(total)}</p>
               </div>
               {pageCount > 1 ? (
                 <div className="flex shrink-0 items-center gap-2">
@@ -506,13 +506,13 @@ export function DashboardClient({
           </SoftCard>
 
           {loading ? (
-            <SoftCard className="border-stone-200/60 p-8 text-sm text-stone-500 shadow-[var(--shadow-xs)] dark:border-stone-800">
+            <SoftCard className="border-stone-200/60 p-8 text-sm text-[var(--muted)] shadow-[var(--shadow-xs)] dark:border-stone-800">
               {t.loading}
             </SoftCard>
           ) : sites.length === 0 ? (
             <SoftCard className="border-dashed border-stone-300/80 bg-stone-50/40 p-8 text-center dark:border-stone-700 dark:bg-stone-950/30">
               <h3 className="font-semibold tracking-tight">{t.emptyTitle}</h3>
-              <p className="mx-auto mt-1 max-w-md text-sm text-stone-500 dark:text-stone-400">{t.emptyBody}</p>
+              <p className="mx-auto mt-1 max-w-md text-sm text-[var(--muted)]">{t.emptyBody}</p>
               <Button
                 type="button"
                 className="mt-5 rounded-full"
@@ -541,10 +541,10 @@ export function DashboardClient({
                       </span>
                     </div>
                     <h3 className="truncate text-base font-semibold tracking-tight">{site.name}</h3>
-                    <p className="mt-1 truncate font-mono text-xs text-stone-500" dir="ltr">
+                    <p className="mt-1 truncate font-mono text-xs text-[var(--muted)]" dir="ltr">
                       /s/{site.slug}
                     </p>
-                    <p className="mt-2 text-[11px] leading-5 text-stone-400">
+                    <p className="mt-2 text-[11px] leading-5 text-[var(--muted)]">
                       {t.updated}{" "}
                       {new Date(site.updatedAt).toLocaleString(uiLang === "ar" ? "ar" : "en")}
                     </p>

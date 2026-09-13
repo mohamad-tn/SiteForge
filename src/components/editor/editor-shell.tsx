@@ -21,6 +21,7 @@ import {
 import { listBlockParts } from "@/lib/block-parts";
 import { withEditableDefaults } from "@/lib/block-style";
 import { SiteRenderer } from "@/components/site-renderer";
+import { SiteChromeProvider } from "@/components/site-chrome-context";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
@@ -190,6 +191,23 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
   useEffect(() => {
     if (!locales.includes(editLocale)) setEditLocale(locales[0]);
   }, [locales, editLocale]);
+
+  const siteChrome = useMemo(
+    () => ({
+      toggleTheme: () => setPreviewMode((m) => (m === "light" ? "dark" : "light")),
+      cycleLocale: () => {
+        if (locales.length < 2) return;
+        setEditLocale((cur) => {
+          const i = locales.indexOf(cur);
+          return locales[(i + 1) % locales.length] || locales[0];
+        });
+      },
+      colorMode: previewMode,
+      locale: editLocale,
+      locales,
+    }),
+    [previewMode, editLocale, locales]
+  );
 
   useEffect(() => {
     if (skipDirtyRef.current) {
@@ -709,8 +727,8 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
               </Button>
             </div>
             {siteMenuOpen ? (
-              <div className="absolute end-0 top-full z-50 mt-1 w-60 rounded-2xl border border-stone-300/90 bg-[var(--card)] p-1.5 text-stone-800 shadow-xl dark:border-stone-700 dark:text-stone-100">
-                <div className="px-2.5 py-1.5 text-[9px] font-bold uppercase tracking-[0.12em] text-stone-600 dark:text-stone-400">{t("toolbarSite")}</div>
+              <div className="absolute end-0 top-full z-50 mt-1 w-72 max-w-[min(18rem,calc(100vw-1.25rem))] rounded-2xl border border-[var(--border)] bg-[var(--card)] p-2 text-[var(--foreground)] shadow-[var(--shadow-md)]" data-sf-chrome="platform">
+                <div className="px-2.5 py-1.5 text-[9px] font-bold uppercase tracking-[0.12em] text-[var(--muted)]">{t("toolbarSite")}</div>
                 <button type="button" className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-start text-xs font-semibold hover:bg-stone-100 dark:hover:bg-stone-800" onClick={() => { openSiteSection(null); setSiteMenuOpen(false); }}>
                   <Settings2 className="h-3.5 w-3.5" aria-hidden /> {t("openSiteSettings")}
                 </button>
@@ -752,13 +770,14 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
                       aria-label={label}
                       aria-pressed={viewport === key}
                       onClick={() => { setViewport(key); setSiteMenuOpen(false); }}
-                      className={`inline-flex flex-1 items-center justify-center rounded-xl p-2 text-xs ${
+                      className={`inline-flex flex-1 flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-2 text-[10px] font-semibold ${
                         viewport === key
-                          ? "bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-900"
-                          : "text-stone-600 hover:bg-stone-100 dark:text-stone-300 dark:hover:bg-stone-800"
+                          ? "bg-[var(--foreground)] text-[var(--card)]"
+                          : "text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--foreground)]"
                       }`}
                     >
                       <Icon className="h-3.5 w-3.5" aria-hidden />
+                      <span className="leading-none">{label}</span>
                     </button>
                   ))}
                 </div>
@@ -832,7 +851,7 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
                 <MoreHorizontal className="h-4 w-4" aria-hidden />
               </Button>
               {moreOpen ? (
-                <div className="absolute end-0 top-full z-50 mt-1 w-56 rounded-2xl border border-stone-300/90 bg-[var(--card)] p-1.5 text-stone-800 shadow-xl dark:border-stone-700 dark:text-stone-100">
+                <div className="absolute end-0 top-full z-50 mt-1 w-64 max-w-[min(16rem,calc(100vw-1.25rem))] rounded-2xl border border-[var(--border)] bg-[var(--card)] p-2 text-[var(--foreground)] shadow-[var(--shadow-md)]" data-sf-chrome="platform">
                   <div className="px-2.5 py-1.5 text-[9px] font-bold uppercase tracking-[0.12em] text-stone-600 sm:hidden dark:text-stone-400">{t("toolbarContent")}</div>
                   <div className="space-y-0.5 sm:hidden">
                     <div className="px-2 py-1">
@@ -1049,7 +1068,7 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
                   </div>
                 ) : null}
                 {page.blocks.map((b, i) => {
-                  const parts = listBlockParts(b, editLocale, content.defaultLocale || "ar");
+                  const parts = listBlockParts(b, editLocale, content.defaultLocale || "ar", uiLang);
                   const blockSelected = selectedId === b.id;
                   return (
                   <div
@@ -1082,7 +1101,12 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
                                 : "text-stone-600 hover:bg-stone-100 hover:text-stone-900 dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-stone-100"
                             }`}
                           >
-                            {ch.label}
+                                                        <span
+                              className={!/[؀-ۿ]/.test(ch.label) && /[A-Za-z]/.test(ch.label) ? "sf-latin" : undefined}
+                              dir={!/[؀-ۿ]/.test(ch.label) && /[A-Za-z]/.test(ch.label) ? "ltr" : undefined}
+                            >
+                              {ch.label}
+                            </span>
                           </button>
                         ))}
                       </div>
@@ -1271,18 +1295,22 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
                 dir={localeDir(editLocale)}
                 data-sf-preview="content"
               >
-                <SiteRenderer
-                  content={content}
-                  pageId={page.id}
-                  selectedBlockId={selectedId}
-                  selectedPart={selectedPart}
-                  hoveredBlockId={hoveredId}
-                  onSelectBlock={selectBlock}
-                  onSelectPart={selectTarget}
-                  onHoverBlock={setHoveredId}
-                  locale={editLocale}
-                  colorMode={previewMode}
-                />
+                <SiteChromeProvider value={siteChrome}>
+                  <SiteChromeProvider value={siteChrome}>
+                    <SiteRenderer
+                      content={content}
+                      pageId={page.id}
+                      selectedBlockId={selectedId}
+                      selectedPart={selectedPart}
+                      hoveredBlockId={hoveredId}
+                      onSelectBlock={selectBlock}
+                      onSelectPart={selectTarget}
+                      onHoverBlock={setHoveredId}
+                      locale={editLocale}
+                      colorMode={previewMode}
+                    />
+                  </SiteChromeProvider>
+                </SiteChromeProvider>
               </div>
             ) : (
               <div className="sf-device-chrome" data-device={viewport} aria-label={t("deviceFrame")}>

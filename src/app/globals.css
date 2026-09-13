@@ -14,7 +14,7 @@
   --accent: #0f766e;
   --accent-fg: #ffffff;
   --card: #ffffff;
-  --muted: #57534e;
+  --muted: #44403c;
   --scrollbar-thumb: #a8a29e;
   --scrollbar-thumb-hover: #78716c;
   --scrollbar-track: transparent;
@@ -64,6 +64,12 @@ html {
   scroll-behavior: smooth;
 }
 
+body,
+.sf-canvas,
+[data-sf-chrome="platform"] {
+  color: var(--foreground);
+}
+
 body {
   background: var(--background);
   color: var(--foreground);
@@ -96,6 +102,7 @@ details > summary::-webkit-details-marker {
   min-height: 100vh;
   background: var(--canvas);
   color: var(--foreground);
+  overflow-x: hidden;
 }
 
 .sf-soft-card {
@@ -698,7 +705,8 @@ html[data-theme="dark"] .sf-device-screen {
   flex-shrink: 0;
   position: relative; /* stacking context only — zones are NOT absolute */
   isolation: isolate;
-  overflow: visible; /* menus */
+  overflow-x: clip; /* prevent horizontal page scroll; menus use overflow visible via popovers */
+  overflow-y: visible;
 }
 .sf-editor-topbar-start,
 .sf-editor-topbar-end {
@@ -799,4 +807,11 @@ html[data-theme="dark"] .sf-device-screen {
 }
 .sf-chrome-fg {
   color: var(--foreground);
+}
+
+
+/* Latin / technical keys under RTL — isolate, never bidi-override */
+.sf-latin {
+  direction: ltr;
+  unicode-bidi: isolate;
 }

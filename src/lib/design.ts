@@ -150,7 +150,7 @@ export const defaultLightColors: ColorPalette = {
   background: "#ffffff",
   surface: "#f5f3ef",
   text: "#1c1917",
-  muted: "#78716c",
+  muted: "#44403c",
   accent: "#d4a574",
 };
 
@@ -264,6 +264,75 @@ export function localizeProps(
   return out;
 }
 
+/** Parse #rgb / #rrggbb (and ignore alpha) → 0–1 sRGB channels. */
+export function parseHexColor(input: string): [number, number, number] | null {
+  const raw = String(input || "").trim();
+  const m = raw.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
+  if (!m) return null;
+  let h = m[1];
+  if (h.length === 3) h = h.split("").map((c) => c + c).join("");
+  const n = parseInt(h, 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v) => v / 255) as [number, number, number];
+}
+
+function channelLuma(c: number): number {
+  return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+}
+
+export function relativeLuminance(hex: string): number | null {
+  const rgb = parseHexColor(hex);
+  if (!rgb) return null;
+  const [r, g, b] = rgb.map(channelLuma);
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+export function contrastRatio(fg: string, bg: string): number | null {
+  const L1 = relativeLuminance(fg);
+  const L2 = relativeLuminance(bg);
+  if (L1 == null || L2 == null) return null;
+  const lighter = Math.max(L1, L2);
+  const darker = Math.min(L1, L2);
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
+/**
+ * When a palette meant for dark surfaces leaks pale muted/text onto a light background
+ * (e.g. #c4b5a5 on #faf8f5), clamp to a readable near-black / dark-gray.
+ */
+export function ensureReadableText(
+  fg: string,
+  bg: string,
+  opts?: { minRatio?: number; darkFallback?: string; lightFallback?: string }
+): string {
+  const minRatio = opts?.minRatio ?? 4.5;
+  const darkFallback = opts?.darkFallback ?? "#1c1917";
+  const lightFallback = opts?.lightFallback ?? "#fafaf9";
+  const ratio = contrastRatio(fg, bg);
+  if (ratio != null && ratio >= minRatio) return fg;
+  const bgL = relativeLuminance(bg);
+  if (bgL == null) return fg;
+  // Light background → force dark text; dark background → force light text
+  return bgL > 0.45 ? darkFallback : lightFallback;
+}
+
+export function contrastCorrectPalette(colors: ColorPalette, mode: "light" | "dark"): ColorPalette {
+  const bg = colors.background || (mode === "light" ? "#ffffff" : "#0c0a09");
+  if (mode === "light") {
+    return {
+      ...colors,
+      text: ensureReadableText(colors.text, bg, { minRatio: 4.5, darkFallback: "#1c1917" }),
+      muted: ensureReadableText(colors.muted, bg, { minRatio: 4.5, darkFallback: "#44403c" }),
+      secondary: ensureReadableText(colors.secondary, bg, { minRatio: 3, darkFallback: "#1c1917" }),
+    };
+  }
+  return {
+    ...colors,
+    text: ensureReadableText(colors.text, bg, { minRatio: 4.5, lightFallback: "#fafaf9" }),
+    muted: ensureReadableText(colors.muted, bg, { minRatio: 3.5, lightFallback: "#a8a29e" }),
+    secondary: ensureReadableText(colors.secondary, bg, { minRatio: 3, lightFallback: "#fafaf9" }),
+  };
+}
+
 export function resolvePalette(
   tokens: DesignTokens,
   mode: "light" | "dark"
@@ -287,7 +356,7 @@ export function tokensForRender(
   mode: "light" | "dark",
   locale: string
 ): DesignTokens {
-  const colors = resolvePalette(tokens, mode);
+  const colors = contrastCorrectPalette(resolvePalette(tokens, mode), mode);
   return {
     ...tokens,
     colors,
@@ -585,6 +654,7 @@ export function defaultPropsFor(type: BlockType): Record<string, unknown> {
       return {
         label: { ar: "اضغط هنا", en: "Click here", fr: "Cliquez ici", es: "Haz clic" },
         href: "#",
+        actionType: "link",
         variant: "primary",
         align: "start",
         size: "md",
@@ -672,6 +742,16 @@ export function parseCsv(raw: unknown): string[] {
 }
 
 /** Structured navbar link item (preferred over CSV `links`). */
+export type ButtonActionType = "link" | "toggleTheme" | "cycleLocale";
+
+export const BUTTON_ACTION_TYPES: ButtonActionType[] = ["link", "toggleTheme", "cycleLocale"];
+
+export function normalizeActionType(v: unknown): ButtonActionType {
+  const s = typeof v === "string" ? v : "";
+  if (s === "toggleTheme" || s === "cycleLocale") return s;
+  return "link";
+}
+
 export type NavItem = {
   id: string;
   label: LocalizedString;
@@ -682,6 +762,8 @@ export type NavItem = {
   linkCollectionItemHref?: string;
   linkCollectionItemId?: string;
   openInNewTab?: string;
+  /** Safe allowlisted click action — never user JS. */
+  actionType?: ButtonActionType;
   /** Optional per-link style overrides (textColor / fontSize). */
   styles?: { textColor?: string; fontSize?: string };
 };
@@ -696,6 +778,7 @@ export type ResolvedNavItem = {
   linkCollectionItemHref?: string;
   linkCollectionItemId?: string;
   openInNewTab?: string;
+  actionType?: ButtonActionType;
   styles?: { textColor?: string; fontSize?: string };
 };
 
@@ -765,6 +848,7 @@ function normalizeNavItem(item: unknown, index: number): NavItem | null {
     linkCollectionItemHref: typeof o.linkCollectionItemHref === "string" ? o.linkCollectionItemHref : "",
     linkCollectionItemId: typeof o.linkCollectionItemId === "string" ? o.linkCollectionItemId : "",
     openInNewTab: typeof o.openInNewTab === "string" ? o.openInNewTab : "false",
+    actionType: normalizeActionType(o.actionType),
     ...(styles ? { styles } : {}),
   };
 }
@@ -830,6 +914,7 @@ export function resolveNavItems(
     linkCollectionItemHref: it.linkCollectionItemHref || "",
     linkCollectionItemId: it.linkCollectionItemId || "",
     openInNewTab: it.openInNewTab || "false",
+    actionType: normalizeActionType(it.actionType),
     ...(it.styles ? { styles: it.styles } : {}),
   }));
 }

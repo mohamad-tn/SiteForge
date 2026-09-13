@@ -81,7 +81,7 @@ export default function LoginPage() {
             {t("createAccount")}
           </Link>
         </p>
-        <p className="mt-2 text-center text-xs text-stone-500 dark:text-stone-400" dir="ltr">
+        <p className="mt-2 text-center text-xs text-[var(--muted)]" dir="ltr">
           demo@siteforge.local / demo1234
         </p>
       </SoftCard>

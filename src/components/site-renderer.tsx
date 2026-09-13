@@ -10,6 +10,7 @@ import {
   tokensForRender,
   resolveNavItems,
   resolveLocalized,
+  normalizeActionType,
   type BlockPart,
 } from "@/lib/design";
 import {
@@ -143,6 +144,7 @@ function BlockView({
               linkCollectionItemHref: "",
               linkCollectionItemId: "",
               openInNewTab: "false",
+              actionType: "link" as const,
               styles: undefined as undefined | { textColor?: string; fontSize?: string },
             }));
       const ctaLabel = str(p, "ctaLabel");
@@ -213,17 +215,37 @@ function BlockView({
                 font: "inherit",
                 ...partStyleCSS(linkPs),
               } as CSSProperties;
-              return editable ? (
-                <button
-                  key={item.id}
-                  type="button"
-                  className={linkClass}
-                  style={linkStyle}
-                  onClick={selectPart(part)}
-                >
-                  {item.label}
-                </button>
-              ) : (
+              const itemAction = normalizeActionType(item.actionType);
+              if (editable) {
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className={linkClass}
+                    style={linkStyle}
+                    onClick={selectPart(part)}
+                  >
+                    {item.label}
+                  </button>
+                );
+              }
+              if (itemAction === "toggleTheme" || itemAction === "cycleLocale") {
+                return (
+                  <ActionableControl
+                    key={item.id}
+                    siteSlug={siteSlug}
+                    blockId={block.id}
+                    props={{ ...source, actionType: itemAction, href: "#" }}
+                    hrefKey="href"
+                    className={linkClass}
+                    style={linkStyle}
+                    as="button"
+                  >
+                    {item.label}
+                  </ActionableControl>
+                );
+              }
+              return (
                 <a key={item.id} className={linkClass} style={linkStyle} {...hrefProps}>
                   {item.label}
                 </a>
@@ -1482,6 +1504,7 @@ export function SiteRenderer({
   locale,
   colorMode = "light",
   siteSlug,
+  focusCollectionSlug,
 }: {
   content: SiteContent;
   pageSlug?: string;
@@ -1495,6 +1518,8 @@ export function SiteRenderer({
   locale?: string;
   colorMode?: "light" | "dark";
   siteSlug?: string;
+  /** When ?collection=slug and no matching collectionList block exists, auto-render one. */
+  focusCollectionSlug?: string;
 }) {
   const page =
     (pageId ? content.pages.find((p) => p.id === pageId) : undefined) ||
@@ -1505,6 +1530,16 @@ export function SiteRenderer({
   const tokens = tokensForRender(content.tokens, colorMode, activeLocale);
   const editable = Boolean(onSelectBlock);
   const { t } = usePlatformLangOptional();
+  const focusCol = (focusCollectionSlug || "").trim();
+  const hasFocusCollectionBlock =
+    !!focusCol &&
+    page.blocks.some(
+      (b) =>
+        b.type === "collectionList" &&
+        strProp(b.props as Record<string, unknown>, "collectionSlug") === focusCol
+    );
+  const autoCollection =
+    !editable && !!siteSlug && !!focusCol && !hasFocusCollectionBlock;
 
   return (
     <div
@@ -1633,7 +1668,29 @@ export function SiteRenderer({
           </div>
         );
       })}
-      {page.blocks.length === 0 ? (
+      {autoCollection ? (
+        <CollectionListView
+          siteSlug={siteSlug!}
+          collectionSlug={focusCol}
+          title={focusCol}
+          subtitle=""
+          columns="3"
+          limit="24"
+          cardTitleField="title"
+          cardBodyField="summary"
+          cardImageField="image"
+          cardUrlField="url"
+          primary={tokens.colors.primary}
+          secondary={tokens.colors.secondary}
+          muted={tokens.colors.muted}
+          bg={tokens.colors.background}
+          surface={tokens.colors.surface}
+          radius={tokens.radius}
+          blockGap={tokens.spacing.blockGap}
+          fontsHeading={tokens.fonts.heading}
+        />
+      ) : null}
+      {page.blocks.length === 0 && !autoCollection ? (
         <div className="flex min-h-[320px] items-center justify-center px-6 py-12">
           <div
             className="w-full max-w-sm rounded-3xl border border-dashed px-6 py-10 text-center"

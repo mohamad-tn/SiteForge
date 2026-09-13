@@ -10,7 +10,7 @@ export default async function PublicSitePage({
   searchParams,
 }: {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ p?: string }>;
+  searchParams: Promise<{ p?: string; collection?: string }>;
 }) {
   const { slug } = await params;
   const site = await prisma.site.findUnique({ where: { slug } });
@@ -64,7 +64,7 @@ export async function generateMetadata({
   searchParams,
 }: {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ p?: string }>;
+  searchParams: Promise<{ p?: string; collection?: string }>;
 }) {
   const { slug } = await params;
   const sp = await searchParams;

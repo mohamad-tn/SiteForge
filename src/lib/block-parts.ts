@@ -180,108 +180,114 @@ export function setPartStyles(
   return { ...props, partStyles: prev };
 }
 
-export function listBlockParts(block: Block, locale: string, fallback = "ar"): { part: BlockPart; label: string }[] {
+export function listBlockParts(
+  block: Block,
+  locale: string,
+  fallback = "ar",
+  uiLang: "ar" | "en" = "ar"
+): { part: BlockPart; label: string; latin?: boolean }[] {
   const p = block.props as Record<string, unknown>;
   const locales = ["ar", "en", "fr", "es"];
+  const pl = (part: BlockPart) => partLabel(part, uiLang);
   switch (block.type) {
     case "navbar": {
       const items = ensureNavItems(p, locales);
       return [
-        { part: "brand", label: resolveLocalized(p.brand, locale, fallback) || "Brand" },
+        { part: "brand", label: resolveLocalized(p.brand, locale, fallback) || pl("brand") },
         ...items.map((it) => ({
           part: `link:${it.id}` as BlockPart,
-          label: resolveLocalized(it.label, locale, fallback) || "Link",
+          label: resolveLocalized(it.label, locale, fallback) || pl(`link:${it.id}`),
         })),
-        { part: "cta", label: resolveLocalized(p.ctaLabel, locale, fallback) || "CTA" },
+        { part: "cta", label: resolveLocalized(p.ctaLabel, locale, fallback) || pl("cta") },
       ];
     }
     case "hero":
       return [
-        { part: "eyebrow", label: "Eyebrow" },
-        { part: "headline", label: "Headline" },
-        { part: "subheadline", label: "Subheadline" },
-        { part: "cta", label: "CTA" },
-        { part: "secondary", label: "Secondary" },
+        { part: "eyebrow", label: pl("eyebrow") },
+        { part: "headline", label: pl("headline") },
+        { part: "subheadline", label: pl("subheadline") },
+        { part: "cta", label: pl("cta") },
+        { part: "secondary", label: pl("secondary") },
       ];
     case "features":
     case "gallery":
     case "stats": {
       const items = ensureFeatureItems(p, locales);
       return [
-        { part: "title", label: resolveLocalized(p.title, locale, fallback) || "Title" },
+        { part: "title", label: resolveLocalized(p.title, locale, fallback) || pl("title") },
         ...(block.type !== "stats"
-          ? [{ part: "subtitle" as BlockPart, label: resolveLocalized(p.subtitle, locale, fallback) || "Subtitle" }]
+          ? [{ part: "subtitle" as BlockPart, label: resolveLocalized(p.subtitle, locale, fallback) || pl("subtitle") }]
           : []),
         ...items.map((it) => ({
           part: `item:${it.id}` as BlockPart,
-          label: resolveLocalized(it.title, locale, fallback) || "Item",
+          label: resolveLocalized(it.title, locale, fallback) || pl(`item:${it.id}`),
         })),
       ];
     }
     case "pricing": {
       const plans = ensurePricingPlans(p, locales);
       return [
-        { part: "title", label: resolveLocalized(p.title, locale, fallback) || "Title" },
-        { part: "subtitle", label: resolveLocalized(p.subtitle, locale, fallback) || "Subtitle" },
+        { part: "title", label: resolveLocalized(p.title, locale, fallback) || pl("title") },
+        { part: "subtitle", label: resolveLocalized(p.subtitle, locale, fallback) || pl("subtitle") },
         ...plans.map((it) => ({
           part: `item:${it.id}` as BlockPart,
-          label: resolveLocalized(it.name, locale, fallback) || "Plan",
+          label: resolveLocalized(it.name, locale, fallback) || pl(`item:${it.id}`),
         })),
       ];
     }
     case "testimonials": {
       const items = ensureTestimonials(p, locales);
       return [
-        { part: "title", label: resolveLocalized(p.title, locale, fallback) || "Title" },
+        { part: "title", label: resolveLocalized(p.title, locale, fallback) || pl("title") },
         ...items.map((it) => ({
           part: `item:${it.id}` as BlockPart,
-          label: resolveLocalized(it.name, locale, fallback) || "Quote",
+          label: resolveLocalized(it.name, locale, fallback) || pl(`item:${it.id}`),
         })),
       ];
     }
     case "faq": {
       const items = ensureFaqItems(p, locales);
       return [
-        { part: "title", label: resolveLocalized(p.title, locale, fallback) || "Title" },
+        { part: "title", label: resolveLocalized(p.title, locale, fallback) || pl("title") },
         ...items.map((it) => ({
           part: `item:${it.id}` as BlockPart,
-          label: resolveLocalized(it.q, locale, fallback) || "Q",
+          label: resolveLocalized(it.q, locale, fallback) || pl(`item:${it.id}`),
         })),
       ];
     }
     case "cta":
       return [
-        { part: "title", label: "Title" },
-        { part: "body", label: "Body" },
-        { part: "button", label: "Button" },
+        { part: "title", label: pl("title") },
+        { part: "body", label: pl("body") },
+        { part: "button", label: pl("button") },
       ];
     case "footer": {
       const cols = ensureFooterColumns(p, locales);
       return [
-        { part: "brand", label: "Brand" },
-        { part: "text", label: "Text" },
+        { part: "brand", label: pl("brand") },
+        { part: "text", label: pl("text") },
         ...cols.map((c) => ({
           part: `column:${c.id}` as BlockPart,
-          label: resolveLocalized(c.title, locale, fallback) || "Column",
+          label: resolveLocalized(c.title, locale, fallback) || pl(`column:${c.id}`),
         })),
       ];
     }
     case "contact":
       return [
-        { part: "title", label: resolveLocalized(p.title, locale, fallback) || "Title" },
-        { part: "subtitle", label: resolveLocalized(p.subtitle, locale, fallback) || "Subtitle" },
-        { part: "email", label: resolveLocalized(p.email, locale, fallback) || "Email" },
-        { part: "phone", label: resolveLocalized(p.phone, locale, fallback) || "Phone" },
-        { part: "address", label: resolveLocalized(p.address, locale, fallback) || "Address" },
-        { part: "button", label: resolveLocalized(p.buttonLabel, locale, fallback) || "Button" },
+        { part: "title", label: resolveLocalized(p.title, locale, fallback) || pl("title") },
+        { part: "subtitle", label: resolveLocalized(p.subtitle, locale, fallback) || pl("subtitle") },
+        { part: "email", label: resolveLocalized(p.email, locale, fallback) || pl("email") },
+        { part: "phone", label: resolveLocalized(p.phone, locale, fallback) || pl("phone") },
+        { part: "address", label: resolveLocalized(p.address, locale, fallback) || pl("address") },
+        { part: "button", label: resolveLocalized(p.buttonLabel, locale, fallback) || pl("button") },
       ];
     case "form": {
       const fields = ensureFormFields(p);
       return [
-        { part: "title", label: resolveLocalized(p.title, locale, fallback) || "Title" },
-        { part: "subtitle", label: resolveLocalized(p.subtitle, locale, fallback) || "Subtitle" },
-        { part: "submit", label: resolveLocalized(p.submitLabel, locale, fallback) || "Submit" },
-        { part: "success", label: resolveLocalized(p.successMessage, locale, fallback) || "Success" },
+        { part: "title", label: resolveLocalized(p.title, locale, fallback) || pl("title") },
+        { part: "subtitle", label: resolveLocalized(p.subtitle, locale, fallback) || pl("subtitle") },
+        { part: "submit", label: resolveLocalized(p.submitLabel, locale, fallback) || pl("submit") },
+        { part: "success", label: resolveLocalized(p.successMessage, locale, fallback) || pl("success") },
         ...fields.map((f) => ({
           part: `field:${f.id}` as BlockPart,
           label: resolveLocalized(f.label, locale, fallback) || f.key,
@@ -290,15 +296,15 @@ export function listBlockParts(block: Block, locale: string, fallback = "ar"): {
     }
     case "collectionList":
       return [
-        { part: "title", label: resolveLocalized(p.title, locale, fallback) || "Title" },
-        { part: "subtitle", label: resolveLocalized(p.subtitle, locale, fallback) || "Subtitle" },
-        { part: "collectionSlug", label: String(p.collectionSlug || "slug") },
-        { part: "columns", label: "columns" },
-        { part: "limit", label: "limit" },
-        { part: "cardTitleField", label: String(p.cardTitleField || "title") },
-        { part: "cardBodyField", label: String(p.cardBodyField || "body") },
-        { part: "cardImageField", label: String(p.cardImageField || "image") },
-        { part: "cardUrlField", label: String(p.cardUrlField || "url") },
+        { part: "title", label: resolveLocalized(p.title, locale, fallback) || pl("title") },
+        { part: "subtitle", label: resolveLocalized(p.subtitle, locale, fallback) || pl("subtitle") },
+        { part: "collectionSlug", label: pl("collectionSlug"), latin: true },
+        { part: "columns", label: pl("columns") },
+        { part: "limit", label: pl("limit") },
+        { part: "cardTitleField", label: pl("cardTitleField"), latin: true },
+        { part: "cardBodyField", label: pl("cardBodyField"), latin: true },
+        { part: "cardImageField", label: pl("cardImageField"), latin: true },
+        { part: "cardUrlField", label: pl("cardUrlField"), latin: true },
       ];
     default:
       return [];

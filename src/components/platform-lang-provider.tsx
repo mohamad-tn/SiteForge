@@ -125,7 +125,7 @@ export function PlatformLangSwitcher({
   return (
     <div className={cn("inline-flex items-center gap-1.5", className)}>
       {size === "default" ? (
-        <span className="hidden text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-400 sm:inline">
+        <span className="hidden text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)] sm:inline">
           {t("appUiLang")}
         </span>
       ) : null}

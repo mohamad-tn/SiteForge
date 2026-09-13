@@ -60,6 +60,7 @@ export function withEditableDefaults(props: Record<string, unknown>): Record<str
     linkMode: "url",
     linkPageSlug: "",
     openInNewTab: "false",
+    actionType: "link",
     ...props,
   };
 }
@@ -274,6 +275,7 @@ export const STYLE_LABELS: Record<string, string> = {
   linkCollectionSlug: "مجموعة",
   linkCollectionItemHref: "رابط عنصر المجموعة",
   openInNewTab: "فتح في تبويب جديد",
+  actionType: "إجراء الزر",
 };
 
 /** Motion / interaction props shared by all blocks */

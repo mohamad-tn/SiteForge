@@ -10,6 +10,8 @@ import {
   type HttpAction,
 } from "@/lib/http-action";
 import { resolveBlockHref } from "@/lib/block-style";
+import { normalizeActionType } from "@/lib/design";
+import { useSiteChrome } from "@/components/site-chrome-context";
 
 async function runViaProxy(
   siteSlug: string,
@@ -91,13 +93,27 @@ export function ActionableControl({
 }) {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const chrome = useSiteChrome();
+  const actionType = normalizeActionType(props.actionType);
   const action = parseHttpAction(props.httpAction);
   const behavior: ClickBehavior = parseClickBehavior(props.clickBehavior);
   const link = resolveBlockHref(props, hrefKey, siteSlug);
   const useHttp = action.enabled && (behavior === "http" || behavior === "both");
   const useLink = behavior === "link" || behavior === "both" || !action.enabled;
 
+  function runChromeAction(e: MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!chrome) return;
+    if (actionType === "toggleTheme") chrome.toggleTheme();
+    else if (actionType === "cycleLocale") chrome.cycleLocale();
+  }
+
   async function onClick(e: MouseEvent) {
+    if (actionType === "toggleTheme" || actionType === "cycleLocale") {
+      runChromeAction(e);
+      return;
+    }
     if (!useHttp) return; // let default <a> navigation happen
     e.preventDefault();
     if (busy || !siteSlug) return;
@@ -120,15 +136,16 @@ export function ActionableControl({
     }
   }
 
+  const isChromeAction = actionType === "toggleTheme" || actionType === "cycleLocale";
   const shared = {
     className: `${className || ""} ${busy ? "opacity-70 pointer-events-none" : ""}`.trim(),
     style,
-    onClick: useHttp ? onClick : undefined,
+    onClick: isChromeAction || useHttp ? onClick : undefined,
     "aria-busy": busy || undefined,
   };
 
   const control =
-    Comp === "button" || useHttp ? (
+    Comp === "button" || useHttp || isChromeAction ? (
       <button type="button" {...shared}>
         {children}
       </button>

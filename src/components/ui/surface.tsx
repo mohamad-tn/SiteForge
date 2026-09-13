@@ -15,7 +15,7 @@ export function Toolbar({ className, ...props }: HTMLAttributes<HTMLDivElement>)
 }
 
 export function AppHeader({ className, ...props }: HTMLAttributes<HTMLElement>) {
-  return <header className={cn("sf-app-header", className)} {...props} />;
+  return <header className={cn("sf-app-header", className)} data-sf-chrome="platform" {...props} />;
 }
 
 export function AppCanvas({
@@ -24,5 +24,13 @@ export function AppCanvas({
   lang,
   ...props
 }: HTMLAttributes<HTMLDivElement> & { dir?: "rtl" | "ltr"; lang?: string }) {
-  return <div className={cn("sf-canvas", className)} dir={dir} lang={lang} {...props} />;
+  return (
+    <div
+      className={cn("sf-canvas overflow-x-hidden", className)}
+      data-sf-chrome="platform"
+      dir={dir}
+      lang={lang}
+      {...props}
+    />
+  );
 }

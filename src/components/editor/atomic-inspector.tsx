@@ -530,6 +530,7 @@ function NavbarAtomic({
                   />
                   <LinkTargetFields
                     props={{
+                      actionType: it.actionType || "link",
                       linkMode: it.linkMode || "url",
                       linkPageSlug: it.linkPageSlug || "",
                       linkCollectionSlug: it.linkCollectionSlug || "",

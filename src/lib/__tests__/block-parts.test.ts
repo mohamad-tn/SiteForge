@@ -202,4 +202,12 @@ describe("listBlockParts", () => {
     expect(parts.some((p) => p.part === "collectionSlug")).toBe(true);
     expect(parts.some((p) => p.part === "cardTitleField")).toBe(true);
   });
+
+  it("hero parts are localized for platform UI lang", () => {
+    const ar = listBlockParts({ id: "h1", type: "hero", props: {} }, "en", "ar", "ar");
+    const en = listBlockParts({ id: "h1", type: "hero", props: {} }, "en", "ar", "en");
+    expect(ar.find((p) => p.part === "eyebrow")?.label).toMatch(/شارة|علوية/);
+    expect(en.find((p) => p.part === "eyebrow")?.label).toBe("Eyebrow");
+    expect(en.find((p) => p.part === "subheadline")?.label).toBe("Subheadline");
+  });
 });

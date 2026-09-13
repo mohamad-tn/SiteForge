@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { SiteContent } from "@/lib/design";
 import { LOCALE_META, isLocaleCode, localeDir } from "@/lib/design";
 import { SiteRenderer } from "@/components/site-renderer";
 import { useSearchParams } from "next/navigation";
 import { sanitizeCustomCss } from "@/lib/sanitize-css";
 import { SF_SITE_VIEW_ATTR } from "@/components/platform-lang-provider";
+import { SiteChromeProvider } from "@/components/site-chrome-context";
 
 function detectSystem(): "light" | "dark" {
   if (typeof window === "undefined") return "light";
@@ -32,6 +33,7 @@ export function PublicSiteView({
 }) {
   const search = useSearchParams();
   const pageParam = search.get("p") || undefined;
+  const collectionParam = search.get("collection") || undefined;
   const locales = content.locales?.length ? content.locales : [content.defaultLocale || "ar"];
   const defaultLocale = content.defaultLocale || locales[0];
   const [locale, setLocale] = useState(defaultLocale);
@@ -84,9 +86,14 @@ export function PublicSiteView({
     fetch("/api/analytics/hit", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ slug, path: pageParam ? `/${pageParam}` : "/", locale }),
+      body: JSON.stringify({
+        slug,
+        path: pageParam ? `/${pageParam}` : "/",
+        locale,
+        collection: collectionParam || undefined,
+      }),
     }).catch(() => {});
-  }, [slug, pageParam, locale]);
+  }, [slug, pageParam, locale, collectionParam]);
 
   const localeOptions = useMemo(
     () =>
@@ -97,17 +104,44 @@ export function PublicSiteView({
     [locales]
   );
 
+  const toggleTheme = useCallback(() => {
+    setMode((m) => (m === "light" ? "dark" : "light"));
+  }, []);
+
+  const cycleLocale = useCallback(() => {
+    if (locales.length < 2) return;
+    setLocale((cur) => {
+      const i = locales.indexOf(cur);
+      const next = locales[(i + 1) % locales.length];
+      return next || locales[0];
+    });
+  }, [locales]);
+
+  const chrome = useMemo(
+    () => ({
+      toggleTheme,
+      cycleLocale,
+      colorMode: mode,
+      locale,
+      locales,
+    }),
+    [toggleTheme, cycleLocale, mode, locale, locales]
+  );
+
   const siteDir = localeDir(locale);
 
   return (
-    <div className="relative min-h-screen" lang={locale} dir={siteDir} data-sf-tenant="public">
+    <div className="relative min-h-screen overflow-x-hidden" lang={locale} dir={siteDir} data-sf-tenant="public">
       {(() => {
         const css = sanitizeCustomCss(customCss);
         return css ? <style dangerouslySetInnerHTML={{ __html: css }} /> : null;
       })()}
       <div className="pointer-events-none fixed inset-x-0 top-0 z-50 flex justify-center p-3 md:justify-end md:p-4">
-        <div className="pointer-events-auto flex items-center gap-1.5 rounded-full border border-black/5 bg-white/80 p-1 shadow-[0_8px_30px_rgba(0,0,0,0.08)] backdrop-blur-xl dark:border-white/10 dark:bg-stone-900/80">
-          <div className="flex items-center gap-0.5 px-0.5">
+        <div
+          className="pointer-events-auto flex max-w-[calc(100vw-1.5rem)] flex-wrap items-center gap-1.5 rounded-2xl border border-[var(--border)] bg-[var(--card)] p-1.5 text-[var(--foreground)] shadow-[var(--shadow-md)] backdrop-blur-xl"
+          data-sf-chrome="platform"
+        >
+          <div className="flex flex-wrap items-center gap-0.5 px-0.5" role="group" aria-label="Language">
             {localeOptions.map((opt) => (
               <button
                 key={opt.code}
@@ -115,33 +149,38 @@ export function PublicSiteView({
                 onClick={() => setLocale(opt.code)}
                 className={`rounded-full px-2.5 py-1 text-[11px] font-semibold transition ${
                   locale === opt.code
-                    ? "bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-900"
-                    : "text-stone-600 hover:bg-stone-100 dark:text-stone-300 dark:hover:bg-stone-800"
+                    ? "bg-[var(--foreground)] text-[var(--card)]"
+                    : "text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--foreground)]"
                 }`}
               >
                 {opt.label}
               </button>
             ))}
           </div>
-          <div className="h-4 w-px bg-stone-200 dark:bg-stone-700" />
+          <div className="h-4 w-px shrink-0 bg-[var(--border)]" aria-hidden />
           <button
             type="button"
-            onClick={() => setMode((m) => (m === "light" ? "dark" : "light"))}
-            className="rounded-full px-2.5 py-1 text-[11px] font-semibold text-stone-600 hover:bg-stone-100 dark:text-stone-300 dark:hover:bg-stone-800"
+            onClick={toggleTheme}
+            className="rounded-full px-2.5 py-1 text-[11px] font-semibold text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--foreground)]"
+            aria-label={mode === "light" ? "Dark" : "Light"}
+            title={mode === "light" ? "Dark" : "Light"}
           >
             {mode === "light" ? "☾" : "☀"}
           </button>
         </div>
       </div>
-      <div className="sf-tenant-root" lang={locale} dir={siteDir}>
-        <SiteRenderer
-          content={content}
-          pageSlug={pageParam}
-          locale={locale}
-          colorMode={mode}
-          siteSlug={slug}
-        />
-      </div>
+      <SiteChromeProvider value={chrome}>
+        <div className="sf-tenant-root overflow-x-hidden" lang={locale} dir={siteDir}>
+          <SiteRenderer
+            content={content}
+            pageSlug={pageParam}
+            locale={locale}
+            colorMode={mode}
+            siteSlug={slug}
+            focusCollectionSlug={collectionParam}
+          />
+        </div>
+      </SiteChromeProvider>
     </div>
   );
 }
