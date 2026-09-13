@@ -16,19 +16,25 @@ export function MediaField({
   onChange,
   accept = "image/*,video/mp4,video/webm,video/quicktime",
   kind = "auto",
+  siteId,
 }: {
   label: string;
   value: string;
   onChange: (url: string) => void;
   accept?: string;
   kind?: "image" | "video" | "auto";
+  siteId?: string;
 }) {
   const { t } = usePlatformLang();
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState("");
-  const [mode, setMode] = useState<"upload" | "url">(value && !value.startsWith("/uploads/") ? "url" : "upload");
+  const isHosted =
+    !value ||
+    value.startsWith("/uploads/") ||
+    value.startsWith("/api/media/");
+  const [mode, setMode] = useState<"upload" | "url">(value && !isHosted ? "url" : "upload");
 
   function onFile(file: File | undefined) {
     if (!file) return;
@@ -42,6 +48,7 @@ export function MediaField({
     setProgress(0);
     const fd = new FormData();
     fd.append("file", file);
+    if (siteId) fd.append("siteId", siteId);
     const xhr = new XMLHttpRequest();
     xhr.open("POST", "/api/uploads");
     xhr.upload.onprogress = (ev) => {

@@ -1,6 +1,6 @@
 "use client";
 
-import type { CSSProperties, MouseEvent as ReactMouseEvent } from "react";
+import { useState, type CSSProperties, type MouseEvent as ReactMouseEvent } from "react";
 import type { Block, DesignTokens, SiteContent } from "@/lib/design";
 import {
   localizeProps,
@@ -24,7 +24,7 @@ import {
   getPartStyles,
 } from "@/lib/block-parts";
 import { blockFrameStyle, blockMotionAttrs, resolveBlockHref, strProp, sanitizeBlockCss } from "@/lib/block-style";
-import { pageUsesCanvas } from "@/lib/editor-canvas";
+import { artboardHeightFromBlocks, pageUsesCanvas } from "@/lib/editor-canvas";
 import { MotionBlock } from "@/components/motion-block";
 import { PublicForm } from "@/components/public-form";
 import { CollectionListView } from "@/components/collection-list-view";
@@ -41,6 +41,67 @@ function num(p: Record<string, unknown>, key: string, fallback: number): number 
   if (typeof v === "number") return v;
   if (typeof v === "string" && v.trim() !== "" && !Number.isNaN(Number(v))) return Number(v);
   return fallback;
+}
+
+
+function MediaWithFallback({
+  kind,
+  src,
+  alt,
+  className,
+  poster,
+  controls,
+  autoPlay,
+  loop,
+  muted,
+  playsInline,
+}: {
+  kind: "image" | "video";
+  src: string;
+  alt?: string;
+  className?: string;
+  poster?: string;
+  controls?: boolean;
+  autoPlay?: boolean;
+  loop?: boolean;
+  muted?: boolean;
+  playsInline?: boolean;
+}) {
+  const [broken, setBroken] = useState(false);
+  if (!src || broken) {
+    return (
+      <div
+        className={`flex h-full w-full items-center justify-center text-xs font-medium ${className || ""}`}
+        style={{
+          background:
+            "color-mix(in oklab, var(--sf-site-surface, var(--card)) 88%, var(--sf-site-primary, var(--accent)) 12%)",
+          color: "var(--sf-site-text, var(--foreground))",
+          border: "1px dashed color-mix(in oklab, var(--sf-site-primary, var(--accent)) 35%, transparent)",
+        }}
+        role="img"
+        aria-label={alt || (kind === "video" ? "video" : "image")}
+      >
+        {alt || (kind === "video" ? "Media" : "Image")}
+      </div>
+    );
+  }
+  if (kind === "video") {
+    return (
+      <video
+        src={src}
+        poster={poster || undefined}
+        className={className}
+        controls={controls}
+        autoPlay={autoPlay}
+        loop={loop}
+        muted={muted}
+        playsInline={playsInline}
+        onError={() => setBroken(true)}
+      />
+    );
+  }
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img src={src} alt={alt || ""} className={className} onError={() => setBroken(true)} />;
 }
 
 function SectionShell({
@@ -1190,8 +1251,7 @@ function BlockView({
               }}
             >
               {src ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={src} alt={str(p, "alt")} className="w-full h-full object-cover" />
+                <MediaWithFallback kind="image" src={src} alt={str(p, "alt")} className="w-full h-full object-cover" />
               ) : (
                 <span className="text-white/90 text-sm font-medium">{str(p, "alt", "صورة")}</span>
               )}
@@ -1226,7 +1286,8 @@ function BlockView({
               }}
             >
               {src ? (
-                <video
+                <MediaWithFallback
+                  kind="video"
                   src={src}
                   poster={poster || undefined}
                   className="w-full h-full object-cover"
@@ -1552,6 +1613,7 @@ export function SiteRenderer({
   siteSlug,
   focusCollectionSlug,
   onRequestInsert,
+  artboardMinHeight,
 }: {
   content: SiteContent;
   pageSlug?: string;
@@ -1570,6 +1632,8 @@ export function SiteRenderer({
   /** When ?collection=slug and no matching collectionList block exists, auto-render one. */
   focusCollectionSlug?: string;
   onRequestInsert?: () => void;
+  /** Canvas artboard min-height (editor / public canvas pages). */
+  artboardMinHeight?: number;
 }) {
   const page =
     (pageId ? content.pages.find((p) => p.id === pageId) : undefined) ||
@@ -1611,7 +1675,10 @@ export function SiteRenderer({
         ...(canvas
           ? {
               position: "relative" as const,
-              minHeight: "100vh",
+              minHeight:
+                artboardMinHeight ??
+                artboardHeightFromBlocks(page.blocks, typeof window !== "undefined" ? window.innerHeight : 800),
+              overflow: "visible" as const,
             }
           : {}),
       }}

@@ -201,6 +201,7 @@ ${css}
         onChange={(url) => onChange({ ogImage: url })}
         kind="image"
         accept="image/*"
+        siteId={siteId}
       />
       <MediaField
         label={t("faviconLabel")}
@@ -208,6 +209,7 @@ ${css}
         onChange={(url) => onChange({ favicon: url })}
         kind="image"
         accept="image/*"
+        siteId={siteId}
       />
 
       <div className="rounded-2xl border border-stone-200/80 bg-stone-50/70 p-3 dark:border-stone-800 dark:bg-stone-950/40">
@@ -376,16 +378,18 @@ ${css}
         <p className="text-[10px] leading-relaxed text-amber-800/90 dark:text-amber-200/80">
           {lang === "ar" ? CUSTOM_CSS_TRUST_BLURB_AR : CUSTOM_CSS_TRUST_BLURB_EN}
         </p>
-        <div className="space-y-1.5 pt-1">
-          <Label className="text-[11px] text-stone-600 dark:text-stone-300">{t("cssPreviewLabel")}</Label>
-          <iframe
-            title="CSS preview"
-            sandbox="allow-same-origin"
-            srcDoc={srcDoc}
-            className="h-36 w-full rounded-2xl border border-stone-200/80 bg-white dark:border-stone-800"
-          />
-          <p className="text-[10px] leading-relaxed text-stone-600 dark:text-[var(--muted)]">{t("cssPreviewHint")}</p>
-        </div>
+        {previewCss.trim() ? (
+          <div className="space-y-1.5 pt-1">
+            <Label className="text-[11px] text-stone-600 dark:text-stone-300">{t("cssPreviewLabel")}</Label>
+            <iframe
+              title="CSS preview"
+              sandbox="allow-same-origin"
+              srcDoc={srcDoc}
+              className="h-36 w-full rounded-2xl border border-stone-200/80 bg-white dark:border-stone-800"
+            />
+            <p className="text-[10px] leading-relaxed text-stone-600 dark:text-[var(--muted)]">{t("cssPreviewHint")}</p>
+          </div>
+        ) : null}
       </div>
     </div>
   );

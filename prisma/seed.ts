@@ -80,7 +80,7 @@ const templates: {
           id: "page-home",
           title: "السيرة",
           slug: "home",
-          layout: "canvas",
+          layout: "flow",
           blocks: [
             {
               id: "cv-nav",
@@ -279,7 +279,7 @@ const templates: {
           id: "page-home",
           title: "الأعمال",
           slug: "home",
-          layout: "canvas",
+          layout: "flow",
           blocks: [
             {
               id: "pf-nav",

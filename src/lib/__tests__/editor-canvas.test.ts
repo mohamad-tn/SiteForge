@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   alignRects,
   applyResizeDelta,
+  artboardHeightFromBlocks,
   autoPlaceBlocks,
+  clearBlockPositions,
   clampResizeSize,
   clampZoom,
   clientToCanvasLocal,
@@ -11,6 +13,7 @@ import {
   distributeRects,
   defaultInsertPosition,
   formatPos,
+  isInvalidCanvasSize,
   layoutStack,
   marqueeHitTest,
   measureRectToLocal,
@@ -48,8 +51,9 @@ describe("editor-canvas math", () => {
       block("b", "hero"),
       block("c", "text", { posX: "100", posY: "900" }),
     ]);
-    expect(next[0].props.posX).toBe("24");
-    expect(next[0].props.posY).toBe("72");
+    expect(next[0].props.posX).toBe("0");
+    expect(next[0].props.posY).toBe("0");
+    expect(next[0].props.width).toBe("100%");
     expect(next[1].props.posY).toBeTruthy();
     expect(next[2].props.posX).toBe("100");
     expect(next[2].props.posY).toBe("900");
@@ -112,14 +116,15 @@ describe("editor-canvas math", () => {
     expect(mid?.x).toBe(45);
   });
 
-  it("pageUsesCanvas defaults and flow opt-out", () => {
+  it("pageUsesCanvas requires explicit canvas layout", () => {
     expect(pageUsesCanvas({ layout: "canvas", blocks: [] })).toBe(true);
     expect(pageUsesCanvas({ layout: "flow", blocks: [] })).toBe(false);
     expect(
       pageUsesCanvas({
         blocks: [block("a", "text", { posX: "1", posY: "2" })],
       } as never)
-    ).toBe(true);
+    ).toBe(false);
+    expect(pageUsesCanvas(null)).toBe(false);
   });
 
   it("readBlockRect falls back to estimates", () => {
@@ -361,5 +366,59 @@ describe("layoutStack / stack detach", () => {
     ];
     const next = reflowStackBlocks(blocks, "lonely");
     expect(next[0].props.stackId).toBeUndefined();
+  });
+});
+
+
+describe("flow default / zoom one-way / artboard height / resize clamp", () => {
+  it("clearBlockPositions strips pos for flow", () => {
+    const next = clearBlockPositions([
+      block("a", "hero", { posX: "0", posY: "10", width: "100%" }),
+    ]);
+    expect(next[0].props.posX).toBeUndefined();
+    expect(next[0].props.posY).toBeUndefined();
+    expect(next[0].props.width).toBe("100%");
+  });
+
+  it("clientToCanvasLocal divides by zoom once (one-way mapping)", () => {
+    const p = clientToCanvasLocal(240, 300, { left: 40, top: 100 }, 0, 0, 0.5);
+    expect(p.x).toBe(400); // (240-40)/0.5
+    expect(p.y).toBe(400); // (300-100)/0.5
+  });
+
+  it("artboardHeightFromBlocks uses max(device, bounds+pad)", () => {
+    const h = artboardHeightFromBlocks(
+      [block("a", "hero", { posX: "0", posY: "0", height: "420" })],
+      800,
+      120
+    );
+    expect(h).toBe(800); // max(800, 420+120)
+  });
+
+  it("artboardHeightFromBlocks grows with deep blocks", () => {
+    const h = artboardHeightFromBlocks(
+      [block("a", "text", { posX: "24", posY: "2000", height: "100" })],
+      800,
+      120
+    );
+    expect(h).toBe(2220);
+  });
+
+  it("isInvalidCanvasSize rejects tiny or NaN", () => {
+    expect(isInvalidCanvasSize(10, 50)).toBe(true);
+    expect(isInvalidCanvasSize(50, Number.NaN)).toBe(true);
+    expect(isInvalidCanvasSize(80, 80)).toBe(false);
+  });
+
+  it("measureRectToLocal never multiplies size by zoom (one-way)", () => {
+    const local = measureRectToLocal(
+      { left: 40, top: 100, width: 200, height: 80 },
+      { left: 40, top: 100 },
+      0,
+      0,
+      2
+    );
+    expect(local.w).toBe(100);
+    expect(local.h).toBe(40);
   });
 });

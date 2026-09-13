@@ -32,9 +32,13 @@ import {
 } from "@/lib/editor-selection";
 import {
   alignRects,
+  artboardHeightFromBlocks,
+  autoPlaceBlocks,
+  clearBlockPositions,
   clampZoom,
   createStackGroup,
   DEFAULT_STACK_GAP,
+  DEVICE_FRAME_HEIGHT,
   distributeRects,
   defaultInsertPosition,
   detachStackMember,
@@ -140,10 +144,10 @@ type LeftTab = "insert" |"layers" |"pages" |"langs" |"cms";
 type RightTab = "inspect" |"style" |"site" |"replies";
 type Viewport = "mobile" |"tablet" |"laptop";
 
-const VIEWPORT_WIDTH: Record<Viewport, number | string> = {
+const VIEWPORT_WIDTH: Record<Viewport, number> = {
   mobile: 390,
   tablet: 768,
-  laptop: "100%",
+  laptop: 1280,
 };
 
 export function EditorShell({ site, initialContent }: { site: SiteMeta; initialContent: SiteContent }) {
@@ -660,17 +664,17 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
           id,
           title: `صفحة ${n}`,
           slug: slugifyPage(`page-${n}`),
-          layout: "canvas" as const,
+          layout: "flow" as const,
           blocks: [
             {
               id: `b-${nanoid(8)}`,
               type: "heading" as const,
-              props: { ...withEditableDefaults(defaultPropsFor("heading")), posX:"24", posY:"72", width:"560" },
+              props: { ...withEditableDefaults(defaultPropsFor("heading")) },
             },
             {
               id: `b-${nanoid(8)}`,
               type: "text" as const,
-              props: { ...withEditableDefaults(defaultPropsFor("text")), posX:"24", posY:"152", width:"560" },
+              props: { ...withEditableDefaults(defaultPropsFor("text")) },
             },
           ],
         },
@@ -701,6 +705,25 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
     }
     setSelectedIds([]);
     setSelectedId(null);
+  }
+
+  function setPageLayout(id: string, layout: "flow" | "canvas") {
+    commit((prev) => ({
+      ...prev,
+      pages: prev.pages.map((pg) => {
+        if (pg.id !== id) return pg;
+        if (layout === "flow") {
+          return { ...pg, layout: "flow" as const, blocks: clearBlockPositions(pg.blocks) };
+        }
+        return {
+          ...pg,
+          layout: "canvas" as const,
+          blocks: autoPlaceBlocks(pg.blocks),
+        };
+      }),
+    }));
+    setCanvasLivePos({});
+    setCanvasGuides([]);
   }
 
   function movePage(id: string, dir: -1 | 1) {
@@ -890,6 +913,10 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
 
   if (!page) return null;
   const canvasWidth = VIEWPORT_WIDTH[viewport];
+  const deviceHeight = DEVICE_FRAME_HEIGHT[viewport];
+  const artboardH = page
+    ? artboardHeightFromBlocks(page.blocks, deviceHeight)
+    : deviceHeight;
 
   return (
     <div className="sf-canvas flex h-screen flex-col" dir={uiDir} lang={uiLang} data-sf-chrome="platform">
@@ -1558,7 +1585,32 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
                           }}
                           className="h-9 rounded-2xl text-xs"
                         />
-                        
+                        <div className="flex gap-1 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-1">
+                          <button
+                            type="button"
+                            className={`flex-1 rounded-xl py-1.5 text-[10px] font-bold ${
+                              (p.layout || "flow") !== "canvas"
+                                ? "bg-[var(--foreground)] text-[var(--card)] shadow-sm"
+                                : "text-[var(--muted)]"
+                            }`}
+                            onClick={() => setPageLayout(p.id, "flow")}
+                          >
+                            {t("layoutFlow")}
+                          </button>
+                          <button
+                            type="button"
+                            className={`flex-1 rounded-xl py-1.5 text-[10px] font-bold ${
+                              p.layout === "canvas"
+                                ? "bg-[var(--foreground)] text-[var(--card)] shadow-sm"
+                                : "text-[var(--muted)]"
+                            }`}
+                            onClick={() => setPageLayout(p.id, "canvas")}
+                          >
+                            {t("layoutCanvas")}
+                          </button>
+                        </div>
+                        <p className="text-[9px] leading-4 text-[var(--muted)]">{t("layoutModeHint")}</p>
+
                         <div className="space-y-1.5 rounded-2xl border border-[var(--border)] p-2.5">
                           <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--muted)]">{t("pageSeo")}</div>
                           <Input
@@ -1579,6 +1631,7 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
                             onChange={(url) => updatePageSeo(p.id, { seoOgImage: url })}
                             kind="image"
                             accept="image/*"
+                            siteId={site.id}
                           />
                           <p className="text-[9px] leading-4 text-[var(--muted)]">{t("seoFallbackHint")}</p>
                         </div>
@@ -1663,11 +1716,11 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
         </div>
 
         {/* Canvas */}
-        <main id="sf-editor-main" className="relative flex-1 overflow-auto rounded-[1.75rem] border border-[var(--border)] bg-[#dfd9cf]/45 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.28)] md:p-8 dark:shadow-none" onClick={() => { setSelectedId(null); setSelectedPart(null); }}>
+        <main id="sf-editor-main" className="relative flex-1 overflow-auto rounded-[1.75rem] border border-[var(--border)] bg-[#dfd9cf]/45 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.28)] md:p-8 dark:shadow-none" onClick={() => { setSelectedId(null); setSelectedPart(null); }} data-sf-editor-desk="">
           <div
             className="sf-device-shell"
             style={{
-              width: typeof canvasWidth === "number" ? canvasWidth + (viewport === "mobile" ? 28 : viewport === "tablet" ? 36 : 0) : canvasWidth,
+              width: canvasWidth + (viewport === "mobile" ? 28 : viewport === "tablet" ? 36 : 0),
               maxWidth: "100%",
             }}
             onClick={(e) => e.stopPropagation()}
@@ -1709,7 +1762,7 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
                   </div>
                 ) : null}
                 <span className="font-mono" dir="ltr" title={t("deviceFrame")}>
-                  {typeof canvasWidth === "number" ? `${canvasWidth}px · ${viewport}` : "fluid · laptop"}
+                  {`${canvasWidth}px · ${viewport}`}
                 </span>
               </div>
             </div>
@@ -1785,27 +1838,76 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
             ) : null}
             {viewport === "laptop" ? (
               <div
-                className="overflow-hidden rounded-[1.75rem] border border-[var(--border)] bg-[var(--card)] shadow-[0_30px_80px_-36px_rgba(28,25,23,0.5)]"
+                className={`rounded-[1.75rem] border border-[var(--border)] bg-[var(--card)] shadow-[0_30px_80px_-36px_rgba(28,25,23,0.5)] ${
+                  isCanvasPage ? "overflow-visible" : "overflow-hidden"
+                }`}
                 lang={editLocale}
                 dir={localeDir(editLocale)}
                 data-sf-preview="content"
               >
                 <SiteChromeProvider value={siteChrome}>
-                    <div ref={canvasRootRef} className="relative">
-                      <EditorCanvasLayer
-                        enabled={isCanvasPage}
-                        blocks={page.blocks}
-                        selectedIds={selectedIds}
-                        rootRef={canvasRootRef}
-                        onSelectIds={selectCanvasIds}
-                        onCommitPositions={commitCanvasBlocks}
-                        livePositions={canvasLivePos}
-                        setLivePositions={setCanvasLivePos}
-                        guides={canvasGuides}
-                        setGuides={setCanvasGuides}
-                        zoom={canvasZoom}
-                        onZoomChange={(z) => setCanvasZoom(clampZoom(z))}
+                    {isCanvasPage ? (
+                      <div
+                        className="mx-auto"
+                        style={{
+                          width: canvasWidth * canvasZoom,
+                          height: artboardH * canvasZoom,
+                          position: "relative",
+                        }}
+                        data-sf-artboard-sizer=""
                       >
+                        <div
+                          ref={canvasRootRef}
+                          className="relative"
+                          data-sf-artboard=""
+                          style={{
+                            width: canvasWidth,
+                            height: artboardH,
+                            overflow: "visible",
+                            transform: `scale(${canvasZoom})`,
+                            transformOrigin: "top center",
+                            marginInline: "auto",
+                          }}
+                        >
+                          <EditorCanvasLayer
+                            enabled={isCanvasPage}
+                            blocks={page.blocks}
+                            selectedIds={selectedIds}
+                            rootRef={canvasRootRef}
+                            onSelectIds={selectCanvasIds}
+                            onCommitPositions={commitCanvasBlocks}
+                            livePositions={canvasLivePos}
+                            setLivePositions={setCanvasLivePos}
+                            guides={canvasGuides}
+                            setGuides={setCanvasGuides}
+                            zoom={canvasZoom}
+                            onZoomChange={(z) => setCanvasZoom(clampZoom(z))}
+                            applyVisualZoom={false}
+                          >
+                            <SiteRenderer
+                              content={canvasPreviewContent}
+                              pageId={page.id}
+                              selectedBlockId={selectedId}
+                              selectedBlockIds={selectedIds}
+                              selectedPart={selectedPart}
+                              hoveredBlockId={hoveredId}
+                              onSelectBlock={selectBlock}
+                              onSelectPart={selectTarget}
+                              onHoverBlock={setHoveredId}
+                              locale={editLocale}
+                              colorMode={previewMode}
+                              siteSlug={site.slug}
+                              artboardMinHeight={artboardH}
+                              onRequestInsert={() => {
+                                setMobilePanel("left");
+                                setLeftTab("insert");
+                              }}
+                            />
+                          </EditorCanvasLayer>
+                        </div>
+                      </div>
+                    ) : (
+                      <div ref={canvasRootRef} className="relative">
                         <SiteRenderer
                           content={canvasPreviewContent}
                           pageId={page.id}
@@ -1824,8 +1926,8 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
                             setLeftTab("insert");
                           }}
                         />
-                      </EditorCanvasLayer>
-                    </div>
+                      </div>
+                    )}
                     <SiteModalHost uiLang={uiLang === "ar" ? "ar" : "en"} />
                 </SiteChromeProvider>
               </div>
@@ -1837,44 +1939,96 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
                   lang={editLocale}
                   dir={localeDir(editLocale)}
                   data-sf-preview="content"
-                  style={{ width: typeof canvasWidth === "number" ? canvasWidth :"100%", maxWidth:"100%", marginInline:"auto" }}
+                  style={{
+                    width: canvasWidth,
+                    maxWidth: "100%",
+                    marginInline: "auto",
+                    overflow: isCanvasPage ? "visible" : "hidden",
+                  }}
                 >
                   <SiteChromeProvider value={siteChrome}>
-                    <div ref={canvasRootRef} className="relative">
-                      <EditorCanvasLayer
-                        enabled={isCanvasPage}
-                        blocks={page.blocks}
-                        selectedIds={selectedIds}
-                        rootRef={canvasRootRef}
-                        onSelectIds={selectCanvasIds}
-                        onCommitPositions={commitCanvasBlocks}
-                        livePositions={canvasLivePos}
-                        setLivePositions={setCanvasLivePos}
-                        guides={canvasGuides}
-                        setGuides={setCanvasGuides}
-                        zoom={canvasZoom}
-                        onZoomChange={(z) => setCanvasZoom(clampZoom(z))}
+                    {isCanvasPage ? (
+                      <div
+                        className="mx-auto"
+                        style={{
+                          width: canvasWidth * canvasZoom,
+                          height: artboardH * canvasZoom,
+                          position: "relative",
+                        }}
+                        data-sf-artboard-sizer=""
                       >
+                        <div
+                          ref={canvasRootRef}
+                          className="relative"
+                          data-sf-artboard=""
+                          style={{
+                            width: canvasWidth,
+                            height: artboardH,
+                            overflow: "visible",
+                            transform: `scale(${canvasZoom})`,
+                            transformOrigin: "top center",
+                            marginInline: "auto",
+                          }}
+                        >
+                          <EditorCanvasLayer
+                            enabled={isCanvasPage}
+                            blocks={page.blocks}
+                            selectedIds={selectedIds}
+                            rootRef={canvasRootRef}
+                            onSelectIds={selectCanvasIds}
+                            onCommitPositions={commitCanvasBlocks}
+                            livePositions={canvasLivePos}
+                            setLivePositions={setCanvasLivePos}
+                            guides={canvasGuides}
+                            setGuides={setCanvasGuides}
+                            zoom={canvasZoom}
+                            onZoomChange={(z) => setCanvasZoom(clampZoom(z))}
+                            applyVisualZoom={false}
+                          >
+                            <SiteRenderer
+                              content={canvasPreviewContent}
+                              pageId={page.id}
+                              selectedBlockId={selectedId}
+                              selectedBlockIds={selectedIds}
+                              selectedPart={selectedPart}
+                              hoveredBlockId={hoveredId}
+                              onSelectBlock={selectBlock}
+                              onSelectPart={selectTarget}
+                              onHoverBlock={setHoveredId}
+                              locale={editLocale}
+                              colorMode={previewMode}
+                              siteSlug={site.slug}
+                              artboardMinHeight={artboardH}
+                              onRequestInsert={() => {
+                                setMobilePanel("left");
+                                setLeftTab("insert");
+                              }}
+                            />
+                          </EditorCanvasLayer>
+                        </div>
+                      </div>
+                    ) : (
+                      <div ref={canvasRootRef} className="relative">
                         <SiteRenderer
-                      content={canvasPreviewContent}
-                      pageId={page.id}
-                      selectedBlockId={selectedId}
-                      selectedBlockIds={selectedIds}
-                      selectedPart={selectedPart}
-                      hoveredBlockId={hoveredId}
-                      onSelectBlock={selectBlock}
-                      onSelectPart={selectTarget}
-                      onHoverBlock={setHoveredId}
-                      locale={editLocale}
-                      colorMode={previewMode}
-                      siteSlug={site.slug}
-                      onRequestInsert={() => {
-                        setMobilePanel("left");
-                        setLeftTab("insert");
-                      }}
-                    />
-                      </EditorCanvasLayer>
-                    </div>
+                          content={canvasPreviewContent}
+                          pageId={page.id}
+                          selectedBlockId={selectedId}
+                          selectedBlockIds={selectedIds}
+                          selectedPart={selectedPart}
+                          hoveredBlockId={hoveredId}
+                          onSelectBlock={selectBlock}
+                          onSelectPart={selectTarget}
+                          onHoverBlock={setHoveredId}
+                          locale={editLocale}
+                          colorMode={previewMode}
+                          siteSlug={site.slug}
+                          onRequestInsert={() => {
+                            setMobilePanel("left");
+                            setLeftTab("insert");
+                          }}
+                        />
+                      </div>
+                    )}
                     <SiteModalHost uiLang={uiLang === "ar" ? "ar" : "en"} />
                   </SiteChromeProvider>
                 </div>

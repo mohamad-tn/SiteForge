@@ -88,6 +88,8 @@ export async function DELETE(_: Request, ctx: { params: Promise<{ id: string }> 
   const { id } = await ctx.params;
   const access = await requireSiteAccess(id, auth.user);
   if ("response" in access) return access.response;
+  // Explicit media cleanup (siteId SetNull would orphan bytes; prefer deleteMany).
+  await prisma.mediaAsset.deleteMany({ where: { siteId: id } });
   await prisma.site.delete({ where: { id } });
   return NextResponse.json({ ok: true });
 }

@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
-import { mkdir, writeFile } from "fs/promises";
-import path from "path";
 import { nanoid } from "nanoid";
+import { prisma } from "@/lib/prisma";
 import { jsonError, requireSession } from "@/lib/api";
 
 export const runtime = "nodejs";
@@ -19,8 +18,10 @@ const ALLOWED = new Set([
 ]);
 
 function extFor(mime: string, original: string): string {
-  const fromName = path.extname(original || "").toLowerCase();
-  if (fromName && fromName.length <= 8) return fromName;
+  const fromName = (original || "").includes(".")
+    ? `.${original.split(".").pop()!.toLowerCase().slice(0, 8)}`
+    : "";
+  if (fromName && fromName.length <= 9) return fromName;
   const map: Record<string, string> = {
     "image/jpeg": ".jpg",
     "image/png": ".png",
@@ -63,13 +64,41 @@ export async function POST(req: Request) {
       }
     }
 
-    const dir = path.join(process.cwd(), "public", "uploads");
-    await mkdir(dir, { recursive: true });
+    const siteIdRaw = form.get("siteId");
+    let siteId: string | null = null;
+    if (typeof siteIdRaw === "string" && siteIdRaw.trim()) {
+      const site = await prisma.site.findFirst({
+        where:
+          auth.user.role === "ADMIN"
+            ? { id: siteIdRaw.trim() }
+            : { id: siteIdRaw.trim(), ownerId: auth.user.id },
+        select: { id: true },
+      });
+      siteId = site?.id ?? null;
+    }
+
     const name = `${Date.now()}-${nanoid(10)}${extFor(mime, file.name)}`;
-    await writeFile(path.join(dir, name), bytes);
-    const url = `/uploads/${name}`;
+    const asset = await prisma.mediaAsset.create({
+      data: {
+        ownerId: auth.user.id,
+        siteId,
+        name,
+        mime,
+        size: file.size,
+        bytes,
+      },
+    });
+
+    const url = `/api/media/${asset.id}`;
     const kind = mime.startsWith("video/") ? "video" : "image";
-    return NextResponse.json({ url, kind, mime, size: file.size, name });
+    return NextResponse.json({
+      url,
+      kind,
+      mime,
+      size: file.size,
+      name: asset.name,
+      id: asset.id,
+    });
   } catch (e) {
     console.error(e);
     return jsonError("Upload failed", 500);

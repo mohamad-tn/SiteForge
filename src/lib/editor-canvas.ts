@@ -9,9 +9,31 @@ import { isLockedProp } from "@/lib/editor-selection";
 export const CANVAS_GRID = 8;
 export const CANVAS_SNAP_THRESHOLD = 6;
 export const CANVAS_ORIGIN_X = 24;
-export const CANVAS_ORIGIN_Y = 72;
+export const CANVAS_ORIGIN_Y = 0;
 export const CANVAS_GAP_Y = 24;
 export const CANVAS_DEFAULT_WIDTH = 720;
+export const CANVAS_ARTBOARD_PAD = 120;
+
+/** Section types that span the full artboard width when on canvas. */
+export const FULL_BLEED_BLOCK_TYPES: ReadonlySet<BlockType> = new Set([
+  "navbar",
+  "hero",
+  "footer",
+  "cta",
+  "features",
+  "pricing",
+  "testimonials",
+  "faq",
+  "stats",
+  "contact",
+  "collectionList",
+]);
+
+export const DEVICE_FRAME_HEIGHT: Record<"mobile" | "tablet" | "laptop", number> = {
+  mobile: 844,
+  tablet: 1024,
+  laptop: 800,
+};
 
 export type CanvasRect = {
   id: string;
@@ -100,31 +122,35 @@ export function estimateBlockSize(type: BlockType): { w: number; h: number } {
 }
 
 export function pageUsesCanvas(page: Pick<Page, "layout" | "blocks"> | null | undefined): boolean {
-  if (!page) return true;
-  if (page.layout === "flow") return false;
-  if (page.layout === "canvas") return true;
-  // Legacy: any positioned block ⇒ treat as canvas for rendering.
-  return page.blocks.some((b) => {
-    const p = b.props as Record<string, unknown>;
-    return Boolean(p.posX) || Boolean(p.posY);
-  });
+  if (!page) return false;
+  return page.layout === "canvas";
 }
 
 export function blockHasPosition(props: Record<string, unknown>): boolean {
   return Boolean(props.posX) || Boolean(props.posY);
 }
 
-export function readBlockRect(block: Block, fallbackIndex = 0): CanvasRect {
+export function readBlockRect(block: Block, fallbackIndex = 0, artboardWidth = CANVAS_DEFAULT_WIDTH): CanvasRect {
   const props = block.props as Record<string, unknown>;
   const est = estimateBlockSize(block.type);
-  const w = parsePos(props.width, est.w) || est.w;
+  const bleed = FULL_BLEED_BLOCK_TYPES.has(block.type);
+  const widthRaw = props.width;
+  let w = est.w;
+  if (typeof widthRaw === "string" && widthRaw.trim().endsWith("%")) {
+    const pct = Number(widthRaw.replace(/%/g, "").trim());
+    w = Number.isFinite(pct) ? (artboardWidth * pct) / 100 : artboardWidth;
+  } else {
+    w = parsePos(widthRaw, est.w) || est.w;
+  }
+  if (bleed && !widthRaw) w = artboardWidth;
   const h =
     parsePos(props.height, 0) ||
     parsePos(props.minHeight, 0) ||
     est.h;
+  const defaultX = bleed ? 0 : CANVAS_ORIGIN_X;
   const x = blockHasPosition(props)
-    ? parsePos(props.posX, CANVAS_ORIGIN_X)
-    : CANVAS_ORIGIN_X;
+    ? parsePos(props.posX, defaultX)
+    : defaultX;
   const y = blockHasPosition(props)
     ? parsePos(props.posY, CANVAS_ORIGIN_Y + fallbackIndex * (est.h + CANVAS_GAP_Y))
     : CANVAS_ORIGIN_Y + fallbackIndex * (est.h + CANVAS_GAP_Y);
@@ -149,18 +175,56 @@ export function autoPlaceBlocks(blocks: Block[]): Block[] {
       return block;
     }
     const est = estimateBlockSize(block.type);
+    const bleed = FULL_BLEED_BLOCK_TYPES.has(block.type);
     const next: Block = {
       ...block,
       props: {
         ...props,
-        posX: formatPos(CANVAS_ORIGIN_X),
+        posX: formatPos(bleed ? 0 : CANVAS_ORIGIN_X),
         posY: formatPos(y),
-        ...(props.width ? {} : { width: formatPos(est.w) }),
+        ...(props.width ? {} : { width: bleed ? "100%" : formatPos(est.w) }),
       },
     };
-    y += est.h + CANVAS_GAP_Y;
+    y += est.h + (bleed ? 0 : CANVAS_GAP_Y);
     return next;
   });
+}
+
+/** Clear absolute canvas positions so the page can reflow as a document. */
+export function clearBlockPositions(blocks: Block[]): Block[] {
+  return blocks.map((block) => {
+    const props = { ...(block.props as Record<string, unknown>) };
+    delete props.posX;
+    delete props.posY;
+    return { ...block, props };
+  });
+}
+
+/**
+ * Artboard height = max(device frame height, deepest block bottom + pad).
+ * Never clip the page to a single viewport.
+ */
+export function artboardHeightFromBlocks(
+  blocks: Block[],
+  deviceHeight: number,
+  pad = CANVAS_ARTBOARD_PAD
+): number {
+  let maxBottom = 0;
+  blocks.forEach((b, i) => {
+    const r = readBlockRect(b, i);
+    maxBottom = Math.max(maxBottom, r.y + r.h);
+  });
+  const base = Number.isFinite(deviceHeight) && deviceHeight > 0 ? deviceHeight : 800;
+  return Math.max(base, maxBottom + pad);
+}
+
+/** True when a size commit would shrink a block below the safe floor or produce NaN. */
+export function isInvalidCanvasSize(w: unknown, h: unknown, min = 40): boolean {
+  const ww = typeof w === "number" ? w : Number(w);
+  const hh = typeof h === "number" ? h : Number(h);
+  if (!Number.isFinite(ww) || !Number.isFinite(hh)) return true;
+  if (ww < min || hh < min) return true;
+  return false;
 }
 
 /** Default insert spot below the lowest unlocked block (or origin). */
@@ -728,6 +792,14 @@ export function applySizePatches(
     const p = map.get(b.id);
     if (!p) return b;
     if (isLockedProp(b.props as Record<string, unknown>)) return b;
+    if (p.w != null || p.h != null) {
+      const cur = readBlockRect(b);
+      const ww = p.w ?? cur.w;
+      const hh = p.h ?? cur.h;
+      if (isInvalidCanvasSize(ww, hh)) return b;
+    }
+    if (p.x != null && !Number.isFinite(p.x)) return b;
+    if (p.y != null && !Number.isFinite(p.y)) return b;
     const next: Record<string, unknown> = { ...b.props };
     if (p.x != null) next.posX = formatPos(p.x);
     if (p.y != null) next.posY = formatPos(p.y);

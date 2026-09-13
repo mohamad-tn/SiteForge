@@ -247,6 +247,7 @@ function ContentField({
   blockType,
   localized,
   uiLang,
+  siteId,
 }: {
   propKey: string;
   value: string;
@@ -254,6 +255,7 @@ function ContentField({
   blockType: string;
   localized?: boolean;
   uiLang: "ar" | "en";
+  siteId?: string;
 }) {
   const label = propLabel(propKey, uiLang);
   if (MEDIA_KEYS.has(propKey)) {
@@ -268,6 +270,7 @@ function ContentField({
             ? "video/mp4,video/webm,video/quicktime,image/*"
             : "image/*"
         }
+        siteId={siteId}
       />
     );
   }
@@ -489,6 +492,7 @@ export function InspectorPanel({
                         value={display}
                         blockType={selected.type}
                         localized={localized}
+                        siteId={siteId}
                         onChange={(v) => {
                           if (localized) onUpdateLocalizedProp(selected.id, key, editLocale, v);
                           else onUpdateProp(selected.id, key, v);

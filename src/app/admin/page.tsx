@@ -8,7 +8,7 @@ import { AppCanvas, AppHeader, SoftCard, Toolbar } from "@/components/ui/surface
 import { SegmentedControl } from "@/components/ui/segmented";
 import { ThemeToggleButton } from "@/components/theme-provider";
 import { PlatformLangSwitcher, usePlatformLang } from "@/components/platform-lang-provider";
-import { Search } from "lucide-react";
+import { Search, Trash2 } from "lucide-react";
 
 type Overview = {
   metrics: { users: number; sites: number; published: number; views7d: number };
@@ -36,8 +36,21 @@ export default function AdminPage() {
   const [sitesQ, setSitesQ] = useState("");
   const [users, setUsers] = useState<Array<Record<string, unknown>>>([]);
   const [sites, setSites] = useState<Array<Record<string, unknown>>>([]);
-  const [tab, setTab] = useState<"overview" | "users" | "sites" | "domains">("overview");
+  const [tab, setTab] = useState<"overview" | "users" | "sites" | "domains" | "templates">("overview");
   const [domains, setDomains] = useState<Array<Record<string, unknown>>>([]);
+  const [templates, setTemplates] = useState<Array<Record<string, unknown>>>([]);
+  const [deleteSiteId, setDeleteSiteId] = useState<string | null>(null);
+  const [deleteSiteLabel, setDeleteSiteLabel] = useState("");
+  const [deleteTplId, setDeleteTplId] = useState<string | null>(null);
+  const [deleteTplLabel, setDeleteTplLabel] = useState("");
+  const [confirmWord, setConfirmWord] = useState("");
+  const [deleting, setDeleting] = useState(false);
+
+  const confirmExpected = lang === "ar" ? "حذف" : "delete";
+  const confirmOk =
+    lang === "ar"
+      ? confirmWord.trim() === confirmExpected
+      : confirmWord.trim().toLowerCase() === confirmExpected;
 
   useEffect(() => {
     fetch("/api/admin/overview")
@@ -74,6 +87,44 @@ export default function AdminPage() {
       .catch(() => setDomains([]));
   }, [tab]);
 
+  useEffect(() => {
+    if (tab !== "templates") return;
+    fetch("/api/templates")
+      .then((r) => r.json())
+      .then((d) => setTemplates(d.templates || []))
+      .catch(() => setTemplates([]));
+  }, [tab]);
+
+  async function runDeleteSite() {
+    if (!deleteSiteId || !confirmOk || deleting) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/sites/${deleteSiteId}`, { method: "DELETE" });
+      if (res.ok) {
+        setSites((prev) => prev.filter((s) => String(s.id) !== deleteSiteId));
+        setDeleteSiteId(null);
+        setConfirmWord("");
+      }
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  async function runDeleteTemplate() {
+    if (!deleteTplId || !confirmOk || deleting) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/templates/${deleteTplId}`, { method: "DELETE" });
+      if (res.ok) {
+        setTemplates((prev) => prev.filter((t) => String(t.id) !== deleteTplId));
+        setDeleteTplId(null);
+        setConfirmWord("");
+      }
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   return (
     <AppCanvas dir={dir} lang={lang}>
       <AppHeader>
@@ -102,6 +153,7 @@ export default function AdminPage() {
             { value: "users", label: t("tabUsers") },
             { value: "sites", label: t("tabSites") },
             { value: "domains", label: t("tabDomains") },
+            { value: "templates", label: t("tabTemplates") },
           ]}
         />
 
@@ -232,6 +284,7 @@ export default function AdminPage() {
                     <th className="font-medium">المالك</th>
                     <th className="font-medium">الحالة</th>
                     <th className="font-medium">أحداث</th>
+                    <th className="font-medium"></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -248,6 +301,21 @@ export default function AdminPage() {
                       </td>
                       <td>{s.publishedAt ? t("published") : t("draft")}</td>
                       <td>{String((s._count as { events: number } | undefined)?.events ?? 0)}</td>
+                      <td>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="rounded-full text-rose-700"
+                          onClick={() => {
+                            setDeleteSiteId(String(s.id));
+                            setDeleteSiteLabel(String(s.name));
+                            setDeleteTplId(null);
+                            setConfirmWord("");
+                          }}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -282,7 +350,109 @@ export default function AdminPage() {
           </SoftCard>
         ) : null}
 
+        {tab === "templates" ? (
+          <SoftCard className="overflow-hidden p-0">
+            <div className="border-b border-[var(--border)] px-4 py-3 text-sm font-semibold">{t("tabTemplates")}</div>
+            <div className="divide-y divide-[var(--border)]">
+              {templates.length === 0 ? (
+                <div className="px-4 py-8 text-center text-sm text-[var(--muted)]">—</div>
+              ) : (
+                templates.map((tpl) => (
+                  <div key={String(tpl.id)} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm">
+                    <div className="min-w-0">
+                      <div className="truncate font-semibold">{String(tpl.nameAr || tpl.name || "")}</div>
+                      <div className="truncate text-xs text-[var(--muted)]" dir="ltr">
+                        {String(tpl.slug)} · {String(tpl.category || "")}
+                      </div>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="rounded-full text-rose-700"
+                      onClick={() => {
+                        setDeleteTplId(String(tpl.id));
+                        setDeleteTplLabel(String(tpl.nameAr || tpl.name || ""));
+                        setDeleteSiteId(null);
+                        setConfirmWord("");
+                      }}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      {t("deleteTemplate")}
+                    </Button>
+                  </div>
+                ))
+              )}
+            </div>
+          </SoftCard>
+        ) : null}
+
       </main>
+
+      {deleteSiteId || deleteTplId ? (
+        <div
+          className="fixed inset-0 z-[80] flex items-center justify-center bg-black/45 p-4"
+          role="dialog"
+          aria-modal="true"
+          onClick={() => {
+            if (!deleting) {
+              setDeleteSiteId(null);
+              setDeleteTplId(null);
+              setConfirmWord("");
+            }
+          }}
+        >
+          <div
+            className="w-full max-w-md rounded-[1.5rem] border border-[var(--border)] bg-[var(--card)] p-5 text-[var(--foreground)] shadow-[var(--shadow-sm)]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-lg font-bold tracking-tight">
+              {deleteSiteId ? t("deleteSiteTitle") : t("deleteTemplateTitle")}
+            </h3>
+            <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
+              {deleteSiteId ? t("deleteSiteBody") : t("deleteTemplateBody")}
+            </p>
+            <p className="mt-3 text-sm font-semibold">{deleteSiteId ? deleteSiteLabel : deleteTplLabel}</p>
+            <label className="mt-4 block text-xs" htmlFor="sf-admin-del-confirm">
+              {t("deleteConfirmPrompt")}{" "}
+              <span className="font-mono font-bold" dir="ltr">
+                {confirmExpected}
+              </span>
+            </label>
+            <Input
+              id="sf-admin-del-confirm"
+              className="mt-1.5"
+              value={confirmWord}
+              onChange={(e) => setConfirmWord(e.target.value)}
+              placeholder={t("deleteConfirmPlaceholder")}
+              disabled={deleting}
+              autoFocus
+            />
+            <div className="mt-5 flex flex-wrap justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="rounded-full"
+                disabled={deleting}
+                onClick={() => {
+                  setDeleteSiteId(null);
+                  setDeleteTplId(null);
+                  setConfirmWord("");
+                }}
+              >
+                {t("close")}
+              </Button>
+              <Button
+                type="button"
+                className="rounded-full bg-rose-700 text-white hover:bg-rose-800 disabled:opacity-40"
+                disabled={!confirmOk || deleting}
+                onClick={() => (deleteSiteId ? runDeleteSite() : runDeleteTemplate())}
+              >
+                {deleting ? t("deleting") : deleteSiteId ? t("deleteSite") : t("deleteTemplate")}
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </AppCanvas>
   );
 }

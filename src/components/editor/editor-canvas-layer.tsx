@@ -15,6 +15,7 @@ import {
   detachStackMember,
   formatPos,
   handleCursor,
+  isInvalidCanvasSize,
   marqueeHitTest,
   measureBlockRects,
   normalizeMarquee,
@@ -99,6 +100,7 @@ export function EditorCanvasLayer({
   setGuides,
   zoom = 1,
   onZoomChange,
+  applyVisualZoom = true,
   children,
 }: {
   enabled: boolean;
@@ -113,6 +115,8 @@ export function EditorCanvasLayer({
   setGuides: (g: GuideLine[]) => void;
   zoom?: number;
   onZoomChange?: (z: number) => void;
+  /** When false, parent owns transform:scale (artboard sizer pattern). */
+  applyVisualZoom?: boolean;
   children: React.ReactNode;
 }) {
   const [marquee, setMarquee] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
@@ -515,7 +519,13 @@ export function EditorCanvasLayer({
           .filter(Boolean) as { id: string; x: number; y: number; w?: number; h?: number }[];
         setLivePositions({});
         setGuides([]);
-        if (patches.length) {
+        const invalid = patches.some(
+          (p) =>
+            !Number.isFinite(p.x) ||
+            !Number.isFinite(p.y) ||
+            isInvalidCanvasSize(p.w ?? 40, p.h ?? 40)
+        );
+        if (patches.length && !invalid) {
           onCommitPositions(applySizePatches(blocks, patches));
         }
         return;
@@ -590,8 +600,8 @@ export function EditorCanvasLayer({
       data-sf-canvas-layer=""
       style={{
         cursor: spaceDown ? "grab" : undefined,
-        transform: zoom !== 1 ? `scale(${zoom})` : undefined,
-        transformOrigin: "top left",
+        transform: applyVisualZoom && zoom !== 1 ? `scale(${zoom})` : undefined,
+        transformOrigin: "top center",
       }}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}

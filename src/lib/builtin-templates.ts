@@ -45,7 +45,7 @@ export function createPortfolioContent(name = "Studio Nova"): SiteContent {
         id: "page-home",
         title: "الأعمال",
         slug: "home",
-        layout: "canvas",
+        layout: "flow",
         blocks: [
           {
             id: "pf-nav",
@@ -246,7 +246,7 @@ export function createCvContent(name = "أحمد علي"): SiteContent {
         id: "page-home",
         title: "السيرة",
         slug: "home",
-        layout: "canvas",
+        layout: "flow",
         blocks: [
           {
             id: "cv-nav",

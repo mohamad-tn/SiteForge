@@ -30,6 +30,7 @@ model User {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
   sites        Site[]
+  mediaAssets  MediaAsset[]
 
   @@index([role])
   @@index([createdAt])
@@ -73,6 +74,7 @@ model Site {
   collections      Collection[]
   formSubmissions  FormSubmission[]
   secrets          SiteSecret[]
+  mediaAssets      MediaAsset[]
 
   @@index([ownerId])
   @@index([customDomain])
@@ -154,3 +156,22 @@ model SiteSecret {
   @@unique([siteId, name])
   @@index([siteId])
 }
+
+model MediaAsset {
+  id        String   @id @default(cuid())
+  ownerId   String
+  owner     User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  siteId    String?
+  site      Site?    @relation(fields: [siteId], references: [id], onDelete: SetNull)
+  name      String
+  mime      String
+  size      Int
+  bytes     Bytes
+  createdAt DateTime @default(now())
+
+  @@index([ownerId])
+  @@index([siteId])
+  @@index([name])
+  @@index([createdAt])
+}
+

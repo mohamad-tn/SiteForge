@@ -76,8 +76,8 @@ export const pageSchema = z.object({
   title: z.string(),
   slug: z.string(),
   blocks: z.array(blockSchema),
-  /** flow = document stack; canvas = absolute free layout (default for new pages). */
-  layout: z.enum(["flow", "canvas"]).optional().default("canvas"),
+  /** flow = document stack (default); canvas = absolute free layout. */
+  layout: z.enum(["flow", "canvas"]).optional().default("flow"),
   seoTitle: z.string().optional(),
   seoDescription: z.string().optional(),
   seoOgImage: z.string().optional(),
@@ -419,7 +419,7 @@ export function ensureContentDefaults(raw: SiteContent): SiteContent {
       rtl: raw.tokens.rtl ?? true,
     },
     pages: (raw.pages || []).map((page) => {
-      const layout = page.layout === "flow" ? "flow" : "canvas";
+      const layout = page.layout === "canvas" ? "canvas" : "flow";
       let blocks = page.blocks.map((block) => {
         if (block.type !== "navbar") return block;
         const props = { ...(block.props as Record<string, unknown>) };
@@ -437,11 +437,25 @@ export function ensureContentDefaults(raw: SiteContent): SiteContent {
   };
 }
 
+const FULL_BLEED_TYPES = new Set([
+  "navbar",
+  "hero",
+  "footer",
+  "cta",
+  "features",
+  "pricing",
+  "testimonials",
+  "faq",
+  "stats",
+  "contact",
+  "collectionList",
+]);
+
 /** Stack unpositioned blocks into a canvas column (kept local to avoid import cycles). */
 function autoPlacePageBlocks(blocks: Block[]): Block[] {
   const ORIGIN_X = 24;
-  const ORIGIN_Y = 72;
-  const GAP = 24;
+  const ORIGIN_Y = 0;
+  const GAP = 0;
   const heights: Record<string, number> = {
     navbar: 64,
     hero: 420,
@@ -479,13 +493,16 @@ function autoPlacePageBlocks(blocks: Block[]): Block[] {
       return { ...block, props };
     }
     const h = heights[block.type] || 160;
+    const bleed = FULL_BLEED_TYPES.has(block.type);
     const nextProps: Record<string, unknown> = {
       ...props,
-      posX: String(ORIGIN_X),
+      posX: String(bleed ? 0 : ORIGIN_X),
       posY: String(y),
     };
-    if (!props.width) nextProps.width = block.type === "button" ? "200" : "720";
-    y += h + GAP;
+    if (!props.width) {
+      nextProps.width = bleed ? "100%" : block.type === "button" ? "200" : "720";
+    }
+    y += h + (bleed ? 0 : 24);
     return { ...block, props: nextProps };
   });
 }
@@ -525,7 +542,7 @@ export function createBlankContent(title = "صفحتي"): SiteContent {
         id: "page-home",
         title: "الرئيسية",
         slug: "home",
-        layout: "canvas",
+        layout: "flow",
         blocks: [
           {
             id: "b-nav",

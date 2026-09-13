@@ -223,7 +223,7 @@ export function blockFrameStyle(p: Record<string, unknown>, opts?: { canvas?: bo
     // Prevent collapse to 0-width when width is unset on canvas.
     if (!width && forceCanvas) {
       style.minWidth = style.minWidth || "120px";
-      if (!style.width) style.width = "min(100%, 720px)";
+      if (!style.width) style.width = "100%";
     }
   }
 

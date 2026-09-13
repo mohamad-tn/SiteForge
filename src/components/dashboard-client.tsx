@@ -14,9 +14,10 @@ import { SignOutButton } from "@/components/sign-out-button";
 import { CommandPalette, type CommandItem } from "@/components/command-palette";
 import { PlatformLangSwitcher, usePlatformLang } from "@/components/platform-lang-provider";
 import { CATEGORY_LABELS } from "@/lib/platform-i18n";
-import { Copy, Download, Search, Upload, Plus, LayoutTemplate, ArrowRight } from "lucide-react";
+import { Copy, Download, Search, Upload, Plus, LayoutTemplate, ArrowRight, Trash2 } from "lucide-react";
 
 type Template = {
+  id?: string;
   slug: string;
   nameAr: string;
   descriptionAr: string;
@@ -100,11 +101,28 @@ export function DashboardClient({
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState("");
   const [importing, setImporting] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<SiteRow | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const [templateDeleteTarget, setTemplateDeleteTarget] = useState<Template | null>(null);
+  const [templateConfirm, setTemplateConfirm] = useState("");
+  const [deletingTemplate, setDeletingTemplate] = useState(false);
+  const [templates, setTemplates] = useState(initialTemplates);
 
   const filteredTemplates = useMemo(
-    () => initialTemplates.filter((tpl) => (category === "all" ? true : tpl.category === category)),
-    [initialTemplates, category]
+    () => templates.filter((tpl) => (category === "all" ? true : tpl.category === category)),
+    [templates, category]
   );
+
+  const siteConfirmWord = uiLang === "ar" ? "حذف" : "delete";
+  const siteConfirmOk =
+    uiLang === "ar"
+      ? deleteConfirm.trim() === siteConfirmWord
+      : deleteConfirm.trim().toLowerCase() === siteConfirmWord;
+  const templateConfirmOk =
+    uiLang === "ar"
+      ? templateConfirm.trim() === siteConfirmWord
+      : templateConfirm.trim().toLowerCase() === siteConfirmWord;
 
   const loadSites = useCallback(async () => {
     setLoading(true);
@@ -168,6 +186,47 @@ export function DashboardClient({
     a.download = `${slug}.siteforge.json`;
     a.click();
     URL.revokeObjectURL(url);
+  }
+
+  async function confirmDeleteSite() {
+    if (!deleteTarget || !siteConfirmOk || deleting) return;
+    setDeleting(true);
+    setError("");
+    try {
+      const res = await fetch(`/api/sites/${deleteTarget.id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setError(data.error || tp("deleteFailed"));
+        return;
+      }
+      setDeleteTarget(null);
+      setDeleteConfirm("");
+      await loadSites();
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  async function confirmDeleteTemplate() {
+    if (!templateDeleteTarget?.id || !templateConfirmOk || deletingTemplate) return;
+    setDeletingTemplate(true);
+    setError("");
+    try {
+      const res = await fetch(`/api/templates/${templateDeleteTarget.id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setError(data.error || tp("deleteFailed"));
+        return;
+      }
+      setTemplates((prev) => prev.filter((t) => t.id !== templateDeleteTarget.id));
+      if (templateSlug === templateDeleteTarget.slug) {
+        setTemplateSlug("blank");
+      }
+      setTemplateDeleteTarget(null);
+      setTemplateConfirm("");
+    } finally {
+      setDeletingTemplate(false);
+    }
   }
 
   async function importJson(file: File) {
@@ -416,6 +475,29 @@ export function DashboardClient({
                   <div className="mt-1 line-clamp-2 text-xs leading-5 text-[var(--muted)]">
                     {tpl.descriptionAr}
                   </div>
+                  {isAdmin && tpl.id ? (
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      className="mt-2 inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-bold text-rose-700 hover:bg-rose-50 dark:text-rose-300 dark:hover:bg-rose-950/40"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setTemplateDeleteTarget(tpl);
+                        setTemplateConfirm("");
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setTemplateDeleteTarget(tpl);
+                          setTemplateConfirm("");
+                        }
+                      }}
+                    >
+                      <Trash2 className="h-3 w-3" />
+                      {tp("deleteTemplate")}
+                    </span>
+                  ) : null}
                 </button>
               ))}
             </div>
@@ -583,6 +665,18 @@ export function DashboardClient({
                     >
                       <Download className="h-3.5 w-3.5" />
                     </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="rounded-full text-rose-700 hover:bg-rose-50 hover:text-rose-800 dark:text-rose-300 dark:hover:bg-rose-950/40"
+                      onClick={() => {
+                        setDeleteTarget(site);
+                        setDeleteConfirm("");
+                      }}
+                      title={tp("deleteSite")}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
                   </div>
                 </SoftCard>
               ))}
@@ -590,6 +684,135 @@ export function DashboardClient({
           )}
         </section>
       </main>
+
+      {deleteTarget ? (
+        <div
+          className="fixed inset-0 z-[80] flex items-center justify-center bg-black/45 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="sf-delete-site-title"
+          onClick={() => {
+            if (!deleting) {
+              setDeleteTarget(null);
+              setDeleteConfirm("");
+            }
+          }}
+        >
+          <div
+            className="w-full max-w-md rounded-[1.5rem] border border-[var(--border)] bg-[var(--card)] p-5 text-[var(--foreground)] shadow-[var(--shadow-sm)]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 id="sf-delete-site-title" className="text-lg font-bold tracking-tight">
+              {tp("deleteSiteTitle")}
+            </h3>
+            <p className="mt-2 text-sm leading-6 text-[var(--muted)]">{tp("deleteSiteBody")}</p>
+            <p className="mt-3 truncate text-sm font-semibold">{deleteTarget.name}</p>
+            <p className="mt-1 font-mono text-xs text-[var(--muted)]" dir="ltr">
+              /s/{deleteTarget.slug}
+            </p>
+            <Label htmlFor="sf-delete-site-confirm" className="mt-4 block text-xs">
+              {tp("deleteConfirmPrompt")}{" "}
+              <span className="font-mono font-bold" dir="ltr">
+                {siteConfirmWord}
+              </span>
+            </Label>
+            <Input
+              id="sf-delete-site-confirm"
+              value={deleteConfirm}
+              onChange={(e) => setDeleteConfirm(e.target.value)}
+              placeholder={tp("deleteConfirmPlaceholder")}
+              className="mt-1.5"
+              autoFocus
+              disabled={deleting}
+            />
+            <div className="mt-5 flex flex-wrap justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="rounded-full"
+                disabled={deleting}
+                onClick={() => {
+                  setDeleteTarget(null);
+                  setDeleteConfirm("");
+                }}
+              >
+                {tp("close")}
+              </Button>
+              <Button
+                type="button"
+                className="rounded-full bg-rose-700 text-white hover:bg-rose-800 disabled:opacity-40"
+                disabled={!siteConfirmOk || deleting}
+                onClick={confirmDeleteSite}
+              >
+                {deleting ? tp("deleting") : tp("deleteSite")}
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {templateDeleteTarget ? (
+        <div
+          className="fixed inset-0 z-[80] flex items-center justify-center bg-black/45 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="sf-delete-tpl-title"
+          onClick={() => {
+            if (!deletingTemplate) {
+              setTemplateDeleteTarget(null);
+              setTemplateConfirm("");
+            }
+          }}
+        >
+          <div
+            className="w-full max-w-md rounded-[1.5rem] border border-[var(--border)] bg-[var(--card)] p-5 text-[var(--foreground)] shadow-[var(--shadow-sm)]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 id="sf-delete-tpl-title" className="text-lg font-bold tracking-tight">
+              {tp("deleteTemplateTitle")}
+            </h3>
+            <p className="mt-2 text-sm leading-6 text-[var(--muted)]">{tp("deleteTemplateBody")}</p>
+            <p className="mt-3 text-sm font-semibold">{templateDeleteTarget.nameAr}</p>
+            <Label htmlFor="sf-delete-tpl-confirm" className="mt-4 block text-xs">
+              {tp("deleteConfirmPrompt")}{" "}
+              <span className="font-mono font-bold" dir="ltr">
+                {siteConfirmWord}
+              </span>
+            </Label>
+            <Input
+              id="sf-delete-tpl-confirm"
+              value={templateConfirm}
+              onChange={(e) => setTemplateConfirm(e.target.value)}
+              placeholder={tp("deleteConfirmPlaceholder")}
+              className="mt-1.5"
+              autoFocus
+              disabled={deletingTemplate}
+            />
+            <div className="mt-5 flex flex-wrap justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="rounded-full"
+                disabled={deletingTemplate}
+                onClick={() => {
+                  setTemplateDeleteTarget(null);
+                  setTemplateConfirm("");
+                }}
+              >
+                {tp("close")}
+              </Button>
+              <Button
+                type="button"
+                className="rounded-full bg-rose-700 text-white hover:bg-rose-800 disabled:opacity-40"
+                disabled={!templateConfirmOk || deletingTemplate}
+                onClick={confirmDeleteTemplate}
+              >
+                {deletingTemplate ? tp("deleting") : tp("deleteTemplate")}
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </AppCanvas>
   );
 }

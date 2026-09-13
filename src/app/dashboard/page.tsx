@@ -7,6 +7,7 @@ export default async function DashboardPage() {
   const templates = await prisma.template.findMany({
     orderBy: { nameAr: "asc" },
     select: {
+      id: true,
       slug: true,
       nameAr: true,
       descriptionAr: true,
