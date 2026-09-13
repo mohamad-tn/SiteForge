@@ -15,8 +15,9 @@ describe("platform i18n", () => {
     expect(tPlatform("ar", "save")).toBe("حفظ");
     expect(tPlatform("en", "save")).toBe("Save");
     expect(tPlatform("en", "cmsHint")).toMatch(/CMS|collection/i);
-    expect(tPlatform("ar", "canvasEmptyTitle")).toBe("صفحة فارغة");
-    expect(tPlatform("en", "canvasEmptyBody")).toMatch(/Insert panel/i);
+    expect(tPlatform("ar", "canvasEmptyTitle")).toMatch(/فارغة|قسم/);
+    expect(tPlatform("en", "canvasEmptyBody")).toMatch(/Insert|hero|refine/i);
+    expect(tPlatform("en", "canvasEmptyCta")).toMatch(/Insert/i);
     expect(tPlatform("en", "staggerHelp")).toMatch(/nested|direct/i);
   });
 

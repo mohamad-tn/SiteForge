@@ -695,6 +695,12 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
 
   return (
     <div className="sf-canvas flex h-screen flex-col" dir={uiDir} lang={uiLang} data-sf-chrome="platform">
+      <a
+        href="#sf-editor-main"
+        className="sr-only focus:not-sr-only focus:absolute focus:start-3 focus:top-3 focus:z-[100] focus:rounded-full focus:bg-teal-800 focus:px-4 focus:py-2 focus:text-sm focus:font-bold focus:text-white"
+      >
+        {t("skipToContent")}
+      </a>
       <CommandPalette items={commands} />
       {publishConfirmOpen ? (
         <div
@@ -1231,7 +1237,7 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
                     <p className="mt-1 text-[11px] leading-5 text-stone-600 dark:text-[var(--muted)]">{t("layersEmptyHint")}</p>
                     <button
                       type="button"
-                      className="mt-3 inline-flex items-center gap-1 rounded-full bg-teal-800 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-teal-700"
+                      className="mt-3 inline-flex min-h-11 items-center gap-1 rounded-full bg-teal-800 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-teal-700 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--ring)]"
                       onClick={() => setLeftTab("insert")}
                     >
                       <Plus className="h-3.5 w-3.5" aria-hidden /> {t("openInsert")}
@@ -1459,7 +1465,7 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
         </div>
 
         {/* Canvas */}
-        <main className="relative flex-1 overflow-auto rounded-[1.75rem] border border-stone-300/25 bg-[#dfd9cf]/45 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.28)] md:p-8 dark:border-stone-800 dark:bg-stone-950/40 dark:shadow-none" onClick={() => { setSelectedId(null); setSelectedPart(null); }}>
+        <main id="sf-editor-main" className="relative flex-1 overflow-auto rounded-[1.75rem] border border-stone-300/25 bg-[#dfd9cf]/45 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.28)] md:p-8 dark:border-stone-800 dark:bg-stone-950/40 dark:shadow-none" onClick={() => { setSelectedId(null); setSelectedPart(null); }}>
           <div
             className="sf-device-shell"
             style={{
@@ -1525,6 +1531,10 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
                       locale={editLocale}
                       colorMode={previewMode}
                       siteSlug={site.slug}
+                      onRequestInsert={() => {
+                        setMobilePanel("left");
+                        setLeftTab("insert");
+                      }}
                     />
                     <SiteModalHost uiLang={uiLang === "ar" ? "ar" : "en"} />
                 </SiteChromeProvider>
@@ -1553,6 +1563,10 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
                       locale={editLocale}
                       colorMode={previewMode}
                       siteSlug={site.slug}
+                      onRequestInsert={() => {
+                        setMobilePanel("left");
+                        setLeftTab("insert");
+                      }}
                     />
                     <SiteModalHost uiLang={uiLang === "ar" ? "ar" : "en"} />
                   </SiteChromeProvider>

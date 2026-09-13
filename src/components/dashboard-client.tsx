@@ -78,6 +78,7 @@ export function DashboardClient({
     loading: tp("loading"),
     emptyTitle: tp("emptyTitle"),
     emptyBody: tp("emptyBody"),
+    skipToContent: tp("skipToContent"),
     openEditor: tp("openEditor"),
     view: tp("view"),
     prev: tp("prev"),
@@ -232,6 +233,12 @@ export function DashboardClient({
   return (
     <AppCanvas dir={dir} lang={uiLang}>
       <CommandPalette items={commands} />
+      <a
+        href="#sf-dash-main"
+        className="sr-only focus:not-sr-only focus:absolute focus:start-3 focus:top-3 focus:z-[100] focus:rounded-full focus:bg-teal-800 focus:px-4 focus:py-2 focus:text-sm focus:font-bold focus:text-white"
+      >
+        {t.skipToContent}
+      </a>
       <AppHeader>
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2 px-4 py-3.5 sm:gap-3 sm:px-6">
           <div className="min-w-0 flex-1 basis-[12rem]">
@@ -261,7 +268,7 @@ export function DashboardClient({
         </div>
       </AppHeader>
 
-      <main className="mx-auto max-w-6xl space-y-7 px-4 py-7 sm:px-6 sm:py-9">
+      <main id="sf-dash-main" className="mx-auto max-w-6xl space-y-7 px-4 py-7 sm:px-6 sm:py-9">
         <section className="relative overflow-hidden rounded-[1.75rem] border border-[var(--border)] bg-[var(--card)] px-5 py-7 shadow-[var(--shadow-xs)] sm:px-8 sm:py-8">
           <div aria-hidden className="pointer-events-none absolute -end-10 -top-12 h-40 w-40 rounded-full bg-teal-500/10 blur-3xl" />
           <div className="relative flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
@@ -507,7 +514,7 @@ export function DashboardClient({
               <p className="mx-auto mt-1 max-w-md text-sm text-[var(--muted)]">{t.emptyBody}</p>
               <Button
                 type="button"
-                className="mt-5 rounded-full"
+                className="mt-5 min-h-11 rounded-full"
                 onClick={() => document.getElementById("create")?.scrollIntoView({ behavior: "smooth" })}
               >
                 {tp("dashCtaCreate")}

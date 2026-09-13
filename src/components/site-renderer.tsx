@@ -1550,6 +1550,7 @@ export function SiteRenderer({
   colorMode = "light",
   siteSlug,
   focusCollectionSlug,
+  onRequestInsert,
 }: {
   content: SiteContent;
   pageSlug?: string;
@@ -1567,6 +1568,7 @@ export function SiteRenderer({
   siteSlug?: string;
   /** When ?collection=slug and no matching collectionList block exists, auto-render one. */
   focusCollectionSlug?: string;
+  onRequestInsert?: () => void;
 }) {
   const page =
     (pageId ? content.pages.find((p) => p.id === pageId) : undefined) ||
@@ -1790,6 +1792,16 @@ export function SiteRenderer({
               {t("canvasEmptyTitle")}
             </p>
             <p className="mt-1.5 text-xs leading-5">{t("canvasEmptyBody")}</p>
+            {editable && onRequestInsert ? (
+              <button
+                type="button"
+                className="mt-4 inline-flex min-h-11 items-center justify-center rounded-full px-4 text-xs font-bold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+                style={{ background: tokens.colors.primary }}
+                onClick={onRequestInsert}
+              >
+                {t("canvasEmptyCta")}
+              </button>
+            ) : null}
           </div>
         </div>
       ) : null}

@@ -169,6 +169,7 @@ export function CollectionsPanel({
               <div className="space-y-1">
                 <Label className="text-[11px] text-[var(--muted)]">{t("cmsName")}</Label>
                 <Input
+                  id="sf-cms-new-name"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   className="h-9 rounded-2xl text-sm"
@@ -217,6 +218,16 @@ export function CollectionsPanel({
               <div className="rounded-2xl border border-dashed border-[var(--border)] bg-[var(--surface)] px-3 py-6 text-center">
                 <p className="text-xs font-semibold text-[var(--foreground)]">{t("cmsEmpty")}</p>
                 <p className="mt-1.5 text-[11px] leading-5 text-[var(--muted)]">{t("cmsEmptyNext")}</p>
+                <button
+                  type="button"
+                  className="mt-3 inline-flex min-h-11 items-center justify-center rounded-full bg-teal-800 px-3 text-[11px] font-bold text-white hover:bg-teal-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
+                  onClick={() => {
+                    const el = document.querySelector<HTMLInputElement>("#sf-cms-new-name");
+                    el?.focus();
+                  }}
+                >
+                  {t("cmsEmptyCta")}
+                </button>
               </div>
             ) : null}
           </div>
