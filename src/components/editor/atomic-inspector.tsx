@@ -38,6 +38,7 @@ import {
   type BlockPart,
   type NavItem,
 } from "@/lib/design";
+import { LinkTargetFields } from "@/components/editor/link-target-fields";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -53,7 +54,7 @@ function Field({
 }) {
   return (
     <div className="space-y-1.5">
-      <Label className="text-[11px] text-stone-500 dark:text-stone-400">{label}</Label>
+      <Label className="text-[11px] text-stone-600 dark:text-stone-300">{label}</Label>
       {children}
     </div>
   );
@@ -83,7 +84,7 @@ function PartStyleFields({
   const size = ps.fontSize || "";
   return (
     <div className="space-y-2 rounded-2xl border border-dashed border-stone-200/90 p-2.5 dark:border-stone-700">
-      <div className="text-[9px] font-bold uppercase tracking-[0.12em] text-stone-400">
+      <div className="text-[9px] font-bold uppercase tracking-[0.12em] text-stone-600 dark:text-stone-400">
         {uiLang === "ar" ? "نمط الجزء" : "Part style"}
       </div>
       <Field label={uiLang === "ar" ? "لون النص" : "Text color"}>
@@ -163,6 +164,7 @@ export function AtomicContentEditor({
   editLocale,
   locales,
   pages,
+  siteId,
   uiLang,
   onUpdateLocalizedProp,
   onUpdateProp,
@@ -174,6 +176,7 @@ export function AtomicContentEditor({
   editLocale: string;
   locales: string[];
   pages: { slug: string; title: string }[];
+  siteId?: string;
   uiLang: "ar" | "en";
   onUpdateLocalizedProp: (blockId: string, key: string, locale: string, value: string) => void;
   onUpdateProp: (blockId: string, key: string, value: string) => void;
@@ -192,6 +195,7 @@ export function AtomicContentEditor({
         editLocale={editLocale}
         locales={locales}
         pages={pages}
+        siteId={siteId}
         uiLang={uiLang}
         onUpdateLocalizedProp={onUpdateLocalizedProp}
         onUpdateProp={onUpdateProp}
@@ -210,6 +214,7 @@ export function AtomicContentEditor({
         editLocale={editLocale}
         uiLang={uiLang}
         pages={pages}
+        siteId={siteId}
         onUpdateLocalizedProp={onUpdateLocalizedProp}
         onUpdateProp={onUpdateProp}
         onUpdatePropsObject={onUpdatePropsObject}
@@ -280,14 +285,13 @@ export function AtomicContentEditor({
                 onChange={(e) => onUpdateLocalizedProp(block.id, "buttonLabel", editLocale, e.target.value)}
               />
             </Field>
-            <Field label={uiLang === "ar" ? "رابط الزر" : "Button URL"}>
-              <Input
-                className="h-10 rounded-2xl font-mono text-xs"
-                dir="ltr"
-                value={String(props.buttonHref ?? "")}
-                onChange={(e) => onUpdateProp(block.id, "buttonHref", e.target.value)}
-              />
-            </Field>
+            <LinkTargetFields
+              props={props}
+              hrefKey="buttonHref"
+              pages={pages}
+              siteId={siteId}
+              onUpdateProp={(key, value) => onUpdateProp(block.id, key, value)}
+            />
           </>
         )}
       </div>
@@ -413,6 +417,7 @@ function NavbarAtomic({
   editLocale,
   locales,
   pages,
+  siteId,
   uiLang,
   onUpdateLocalizedProp,
   onUpdateProp,
@@ -425,6 +430,7 @@ function NavbarAtomic({
   editLocale: string;
   locales: string[];
   pages: { slug: string; title: string }[];
+  siteId?: string;
   uiLang: "ar" | "en";
   onUpdateLocalizedProp: (blockId: string, key: string, locale: string, value: string) => void;
   onUpdateProp: (blockId: string, key: string, value: string) => void;
@@ -470,7 +476,7 @@ function NavbarAtomic({
       {showList ? (
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <Label className="text-[11px] text-stone-500 dark:text-stone-400">
+            <Label className="text-[11px] text-stone-600 dark:text-stone-300">
               {uiLang === "ar" ? "روابط التنقل" : "Nav links"}
             </Label>
             <Button
@@ -504,7 +510,7 @@ function NavbarAtomic({
                 >
                   <button
                     type="button"
-                    className="text-[10px] font-bold text-stone-400"
+                    className="text-[10px] font-bold text-stone-600 dark:text-stone-400"
                     onClick={() => onSelectPart?.(`link:${it.id}`)}
                   >
                     #{fullIdx + 1}
@@ -522,13 +528,23 @@ function NavbarAtomic({
                     }}
                     onFocus={() => onSelectPart?.(`link:${it.id}`)}
                   />
-                  <Input
-                    className="h-9 rounded-xl font-mono text-[11px]"
-                    dir="ltr"
-                    placeholder="https:// or #"
-                    value={it.href || ""}
-                    onChange={(e) => {
-                      commitItems(items.map((x) => (x.id === it.id ? { ...x, href: e.target.value } : x)));
+                  <LinkTargetFields
+                    props={{
+                      linkMode: it.linkMode || "url",
+                      linkPageSlug: it.linkPageSlug || "",
+                      linkCollectionSlug: it.linkCollectionSlug || "",
+                      linkCollectionItemHref: it.linkCollectionItemHref || "",
+                      linkCollectionItemId: it.linkCollectionItemId || "",
+                      openInNewTab: it.openInNewTab || "false",
+                      href: it.href || "",
+                    }}
+                    hrefKey="href"
+                    pages={pages}
+                    siteId={siteId}
+                    onUpdateProp={(key, value) => {
+                      commitItems(
+                        items.map((x) => (x.id === it.id ? { ...x, [key]: value } : x))
+                      );
                     }}
                   />
                   {linkId === it.id ? (
@@ -618,30 +634,13 @@ function NavbarAtomic({
               onFocus={() => onSelectPart?.("cta")}
             />
           </Field>
-          <Field label={uiLang === "ar" ? "رابط CTA" : "CTA URL"}>
-            <Input
-              className="h-10 rounded-2xl font-mono text-xs"
-              dir="ltr"
-              value={String(props.ctaHref ?? "")}
-              onChange={(e) => onUpdateProp(blockId, "ctaHref", e.target.value)}
-            />
-          </Field>
-          {pages.length > 0 ? (
-            <Field label={uiLang === "ar" ? "أو صفحة داخلية" : "Or internal page"}>
-              <Select
-                value=""
-                onValueChange={(slug) => {
-                  if (!slug) return;
-                  onUpdateProp(blockId, "ctaHref", `?p=${encodeURIComponent(slug)}`);
-                  onUpdateProp(blockId, "linkMode", "url");
-                }}
-                options={[
-                  { value: "", label: uiLang === "ar" ? "— اختر —" : "— choose —" },
-                  ...pages.map((p) => ({ value: p.slug, label: p.title })),
-                ]}
-              />
-            </Field>
-          ) : null}
+          <LinkTargetFields
+            props={props}
+            hrefKey="ctaHref"
+            pages={pages}
+            siteId={siteId}
+            onUpdateProp={(key, value) => onUpdateProp(blockId, key, value)}
+          />
         </div>
       ) : null}
 
@@ -668,6 +667,7 @@ function HeroAtomic({
   editLocale,
   uiLang,
   pages,
+  siteId,
   onUpdateLocalizedProp,
   onUpdateProp,
   onUpdatePropsObject,
@@ -678,6 +678,7 @@ function HeroAtomic({
   editLocale: string;
   uiLang: "ar" | "en";
   pages: { slug: string; title: string }[];
+  siteId?: string;
   onUpdateLocalizedProp: (blockId: string, key: string, locale: string, value: string) => void;
   onUpdateProp: (blockId: string, key: string, value: string) => void;
   onUpdatePropsObject?: (blockId: string, patch: Record<string, unknown>) => void;
@@ -733,14 +734,13 @@ function HeroAtomic({
               onChange={(e) => onUpdateLocalizedProp(blockId, "ctaLabel", editLocale, e.target.value)}
             />
           </Field>
-          <Field label={uiLang === "ar" ? "رابط CTA" : "CTA URL"}>
-            <Input
-              className="h-10 rounded-2xl font-mono text-xs"
-              dir="ltr"
-              value={String(props.ctaHref ?? "")}
-              onChange={(e) => onUpdateProp(blockId, "ctaHref", e.target.value)}
-            />
-          </Field>
+          <LinkTargetFields
+            props={props}
+            hrefKey="ctaHref"
+            pages={pages}
+            siteId={siteId}
+            onUpdateProp={(key, value) => onUpdateProp(blockId, key, value)}
+          />
         </>
       ) : null}
       {show("secondary") ? (
@@ -833,7 +833,7 @@ function FeaturesAtomic({
       {showItems ? (
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <Label className="text-[11px] text-stone-500 dark:text-stone-400">
+            <Label className="text-[11px] text-stone-600 dark:text-stone-300">
               {uiLang === "ar" ? "العناصر" : "Items"}
             </Label>
             {!itemId ? (
@@ -955,7 +955,7 @@ function FooterAtomic({
       )}
       {(!part || colId) && (
         <div className="space-y-2">
-          <Label className="text-[11px] text-stone-500 dark:text-stone-400">
+          <Label className="text-[11px] text-stone-600 dark:text-stone-300">
             {uiLang === "ar" ? "أعمدة الروابط" : "Link columns"}
           </Label>
           {cols
@@ -1048,7 +1048,7 @@ function PricingAtomic({
       {(!part || itemId) && (
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <Label className="text-[11px] text-stone-500 dark:text-stone-400">
+            <Label className="text-[11px] text-stone-600 dark:text-stone-300">
               {uiLang === "ar" ? "الخطط" : "Plans"}
             </Label>
             {!itemId ? (
@@ -1194,7 +1194,7 @@ function TestimonialsAtomic({
       {(!part || itemId) && (
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <Label className="text-[11px] text-stone-500 dark:text-stone-400">
+            <Label className="text-[11px] text-stone-600 dark:text-stone-300">
               {uiLang === "ar" ? "الشهادات" : "Quotes"}
             </Label>
             {!itemId ? (
@@ -1312,7 +1312,7 @@ function FaqAtomic({
       {(!part || itemId) && (
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <Label className="text-[11px] text-stone-500 dark:text-stone-400">
+            <Label className="text-[11px] text-stone-600 dark:text-stone-300">
               {uiLang === "ar" ? "الأسئلة" : "Questions"}
             </Label>
             {!itemId ? (
@@ -1525,7 +1525,7 @@ function FormAtomic({
       {(!part || fieldId) && (
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <Label className="text-[11px] text-stone-500 dark:text-stone-400">
+            <Label className="text-[11px] text-stone-600 dark:text-stone-300">
               {uiLang === "ar" ? "الحقول" : "Fields"}
             </Label>
             {!fieldId ? (
@@ -1630,13 +1630,19 @@ function CollectionListAtomic({
         </Field>
       ) : null}
       {show("collectionSlug") ? (
-        <Field label={uiLang === "ar" ? "معرّف المجموعة" : "Collection slug"}>
+        <Field label={uiLang === "ar" ? "معرّف المجموعة (slug)" : "Collection slug"}>
           <Input
             className="h-10 rounded-2xl font-mono text-xs"
             dir="ltr"
             value={String(props.collectionSlug ?? "")}
             onChange={(e) => onUpdateProp(blockId, "collectionSlug", e.target.value)}
+            placeholder="projects"
           />
+          <p className="text-[10px] leading-4 text-stone-600 dark:text-stone-400">
+            {uiLang === "ar"
+              ? "يجب أن يطابق معرّف المجموعة من تبويب «المجموعات». أنشئ المجموعة هناك أولاً."
+              : "Must match a collection slug from the Collections tab. Create the collection there first."}
+          </p>
         </Field>
       ) : null}
       {show("columns") ? (

@@ -139,6 +139,10 @@ function BlockView({
               href: "#",
               linkMode: "url",
               linkPageSlug: "",
+              linkCollectionSlug: "",
+              linkCollectionItemHref: "",
+              linkCollectionItemId: "",
+              openInNewTab: "false",
               styles: undefined as undefined | { textColor?: string; fontSize?: string },
             }));
       const ctaLabel = str(p, "ctaLabel");
@@ -187,14 +191,19 @@ function BlockView({
             {items.map((item) => {
               const part = `link:${item.id}` as BlockPart;
               const linkPs = item.styles || getPartStyles(source, part);
-              const hrefProps =
-                item.linkMode === "page"
-                  ? resolveBlockHref(
-                      { ...p, linkMode: "page", linkPageSlug: item.linkPageSlug, href: item.href },
-                      "href",
-                      siteSlug
-                    )
-                  : { href: item.href || "#" };
+              const hrefProps = resolveBlockHref(
+                {
+                  ...p,
+                  linkMode: item.linkMode || "url",
+                  linkPageSlug: item.linkPageSlug,
+                  linkCollectionSlug: item.linkCollectionSlug,
+                  linkCollectionItemHref: item.linkCollectionItemHref,
+                  openInNewTab: item.openInNewTab,
+                  href: item.href,
+                },
+                "href",
+                siteSlug
+              );
               const linkClass = `opacity-80 hover:opacity-100 transition-opacity ${editable ? `cursor-pointer ${partRing(selectedPart === part)}` : ""}`;
               const linkStyle = {
                 color: linkPs.textColor || linkColor,

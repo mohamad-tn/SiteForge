@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type Item = { id: string; data: Record<string, unknown>; sort: number };
 
@@ -45,6 +45,30 @@ export function CollectionListView({
 }) {
   const [items, setItems] = useState<Item[] | null>(null);
   const [err, setErr] = useState("");
+  const [focusSlug, setFocusSlug] = useState("");
+  const focused = Boolean(focusSlug && focusSlug === collectionSlug);
+  const sectionRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    try {
+      const q = new URLSearchParams(window.location.search);
+      const hash = window.location.hash.replace(/^#/, "");
+      const fromQuery = q.get("collection") || "";
+      const fromHash = hash.startsWith("collection-") ? decodeURIComponent(hash.slice("collection-".length)) : "";
+      setFocusSlug(fromQuery || fromHash);
+    } catch {
+      setFocusSlug("");
+    }
+  }, [collectionSlug]);
+
+  useEffect(() => {
+    if (!focused || !sectionRef.current) return;
+    const el = sectionRef.current;
+    const t = window.setTimeout(() => {
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 80);
+    return () => window.clearTimeout(t);
+  }, [focused, collectionSlug]);
 
   useEffect(() => {
     if (!siteSlug || !collectionSlug) return;
@@ -81,8 +105,18 @@ export function CollectionListView({
 
   return (
     <section
-      className="px-5 md:px-8"
-      style={{ paddingTop: 72, paddingBottom: 72, background: surface }}
+      ref={sectionRef}
+      id={collectionSlug ? `collection-${collectionSlug}` : undefined}
+      data-sf-collection={collectionSlug || undefined}
+      data-sf-collection-focus={focused ? "true" : undefined}
+      className="px-5 md:px-8 scroll-mt-24"
+      style={{
+        paddingTop: 72,
+        paddingBottom: 72,
+        background: surface,
+        outline: focused ? `2px solid ${primary}` : undefined,
+        outlineOffset: focused ? 4 : undefined,
+      }}
     >
       <div className="mx-auto w-full" style={{ maxWidth: 1120 }}>
         <div className="text-center mb-10">

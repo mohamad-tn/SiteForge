@@ -108,7 +108,7 @@ ${css}
       </div>
 
       <div className="space-y-1.5">
-        <Label className="text-[11px] text-stone-500">{t("siteNameLabel")}</Label>
+        <Label className="text-[11px] text-stone-600 dark:text-stone-300">{t("siteNameLabel")}</Label>
         <Input
           value={settings.name}
           onChange={(e) => onChange({ name: e.target.value })}
@@ -117,7 +117,7 @@ ${css}
         />
       </div>
       <div className="space-y-1.5">
-        <Label className="text-[11px] text-stone-500">{t("seoTitleLabel")}</Label>
+        <Label className="text-[11px] text-stone-600 dark:text-stone-300">{t("seoTitleLabel")}</Label>
         <Input
           value={settings.seoTitle}
           onChange={(e) => onChange({ seoTitle: e.target.value })}
@@ -126,7 +126,7 @@ ${css}
         />
       </div>
       <div className="space-y-1.5">
-        <Label className="text-[11px] text-stone-500">{t("seoDescLabel")}</Label>
+        <Label className="text-[11px] text-stone-600 dark:text-stone-300">{t("seoDescLabel")}</Label>
         <Textarea
           value={settings.seoDescription}
           onChange={(e) => onChange({ seoDescription: e.target.value })}
@@ -156,7 +156,7 @@ ${css}
         className="scroll-mt-4 space-y-3 rounded-2xl border border-stone-200/80 p-3 transition-[box-shadow] duration-300 dark:border-stone-800"
       >
         <div className="flex items-center justify-between gap-2">
-          <h3 className="text-[10px] font-bold uppercase tracking-[0.14em] text-stone-400">
+          <h3 className="text-[10px] font-bold uppercase tracking-[0.14em] text-stone-600 dark:text-stone-400">
             {t("customDomainTitle")}
           </h3>
           <span
@@ -165,9 +165,9 @@ ${css}
             {badgeLabel}
           </span>
         </div>
-        <p className="text-[11px] leading-5 text-stone-500">{t("customDomainHint")}</p>
+        <p className="text-[11px] leading-5 text-stone-600 dark:text-stone-300">{t("customDomainHint")}</p>
         <div className="space-y-1.5">
-          <Label className="text-[11px] text-stone-500">{t("domainLabel")}</Label>
+          <Label className="text-[11px] text-stone-600 dark:text-stone-300">{t("domainLabel")}</Label>
           <Input
             value={settings.customDomain}
             onChange={(e) => {
@@ -187,7 +187,7 @@ ${css}
           />
         </div>
         <div className="space-y-1.5">
-          <Label className="text-[11px] text-stone-500">{t("domainStatusLabel")}</Label>
+          <Label className="text-[11px] text-stone-600 dark:text-stone-300">{t("domainStatusLabel")}</Label>
           <Select
             value={settings.domainStatus}
             onValueChange={(v) => onChange({ domainStatus: v as SiteSettings["domainStatus"] })}
@@ -199,7 +199,7 @@ ${css}
             className="rounded-xl bg-stone-50 p-2.5 text-[11px] leading-5 dark:bg-stone-950/50"
             dir="ltr"
           >
-            <div className="mb-1 font-mono text-[10px] text-stone-500">DNS</div>
+            <div className="mb-1 font-mono text-[10px] text-stone-600 dark:text-stone-400">DNS</div>
             <div>
               CNAME <strong>{settings.customDomain}</strong> → <strong>siteforge.host</strong>
             </div>
@@ -212,7 +212,7 @@ ${css}
       </div>
 
       <div className="space-y-1.5">
-        <Label className="text-[11px] text-stone-500">{t("customCssLabel")}</Label>
+        <Label className="text-[11px] text-stone-600 dark:text-stone-300">{t("customCssLabel")}</Label>
         <Textarea
           value={settings.customCss}
           onChange={(e) => onChange({ customCss: e.target.value })}
@@ -224,14 +224,14 @@ ${css}
           {lang === "ar" ? CUSTOM_CSS_TRUST_BLURB_AR : CUSTOM_CSS_TRUST_BLURB_EN}
         </p>
         <div className="space-y-1.5 pt-1">
-          <Label className="text-[11px] text-stone-500">{t("cssPreviewLabel")}</Label>
+          <Label className="text-[11px] text-stone-600 dark:text-stone-300">{t("cssPreviewLabel")}</Label>
           <iframe
             title="CSS preview"
             sandbox="allow-same-origin"
             srcDoc={srcDoc}
             className="h-36 w-full rounded-2xl border border-stone-200/80 bg-white dark:border-stone-800"
           />
-          <p className="text-[10px] leading-relaxed text-stone-400">{t("cssPreviewHint")}</p>
+          <p className="text-[10px] leading-relaxed text-stone-600 dark:text-stone-400">{t("cssPreviewHint")}</p>
         </div>
       </div>
     </div>

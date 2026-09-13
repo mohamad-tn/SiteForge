@@ -19,6 +19,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select } from "@/components/ui/select";
 import { MediaField } from "@/components/editor/media-field";
+import { LinkTargetFields } from "@/components/editor/link-target-fields";
 import { usePlatformLang } from "@/components/platform-lang-provider";
 import type { BlockPart } from "@/lib/design";
 import {
@@ -113,6 +114,9 @@ const HIDDEN_FROM_CONTENT = new Set([
   ...MOTION_KEYS,
   "linkMode",
   "linkPageSlug",
+  "linkCollectionSlug",
+  "linkCollectionItemHref",
+  "linkCollectionItemId",
   "openInNewTab",
   "href",
   "ctaHref",
@@ -134,7 +138,7 @@ const HIDDEN_FROM_CONTENT = new Set([
 type InspTab = "content" | "layout" | "look" | "colors" | "link" | "api" | "motion";
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
-  return <h3 className="text-[10px] font-bold uppercase tracking-[0.14em] text-stone-400 dark:text-stone-500">{children}</h3>;
+  return <h3 className="text-[10px] font-bold uppercase tracking-[0.14em] text-stone-600 dark:text-stone-400">{children}</h3>;
 }
 
 function ColorField({
@@ -148,7 +152,7 @@ function ColorField({
 }) {
   return (
     <div className="space-y-1.5">
-      <Label className="text-[11px] text-stone-500 dark:text-stone-400">{label}</Label>
+      <Label className="text-[11px] text-stone-600 dark:text-stone-300">{label}</Label>
       <div className="flex items-center gap-1.5">
         <Input
           type="color"
@@ -189,8 +193,8 @@ function NumField({
   return (
     <div className="space-y-1.5">
       <div className="flex items-center justify-between gap-2">
-        <Label className="text-[11px] text-stone-500 dark:text-stone-400">{label}</Label>
-        {hint ? <span className="text-[10px] text-stone-400">{hint}</span> : null}
+        <Label className="text-[11px] text-stone-600 dark:text-stone-300">{label}</Label>
+        {hint ? <span className="text-[10px] text-stone-600 dark:text-stone-400">{hint}</span> : null}
       </div>
       <div className="flex items-center gap-2">
         {min != null && max != null ? (
@@ -254,7 +258,7 @@ function ContentField({
   if (opts && !localized) {
     return (
       <div className="space-y-1.5">
-        <Label className="text-[11px] text-stone-500 dark:text-stone-400">{label}</Label>
+        <Label className="text-[11px] text-stone-600 dark:text-stone-300">{label}</Label>
         <Select value={value || opts[0]?.value || ""} onValueChange={onChange} options={opts} />
       </div>
     );
@@ -262,20 +266,20 @@ function ContentField({
   if (LONG_KEYS.has(propKey) || value.length > 70) {
     return (
       <div className="space-y-1.5">
-        <Label className="text-[11px] text-stone-500 dark:text-stone-400">
+        <Label className="text-[11px] text-stone-600 dark:text-stone-300">
           {label}
           {localized ? <span className="ms-1 text-teal-700">· locale</span> : null}
         </Label>
         <Textarea value={value} onChange={(e) => onChange(e.target.value)} className="min-h-[96px] rounded-2xl text-sm" dir="auto" />
         {propKey === "items" ? (
-          <p className="text-[10px] leading-relaxed text-stone-400" dir="auto">CSV · compound: title|body</p>
+          <p className="text-[10px] leading-relaxed text-[var(--muted)]" dir="auto">CSV · compound: title|body</p>
         ) : null}
       </div>
     );
   }
   return (
     <div className="space-y-1.5">
-      <Label className="text-[11px] text-stone-500 dark:text-stone-400">
+      <Label className="text-[11px] text-stone-600 dark:text-stone-300">
         {label}
         {localized ? <span className="ms-1 text-teal-700">· locale</span> : null}
       </Label>
@@ -299,7 +303,7 @@ function Slider({
 }) {
   return (
     <div className="space-y-1.5">
-      <Label className="text-[11px] text-stone-500 dark:text-stone-400">{label}</Label>
+      <Label className="text-[11px] text-stone-600 dark:text-stone-300">{label}</Label>
       <input type="range" min={min} max={max} value={value} onChange={(e) => onChange(Number(e.target.value))} className="w-full accent-teal-700" />
     </div>
   );
@@ -345,11 +349,11 @@ export function InspectorPanel({
   return (
     <div className="space-y-5">
       {/* Design tokens — always available */}
-      <details className="group rounded-2xl border border-stone-200/80 open:bg-stone-50/50 dark:border-stone-800 dark:open:bg-stone-950/40">
+      <details className="group rounded-2xl border border-stone-300/80 open:bg-stone-50/50 dark:border-stone-800 dark:open:bg-stone-950/40">
         <summary className="cursor-pointer list-none px-3 py-2.5 text-[11px] font-bold text-stone-600 dark:text-stone-300">
           {t("tokensTitle")}
         </summary>
-        <div className="space-y-4 border-t border-stone-200/70 p-3 dark:border-stone-800">
+        <div className="space-y-4 border-t border-stone-300/70 p-3 dark:border-stone-800">
           <p className="rounded-xl bg-amber-50/80 px-2.5 py-2 text-[10px] leading-5 text-amber-950 dark:bg-amber-950/30 dark:text-amber-100/90">
             {uiLang === "ar"
               ? "هذه الألوان والخطوط تخص موقعك داخل المعاينة فقط — لا تغيّر شريط أدوات SiteForge."
@@ -388,7 +392,7 @@ export function InspectorPanel({
             ))}
           </div>
           <div className="space-y-1.5">
-            <Label className="text-[11px] text-stone-500 dark:text-stone-400">{t("fontHeading")}</Label>
+            <Label className="text-[11px] text-stone-600 dark:text-stone-300">{t("fontHeading")}</Label>
             <Select
               value={tokens.fonts.heading}
               onValueChange={(v) => onUpdateTokens("fonts.heading", v)}
@@ -397,7 +401,7 @@ export function InspectorPanel({
             />
           </div>
           <div className="space-y-1.5">
-            <Label className="text-[11px] text-stone-500 dark:text-stone-400">{t("fontBody")}</Label>
+            <Label className="text-[11px] text-stone-600 dark:text-stone-300">{t("fontBody")}</Label>
             <Select
               value={tokens.fonts.body}
               onValueChange={(v) => onUpdateTokens("fonts.body", v)}
@@ -406,7 +410,7 @@ export function InspectorPanel({
             />
           </div>
           <div className="space-y-1.5">
-            <Label className="text-[11px] text-stone-500 dark:text-stone-400">{uiLang === "ar" ? "سمة الزائر الافتراضية" : "Default visitor theme"}</Label>
+            <Label className="text-[11px] text-stone-600 dark:text-stone-300">{uiLang === "ar" ? "سمة الزائر الافتراضية" : "Default visitor theme"}</Label>
             <Select
               value={tokens.themeMode || "system"}
               onValueChange={(v) => onUpdateTokens("themeMode", v)}
@@ -431,8 +435,8 @@ export function InspectorPanel({
             <span className="text-lg font-bold" aria-hidden>◇</span>
           </div>
           <p className="text-sm font-medium text-stone-600 dark:text-stone-300">{t("noSelection")}</p>
-          <p className="mt-1 text-xs text-stone-400">{t("noSelectionHint")}</p>
-          <p className="mt-2 text-[11px] text-stone-400">
+          <p className="mt-1 text-xs text-stone-600 dark:text-stone-400">{t("noSelectionHint")}</p>
+          <p className="mt-2 text-[11px] text-stone-600 dark:text-stone-400">
             {t("editingIn")} <span className="font-semibold text-teal-800 dark:text-teal-300">{localeLabel}</span>
           </p>
         </div>
@@ -479,7 +483,7 @@ export function InspectorPanel({
                   className={`shrink-0 rounded-xl px-2.5 py-1.5 text-[10px] font-semibold transition sm:text-[11px] ${
                     tab === k
                       ? "bg-white text-stone-900 shadow-sm dark:bg-stone-800 dark:text-stone-50"
-                      : "text-stone-500 hover:text-stone-800 dark:text-stone-400 dark:hover:text-stone-200"
+                      : "text-stone-600 hover:text-stone-900 dark:text-stone-400 dark:hover:text-stone-100"
                   }`}
                 >
                   {label}
@@ -490,7 +494,7 @@ export function InspectorPanel({
 
           {tab === "content" ? (
             <div className="space-y-3">
-              <p className="rounded-xl bg-stone-50/80 px-2.5 py-2 text-[10px] leading-5 text-stone-500 dark:bg-stone-950/40">{t("tipContent")}</p>
+              <p className="rounded-xl bg-stone-50/80 px-2.5 py-2 text-[10px] leading-5 text-stone-600 dark:bg-stone-950/40 dark:text-stone-300">{t("tipContent")}</p>
               {ATOMIC_BLOCK_TYPES.has(selected.type) && onUpdatePropsObject ? (
                 <AtomicContentEditor
                   block={selected}
@@ -498,6 +502,7 @@ export function InspectorPanel({
                   editLocale={editLocale}
                   locales={content.locales?.length ? content.locales : [content.defaultLocale || "ar"]}
                   pages={pages}
+                  siteId={siteId}
                   uiLang={uiLang}
                   onUpdateLocalizedProp={onUpdateLocalizedProp}
                   onUpdateProp={onUpdateProp}
@@ -529,7 +534,7 @@ export function InspectorPanel({
                   })
               )}
               {tab === "content" && selected.type === "navbar" ? (
-                <p className="text-[10px] leading-5 text-stone-400 dark:text-stone-500">
+                <p className="text-[10px] leading-5 text-stone-600 dark:text-stone-400">
                   {uiLang === "ar"
                     ? "نصيحة: انقر الشعار أو رابطاً أو زر CTA داخل المعاينة لتحديده مباشرة."
                     : "Tip: click brand, a link, or CTA inside the preview to focus that part."}
@@ -540,7 +545,7 @@ export function InspectorPanel({
 
           {tab === "layout" ? (
             <div className="space-y-4">
-              <p className="rounded-xl border border-stone-200/80 bg-stone-50/80 px-2.5 py-2 text-[10px] leading-5 text-stone-600 dark:border-stone-800 dark:bg-stone-950/50 dark:text-stone-300">{t("tipLayout")}</p>
+              <p className="rounded-xl border border-stone-300/80 bg-stone-50/80 px-2.5 py-2 text-[10px] leading-5 text-stone-600 dark:border-stone-800 dark:bg-stone-950/50 dark:text-stone-300">{t("tipLayout")}</p>
               <SectionTitle>{uiLang === "ar" ? "الأبعاد" : "Size"}</SectionTitle>
               <div className="grid grid-cols-2 gap-2.5">
                 <NumField label={t("widthLabel")} value={String(selected.props.width ?? "")} onChange={(v) => onUpdateProp(selected.id, "width", v)} hint="px/%" />
@@ -563,7 +568,7 @@ export function InspectorPanel({
                 {showSides ? "إخفاء التحكم لكل جانب" : "تحكم لكل جانب (أعلى/يمين/أسفل/يسار)"}
               </button>
               {showSides ? (
-                <div className="grid grid-cols-2 gap-2.5 rounded-2xl border border-stone-200/80 p-3 dark:border-stone-800">
+                <div className="grid grid-cols-2 gap-2.5 rounded-2xl border border-stone-300/80 p-3 dark:border-stone-800">
                   {(
                     [
                       "paddingTop",
@@ -588,7 +593,7 @@ export function InspectorPanel({
                 </div>
               ) : null}
               <div className="space-y-1.5">
-                <Label className="text-[11px] text-stone-500 dark:text-stone-400">{t("hideBlock")}</Label>
+                <Label className="text-[11px] text-stone-600 dark:text-stone-300">{t("hideBlock")}</Label>
                 <Select
                   value={String(selected.props.hidden ?? "false")}
                   onValueChange={(v) => onUpdateProp(selected.id, "hidden", v)}
@@ -603,13 +608,13 @@ export function InspectorPanel({
 
           {tab === "look" ? (
             <div className="space-y-4">
-              <p className="rounded-xl border border-stone-200/80 bg-stone-50/80 px-2.5 py-2 text-[10px] leading-5 text-stone-600 dark:border-stone-800 dark:bg-stone-950/50 dark:text-stone-300" title={t("tipLook")}>
+              <p className="rounded-xl border border-stone-300/80 bg-stone-50/80 px-2.5 py-2 text-[10px] leading-5 text-stone-600 dark:border-stone-800 dark:bg-stone-950/50 dark:text-stone-300" title={t("tipLook")}>
                 {t("tipLook")}
               </p>
               <SectionTitle>{uiLang === "ar" ? "الخط والنص" : "Type"}</SectionTitle>
               <NumField label={styleLabel("fontSize", uiLang)} value={String(selected.props.fontSize ?? "")} onChange={(v) => onUpdateProp(selected.id, "fontSize", v)} min={10} max={96} />
               <div className="space-y-1.5">
-                <Label className="text-[11px] text-stone-500 dark:text-stone-400">{styleLabel("fontWeight", uiLang)}</Label>
+                <Label className="text-[11px] text-stone-600 dark:text-stone-300">{styleLabel("fontWeight", uiLang)}</Label>
                 <Select
                   value={String(selected.props.fontWeight ?? "")}
                   onValueChange={(v) => onUpdateProp(selected.id, "fontWeight", v)}
@@ -626,7 +631,7 @@ export function InspectorPanel({
               <NumField label={styleLabel("lineHeight", uiLang)} value={String(selected.props.lineHeight ?? "")} onChange={(v) => onUpdateProp(selected.id, "lineHeight", v)} hint="1.4" min={1} max={3} step={0.05} />
               <NumField label={styleLabel("letterSpacing", uiLang)} value={String(selected.props.letterSpacing ?? "")} onChange={(v) => onUpdateProp(selected.id, "letterSpacing", v)} min={-2} max={12} step={0.1} />
               <div className="space-y-1.5">
-                <Label className="text-[11px] text-stone-500 dark:text-stone-400">{styleLabel("textAlign", uiLang)}</Label>
+                <Label className="text-[11px] text-stone-600 dark:text-stone-300">{styleLabel("textAlign", uiLang)}</Label>
                 <Select
                   value={String(selected.props.textAlign ?? "")}
                   onValueChange={(v) => onUpdateProp(selected.id, "textAlign", v)}
@@ -642,7 +647,7 @@ export function InspectorPanel({
               <NumField label={styleLabel("borderWidth", uiLang)} value={String(selected.props.borderWidth ?? "")} onChange={(v) => onUpdateProp(selected.id, "borderWidth", v)} min={0} max={16} />
               <NumField label={styleLabel("borderRadius", uiLang)} value={String(selected.props.borderRadius ?? "")} onChange={(v) => onUpdateProp(selected.id, "borderRadius", v)} min={0} max={64} />
               <div className="space-y-1.5">
-                <Label className="text-[11px] text-stone-500 dark:text-stone-400">{styleLabel("boxShadow", uiLang)}</Label>
+                <Label className="text-[11px] text-stone-600 dark:text-stone-300">{styleLabel("boxShadow", uiLang)}</Label>
                 <Select
                   value={String(selected.props.boxShadow ?? "")}
                   onValueChange={(v) => onUpdateProp(selected.id, "boxShadow", v)}
@@ -662,7 +667,7 @@ export function InspectorPanel({
 
           {tab === "colors" ? (
             <div className="space-y-4">
-              <p className="rounded-xl border border-stone-200/80 bg-stone-50/80 px-2.5 py-2 text-[10px] leading-5 text-stone-600 dark:border-stone-800 dark:bg-stone-950/50 dark:text-stone-300">
+              <p className="rounded-xl border border-stone-300/80 bg-stone-50/80 px-2.5 py-2 text-[10px] leading-5 text-stone-600 dark:border-stone-800 dark:bg-stone-950/50 dark:text-stone-300">
                 {t("tipColors")}
               </p>
               <ColorField label={styleLabel("textColor", uiLang)} value={String(selected.props.textColor ?? "")} onChange={(v) => onUpdateProp(selected.id, "textColor", v)} />
@@ -673,56 +678,16 @@ export function InspectorPanel({
 
           {tab === "link" ? (
             <div className="space-y-3">
-              <div className="rounded-2xl border border-teal-700/15 bg-teal-50/50 px-3 py-2 text-[11px] leading-5 text-stone-600 dark:bg-teal-950/30 dark:text-stone-300">
+              <div className="rounded-2xl border border-teal-700/15 bg-teal-50/50 px-3 py-2 text-[11px] leading-5 text-stone-700 dark:bg-teal-950/30 dark:text-stone-200">
                 {t("tipLink")}
               </div>
-              <div className="space-y-1.5">
-                <Label className="text-[11px] text-stone-500 dark:text-stone-400">نوع الرابط</Label>
-                <Select
-                  value={String(selected.props.linkMode || "url")}
-                  onValueChange={(v) => onUpdateProp(selected.id, "linkMode", v)}
-                  options={[
-                    { value: "url", label: "رابط خارجي / مخصص" },
-                    { value: "page", label: "صفحة داخل الموقع" },
-                  ]}
-                />
-              </div>
-              {String(selected.props.linkMode) === "page" ? (
-                <div className="space-y-1.5">
-                  <Label className="text-[11px] text-stone-500 dark:text-stone-400">الصفحة المستهدفة</Label>
-                  <Select
-                    value={String(selected.props.linkPageSlug || pages[0]?.slug || "home")}
-                    onValueChange={(v) => onUpdateProp(selected.id, "linkPageSlug", v)}
-                    options={
-                      pages.length
-                        ? pages.map((p) => ({ value: p.slug, label: `${p.title} (${p.slug})` }))
-                        : [{ value: "home", label: "home" }]
-                    }
-                  />
-                </div>
-              ) : (
-                <div className="space-y-1.5">
-                  <Label className="text-[11px] text-stone-500 dark:text-stone-400">
-                    عنوان الرابط {hrefKey ? `(${hrefKey})` : ""}
-                  </Label>
-                  <Input
-                    value={String(selected.props[hrefKey || "href"] ?? "")}
-                    onChange={(e) => onUpdateProp(selected.id, hrefKey || "href", e.target.value)}
-                    className="h-10 rounded-2xl font-mono text-sm"
-                    dir="ltr"
-                    placeholder="https://… أو #section"
-                  />
-                </div>
-              )}
-              <label className="flex items-center gap-2 rounded-2xl border border-stone-200/80 px-3 py-2.5 text-sm dark:border-stone-800">
-                <input
-                  type="checkbox"
-                  className="accent-teal-700"
-                  checked={String(selected.props.openInNewTab) === "true"}
-                  onChange={(e) => onUpdateProp(selected.id, "openInNewTab", e.target.checked ? "true" : "false")}
-                />
-                فتح في تبويب جديد
-              </label>
+              <LinkTargetFields
+                props={selected.props as Record<string, unknown>}
+                hrefKey={hrefKey || "href"}
+                pages={pages}
+                siteId={siteId}
+                onUpdateProp={(key, value) => onUpdateProp(selected.id, key, value)}
+              />
             </div>
           ) : null}
 
@@ -738,7 +703,7 @@ export function InspectorPanel({
                   onChange={(patch) => onUpdatePropsObject(selected.id, patch)}
                 />
               ) : (
-                <p className="text-xs text-stone-500">تعذّر فتح محرر API</p>
+                <p className="text-xs text-stone-600 dark:text-stone-300">تعذّر فتح محرر API</p>
               )}
             </div>
           ) : null}
@@ -757,7 +722,7 @@ export function InspectorPanel({
                 </p>
               ) : null}
               <div className="space-y-1.5">
-                <Label className="text-[11px] text-stone-500 dark:text-stone-400">{motionLabel("effectPreset", uiLang)}</Label>
+                <Label className="text-[11px] text-stone-600 dark:text-stone-300">{motionLabel("effectPreset", uiLang)}</Label>
                 <Select
                   value={detectEffectPreset(selected.props as Record<string, unknown>)}
                   onValueChange={(v) => {
@@ -773,10 +738,10 @@ export function InspectorPanel({
                   }))}
                   triggerClassName="h-9 rounded-xl text-xs font-semibold"
                 />
-                <p className="text-[10px] leading-4 text-stone-400 dark:text-stone-500">{t("tipMotion")}</p>
+                <p className="text-[10px] leading-4 text-stone-600 dark:text-stone-400">{t("tipMotion")}</p>
               </div>
               <div className="space-y-1.5">
-                <Label className="text-[11px] text-stone-500 dark:text-stone-400">{motionLabel("entranceAnim", uiLang)}</Label>
+                <Label className="text-[11px] text-stone-600 dark:text-stone-300">{motionLabel("entranceAnim", uiLang)}</Label>
                 <Select
                   value={String(selected.props.entranceAnim || "none")}
                   onValueChange={(v) => onUpdateProp(selected.id, "entranceAnim", v)}
@@ -797,7 +762,7 @@ export function InspectorPanel({
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-[11px] text-stone-500 dark:text-stone-400">{motionLabel("animEase", uiLang)}</Label>
+                <Label className="text-[11px] text-stone-600 dark:text-stone-300">{motionLabel("animEase", uiLang)}</Label>
                 <Select
                   value={String(selected.props.animEase || "ease-out")}
                   onValueChange={(v) => onUpdateProp(selected.id, "animEase", v)}
@@ -807,11 +772,11 @@ export function InspectorPanel({
                   }))}
                   triggerClassName="h-9 rounded-xl text-xs font-semibold"
                 />
-                <p className="text-[10px] leading-4 text-stone-400 dark:text-stone-500">{t("easeHelp")}</p>
+                <p className="text-[10px] leading-4 text-stone-600 dark:text-stone-400">{t("easeHelp")}</p>
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div className="space-y-1.5">
-                  <Label className="text-[11px] text-stone-500 dark:text-stone-400">{motionLabel("hoverScale", uiLang)}</Label>
+                  <Label className="text-[11px] text-stone-600 dark:text-stone-300">{motionLabel("hoverScale", uiLang)}</Label>
                   <Select
                     value={String(selected.props.hoverScale || "none")}
                     onValueChange={(v) => onUpdateProp(selected.id, "hoverScale", v)}
@@ -824,7 +789,7 @@ export function InspectorPanel({
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-[11px] text-stone-500 dark:text-stone-400">{motionLabel("hoverShadow", uiLang)}</Label>
+                  <Label className="text-[11px] text-stone-600 dark:text-stone-300">{motionLabel("hoverShadow", uiLang)}</Label>
                   <Select
                     value={String(selected.props.hoverShadow || "false")}
                     onValueChange={(v) => onUpdateProp(selected.id, "hoverShadow", v)}
@@ -838,7 +803,7 @@ export function InspectorPanel({
                 </div>
               </div>
               <div className="space-y-1.5">
-                <Label className="text-[11px] text-stone-500 dark:text-stone-400">{motionLabel("scrollReveal", uiLang)}</Label>
+                <Label className="text-[11px] text-stone-600 dark:text-stone-300">{motionLabel("scrollReveal", uiLang)}</Label>
                 <Select
                   value={String(selected.props.scrollReveal || "false")}
                   onValueChange={(v) => onUpdateProp(selected.id, "scrollReveal", v)}
@@ -848,7 +813,7 @@ export function InspectorPanel({
                   ]}
                   triggerClassName="h-9 rounded-xl text-xs font-semibold"
                 />
-                <p className="text-[10px] leading-4 text-stone-400 dark:text-stone-500">{t("scrollRevealHelp")}</p>
+                <p className="text-[10px] leading-4 text-stone-600 dark:text-stone-400">{t("scrollRevealHelp")}</p>
               </div>
               <NumField
                 label={motionLabel("animDuration", uiLang)}
@@ -868,8 +833,8 @@ export function InspectorPanel({
                 step={50}
                 hint="ms"
               />
-              <div className="space-y-1.5 rounded-2xl border border-stone-200/80 p-3 dark:border-stone-800">
-                <Label className="text-[11px] text-stone-500 dark:text-stone-400">{motionLabel("staggerChildren", uiLang)}</Label>
+              <div className="space-y-1.5 rounded-2xl border border-stone-300/80 p-3 dark:border-stone-800">
+                <Label className="text-[11px] text-stone-600 dark:text-stone-300">{motionLabel("staggerChildren", uiLang)}</Label>
                 <Select
                   value={String(selected.props.staggerChildren || "false")}
                   onValueChange={(v) => onUpdateProp(selected.id, "staggerChildren", v)}
@@ -879,7 +844,7 @@ export function InspectorPanel({
                   ]}
                   triggerClassName="h-9 rounded-xl text-xs font-semibold"
                 />
-                <p className="text-[10px] leading-4 text-stone-400 dark:text-stone-500">{t("staggerHelp")}</p>
+                <p className="text-[10px] leading-4 text-stone-600 dark:text-stone-400">{t("staggerHelp")}</p>
                 {String(selected.props.staggerChildren) === "true" ? (
                   <NumField
                     label={motionLabel("staggerMs", uiLang)}

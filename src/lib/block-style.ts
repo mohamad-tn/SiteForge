@@ -197,9 +197,27 @@ export function resolveBlockHref(
   const mode = strProp(p, "linkMode", "url");
   const openNew = strProp(p, "openInNewTab") === "true";
   let href = strProp(p, hrefKey, "#");
-  if (mode === "page") {
+  // Structured modes apply to primary link keys only (not secondaryHref).
+  const structured =
+    hrefKey === "href" || hrefKey === "ctaHref" || hrefKey === "buttonHref";
+  if (structured && mode === "collection") {
+    const itemHref = strProp(p, "linkCollectionItemHref", "");
+    if (itemHref) {
+      href = itemHref;
+    } else {
+      const pageSlug = strProp(p, "linkPageSlug", "home");
+      const colSlug = strProp(p, "linkCollectionSlug", "");
+      const qs = new URLSearchParams();
+      qs.set("p", pageSlug);
+      if (colSlug) qs.set("collection", colSlug);
+      const base = siteSlug ? `/s/${siteSlug}?${qs.toString()}` : `?${qs.toString()}`;
+      href = colSlug ? `${base}#collection-${encodeURIComponent(colSlug)}` : base;
+    }
+  } else if (structured && mode === "page") {
     const pageSlug = strProp(p, "linkPageSlug", "home");
-    href = siteSlug ? `/s/${siteSlug}?p=${encodeURIComponent(pageSlug)}` : `?p=${encodeURIComponent(pageSlug)}`;
+    href = siteSlug
+      ? `/s/${siteSlug}?p=${encodeURIComponent(pageSlug)}`
+      : `?p=${encodeURIComponent(pageSlug)}`;
   }
   return {
     href: href || "#",
@@ -253,6 +271,8 @@ export const STYLE_LABELS: Record<string, string> = {
   hidden: "إخفاء",
   linkMode: "نوع الرابط",
   linkPageSlug: "صفحة داخلية",
+  linkCollectionSlug: "مجموعة",
+  linkCollectionItemHref: "رابط عنصر المجموعة",
   openInNewTab: "فتح في تبويب جديد",
 };
 

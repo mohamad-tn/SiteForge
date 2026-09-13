@@ -678,6 +678,10 @@ export type NavItem = {
   href?: string;
   linkMode?: string;
   linkPageSlug?: string;
+  linkCollectionSlug?: string;
+  linkCollectionItemHref?: string;
+  linkCollectionItemId?: string;
+  openInNewTab?: string;
   /** Optional per-link style overrides (textColor / fontSize). */
   styles?: { textColor?: string; fontSize?: string };
 };
@@ -688,6 +692,10 @@ export type ResolvedNavItem = {
   href: string;
   linkMode: string;
   linkPageSlug: string;
+  linkCollectionSlug?: string;
+  linkCollectionItemHref?: string;
+  linkCollectionItemId?: string;
+  openInNewTab?: string;
   styles?: { textColor?: string; fontSize?: string };
 };
 
@@ -753,6 +761,10 @@ function normalizeNavItem(item: unknown, index: number): NavItem | null {
     href: typeof o.href === "string" ? o.href : "#",
     linkMode: typeof o.linkMode === "string" ? o.linkMode : "url",
     linkPageSlug: typeof o.linkPageSlug === "string" ? o.linkPageSlug : "",
+    linkCollectionSlug: typeof o.linkCollectionSlug === "string" ? o.linkCollectionSlug : "",
+    linkCollectionItemHref: typeof o.linkCollectionItemHref === "string" ? o.linkCollectionItemHref : "",
+    linkCollectionItemId: typeof o.linkCollectionItemId === "string" ? o.linkCollectionItemId : "",
+    openInNewTab: typeof o.openInNewTab === "string" ? o.openInNewTab : "false",
     ...(styles ? { styles } : {}),
   };
 }
@@ -814,6 +826,10 @@ export function resolveNavItems(
     href: it.href || "#",
     linkMode: it.linkMode || "url",
     linkPageSlug: it.linkPageSlug || "",
+    linkCollectionSlug: it.linkCollectionSlug || "",
+    linkCollectionItemHref: it.linkCollectionItemHref || "",
+    linkCollectionItemId: it.linkCollectionItemId || "",
+    openInNewTab: it.openInNewTab || "false",
     ...(it.styles ? { styles: it.styles } : {}),
   }));
 }

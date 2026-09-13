@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { blockFrameStyle, defaultStyleProps, STYLE_KEYS, blockMotionAttrs, detectEffectPreset, effectPresetProps, resolveEaseCss, EASE_PRESETS } from "@/lib/block-style";
+import { blockFrameStyle, defaultStyleProps, STYLE_KEYS, blockMotionAttrs, detectEffectPreset, effectPresetProps, resolveEaseCss, EASE_PRESETS, resolveBlockHref } from "@/lib/block-style";
 
 describe("block-style encode", () => {
   it("defaultStyleProps covers STYLE_KEYS", () => {
@@ -91,4 +91,63 @@ describe("block motion / effects", () => {
     expect(softStagger.style["--sf-ease"]).toBe(EASE_PRESETS.soft);
   });
 
+});
+
+
+describe("resolveBlockHref", () => {
+  it("resolves page mode to site page URL", () => {
+    expect(resolveBlockHref({ linkMode: "page", linkPageSlug: "about" }, "href", "demo").href).toBe(
+      "/s/demo?p=about"
+    );
+  });
+
+  it("builds a real public collection URL with query + hash", () => {
+    expect(
+      resolveBlockHref(
+        { linkMode: "collection", linkPageSlug: "work", linkCollectionSlug: "projects" },
+        "href",
+        "demo"
+      ).href
+    ).toBe("/s/demo?p=work&collection=projects#collection-projects");
+    expect(
+      resolveBlockHref(
+        { linkMode: "collection", linkPageSlug: "home", linkCollectionSlug: "team" },
+        "ctaHref",
+        "acme"
+      ).href
+    ).toBe("/s/acme?p=home&collection=team#collection-team");
+  });
+
+  it("prefers collection item href when set", () => {
+    expect(
+      resolveBlockHref(
+        {
+          linkMode: "collection",
+          linkPageSlug: "work",
+          linkCollectionItemHref: "https://example.com/x",
+        },
+        "href",
+        "demo"
+      ).href
+    ).toBe("https://example.com/x");
+  });
+
+  it("does not apply collection mode to secondaryHref", () => {
+    expect(
+      resolveBlockHref(
+        {
+          linkMode: "collection",
+          linkPageSlug: "work",
+          linkCollectionSlug: "projects",
+          secondaryHref: "#about",
+        },
+        "secondaryHref",
+        "demo"
+      ).href
+    ).toBe("#about");
+  });
+
+  it("keeps raw url mode", () => {
+    expect(resolveBlockHref({ linkMode: "url", href: "#cta" }, "href", "demo").href).toBe("#cta");
+  });
 });

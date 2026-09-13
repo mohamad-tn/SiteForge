@@ -34,4 +34,15 @@ describe("platform i18n", () => {
     expect(tPlatform("ar", "groupLook")).toBeTruthy();
     expect(tPlatform("ar", "preview")).toBeTruthy();
   });
+
+  it("collections path copy is discoverable", () => {
+    expect(tPlatform("ar", "cms")).toMatch(/مجموع/);
+    expect(tPlatform("en", "cms").toLowerCase()).toMatch(/collection/);
+    expect(tPlatform("ar", "openCms")).toMatch(/مجموع/);
+    expect(tPlatform("en", "linkModeCollection").toLowerCase()).toMatch(/collection/);
+    expect(tPlatform("ar", "cmsHowToUse")).toMatch(/قائمة مجموعة/);
+    expect(tPlatform("en", "cmsEmptyNext")).toMatch(/Collection list/i);
+    expect(tPlatform("ar", "cmsBindButtonHint")).toMatch(/زر/);
+    expect(tPlatform("en", "cmsBindButtonHint").toLowerCase()).toMatch(/button/);
+  });
 });
