@@ -83,6 +83,16 @@ export function normalizeEase(ease: unknown): string {
 
 export type MotionTrigger = "load" | "scroll" | "hover";
 
+/** Optional property bag sampled at progress t (0..1). */
+export type MotionKeyframe = {
+  t: number;
+  opacity?: number;
+  x?: number;
+  y?: number;
+  scale?: number;
+  rotate?: number;
+};
+
 export type MotionTimelineStep = {
   id: string;
   trigger: MotionTrigger;
@@ -93,6 +103,11 @@ export type MotionTimelineStep = {
   /** Stagger option — only meaningful on the first load step at runtime. */
   staggerChildren?: boolean;
   staggerMs?: number;
+  /**
+   * Optional keyframes (t in 0..1). When 2+ keys exist they drive CSS @keyframes
+   * (additive override over the named preset anim).
+   */
+  keyframes?: MotionKeyframe[];
 };
 
 export const MOTION_TRIGGERS: MotionTrigger[] = ["load", "scroll", "hover"];
@@ -158,6 +173,7 @@ export function createTimelineStep(partial?: Partial<MotionTimelineStep>): Motio
     ease: partial?.ease ?? "ease-out",
     staggerChildren: partial?.staggerChildren,
     staggerMs: partial?.staggerMs,
+    keyframes: partial?.keyframes,
   });
 }
 
@@ -172,6 +188,7 @@ export function normalizeStep(raw: Partial<MotionTimelineStep> | Record<string, 
   const ease = normalizeEase(raw.ease);
   const staggerChildren = Boolean(raw.staggerChildren);
   const staggerMs = clamp(Math.round(num(raw.staggerMs, 80)), 0, 1000);
+  const keyframes = normalizeKeyframes((raw as { keyframes?: unknown }).keyframes);
   return {
     id: str(raw.id) || newId(),
     trigger,
@@ -180,6 +197,7 @@ export function normalizeStep(raw: Partial<MotionTimelineStep> | Record<string, 
     durationMs,
     ease,
     ...(staggerChildren ? { staggerChildren: true, staggerMs } : {}),
+    ...(keyframes && keyframes.length ? { keyframes } : {}),
   };
 }
 
@@ -385,4 +403,207 @@ export function hasLoadEntrance(steps: MotionTimelineStep[]): boolean {
     const n = normalizeStep(s);
     return n.trigger === "load" && (n.anim !== "none" || n.staggerChildren);
   });
+}
+
+
+export function clampKeyframeT(t: number): number {
+  if (!Number.isFinite(t)) return 0;
+  return Math.min(1, Math.max(0, t));
+}
+
+function optNum(v: unknown): number | undefined {
+  if (v == null || v === "") return undefined;
+  const n = typeof v === "number" ? v : Number(v);
+  return Number.isFinite(n) ? n : undefined;
+}
+
+export function normalizeKeyframe(raw: Partial<MotionKeyframe> | Record<string, unknown>): MotionKeyframe {
+  const t = clampKeyframeT(num(raw.t, 0));
+  const out: MotionKeyframe = { t };
+  const opacity = optNum(raw.opacity);
+  const x = optNum(raw.x);
+  const y = optNum(raw.y);
+  const scale = optNum(raw.scale);
+  const rotate = optNum(raw.rotate);
+  if (opacity != null) out.opacity = clamp(opacity, 0, 1);
+  if (x != null) out.x = clamp(x, -2000, 2000);
+  if (y != null) out.y = clamp(y, -2000, 2000);
+  if (scale != null) out.scale = clamp(scale, 0, 8);
+  if (rotate != null) out.rotate = clamp(rotate, -720, 720);
+  return out;
+}
+
+/** Parse/normalize keyframe list; returns undefined when fewer than 1 valid key. */
+export function normalizeKeyframes(raw: unknown): MotionKeyframe[] | undefined {
+  if (raw == null || raw === "") return undefined;
+  let data: unknown = raw;
+  if (typeof raw === "string") {
+    try {
+      data = JSON.parse(raw);
+    } catch {
+      return undefined;
+    }
+  }
+  if (!Array.isArray(data) || data.length === 0) return undefined;
+  const keys = data
+    .filter((x) => x && typeof x === "object")
+    .map((x) => normalizeKeyframe(x as Record<string, unknown>))
+    .sort((a, b) => a.t - b.t);
+  // Deduplicate identical t (keep last)
+  const byT = new Map<number, MotionKeyframe>();
+  for (const k of keys) byT.set(Math.round(k.t * 1000) / 1000, { ...k, t: Math.round(k.t * 1000) / 1000 });
+  const out = [...byT.values()].sort((a, b) => a.t - b.t);
+  return out.length ? out : undefined;
+}
+
+export function serializeKeyframes(keys: MotionKeyframe[] | undefined): string {
+  const n = normalizeKeyframes(keys);
+  return JSON.stringify(n || []);
+}
+
+function lerp(a: number, b: number, u: number): number {
+  return a + (b - a) * u;
+}
+
+function sampleProp(
+  keys: MotionKeyframe[],
+  t: number,
+  prop: keyof Omit<MotionKeyframe, "t">,
+  fallback: number
+): number {
+  const withProp = keys.filter((k) => k[prop] != null);
+  if (!withProp.length) return fallback;
+  if (t <= withProp[0].t) return withProp[0][prop] as number;
+  if (t >= withProp[withProp.length - 1].t) return withProp[withProp.length - 1][prop] as number;
+  for (let i = 0; i < withProp.length - 1; i++) {
+    const a = withProp[i];
+    const b = withProp[i + 1];
+    if (t >= a.t && t <= b.t) {
+      const span = b.t - a.t || 1;
+      const u = (t - a.t) / span;
+      return lerp(a[prop] as number, b[prop] as number, u);
+    }
+  }
+  return fallback;
+}
+
+/**
+ * Sample interpolated transform/opacity at progress t (0..1).
+ * Linear between surrounding keys; callers may ease t via the step's cubic-bezier first.
+ */
+export function interpolateKeyframes(
+  keys: MotionKeyframe[] | undefined | null,
+  tRaw: number
+): { opacity: number; x: number; y: number; scale: number; rotate: number } {
+  const t = clampKeyframeT(tRaw);
+  const list = normalizeKeyframes(keys || undefined) || [];
+  if (list.length === 0) {
+    return { opacity: 1, x: 0, y: 0, scale: 1, rotate: 0 };
+  }
+  if (list.length === 1) {
+    const k = list[0];
+    return {
+      opacity: k.opacity ?? 1,
+      x: k.x ?? 0,
+      y: k.y ?? 0,
+      scale: k.scale ?? 1,
+      rotate: k.rotate ?? 0,
+    };
+  }
+  return {
+    opacity: sampleProp(list, t, "opacity", 1),
+    x: sampleProp(list, t, "x", 0),
+    y: sampleProp(list, t, "y", 0),
+    scale: sampleProp(list, t, "scale", 1),
+    rotate: sampleProp(list, t, "rotate", 0),
+  };
+}
+
+function fmtCssNum(n: number): string {
+  const r = Math.round(n * 1000) / 1000;
+  return String(r);
+}
+
+function keyframeToCssDecl(sample: { opacity: number; x: number; y: number; scale: number; rotate: number }): string {
+  const transform = `translate(${fmtCssNum(sample.x)}px, ${fmtCssNum(sample.y)}px) scale(${fmtCssNum(sample.scale)}) rotate(${fmtCssNum(sample.rotate)}deg)`;
+  return `opacity:${fmtCssNum(sample.opacity)};transform:${transform}`;
+}
+
+/**
+ * Compile 2+ keyframes into a CSS @keyframes rule + utility class.
+ * Named presets remain as fallback when keyframes are absent / single.
+ */
+export function compileKeyframesCss(
+  animName: string,
+  keys: MotionKeyframe[] | undefined | null
+): { css: string; className: string; animationName: string } | null {
+  const list = normalizeKeyframes(keys || undefined);
+  if (!list || list.length < 2) return null;
+  const safe = String(animName || "sf-kf").replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 48) || "sf-kf";
+  const frames: string[] = [];
+  // Ensure 0% and 100% coverage by sampling ends if missing.
+  const ts = new Set(list.map((k) => k.t));
+  if (![...ts].some((t) => t <= 0.001)) {
+    frames.push(`0%{${keyframeToCssDecl(interpolateKeyframes(list, 0))}}`);
+  }
+  for (const k of list) {
+    const pct = Math.round(clampKeyframeT(k.t) * 1000) / 10;
+    frames.push(`${pct}%{${keyframeToCssDecl(interpolateKeyframes(list, k.t))}}`);
+  }
+  if (![...ts].some((t) => t >= 0.999)) {
+    frames.push(`100%{${keyframeToCssDecl(interpolateKeyframes(list, 1))}}`);
+  }
+  const css = `@keyframes ${safe}{${frames.join("")}}.${safe}{animation-name:${safe}}`;
+  return { css, className: safe, animationName: safe };
+}
+
+/** True when a step should use compiled keyframes instead of (or over) preset class. */
+export function stepUsesKeyframes(step: MotionTimelineStep): boolean {
+  const keys = normalizeKeyframes(step.keyframes);
+  return Boolean(keys && keys.length >= 2);
+}
+
+export function defaultEntranceKeyframes(anim: string): MotionKeyframe[] {
+  switch (anim) {
+    case "fade":
+      return [
+        { t: 0, opacity: 0 },
+        { t: 1, opacity: 1 },
+      ];
+    case "slide-up":
+      return [
+        { t: 0, opacity: 0, y: 24 },
+        { t: 1, opacity: 1, y: 0 },
+      ];
+    case "slide-down":
+      return [
+        { t: 0, opacity: 0, y: -24 },
+        { t: 1, opacity: 1, y: 0 },
+      ];
+    case "slide-left":
+      return [
+        { t: 0, opacity: 0, x: 24 },
+        { t: 1, opacity: 1, x: 0 },
+      ];
+    case "slide-right":
+      return [
+        { t: 0, opacity: 0, x: -24 },
+        { t: 1, opacity: 1, x: 0 },
+      ];
+    case "scale":
+      return [
+        { t: 0, opacity: 0, scale: 0.92 },
+        { t: 1, opacity: 1, scale: 1 },
+      ];
+    case "zoom-fade":
+      return [
+        { t: 0, opacity: 0, scale: 1.08 },
+        { t: 1, opacity: 1, scale: 1 },
+      ];
+    default:
+      return [
+        { t: 0, opacity: 0 },
+        { t: 1, opacity: 1 },
+      ];
+  }
 }

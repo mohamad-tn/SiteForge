@@ -80,6 +80,7 @@ const templates: {
           id: "page-home",
           title: "السيرة",
           slug: "home",
+          layout: "canvas",
           blocks: [
             {
               id: "cv-nav",
@@ -91,6 +92,8 @@ const templates: {
                 ctaLabel: { ar: "حمّل السيرة", en: "Download CV", fr: "Télécharger" },
                 ctaHref: "#contact",
                 sticky: "true",
+                bgColor: "#ffffff",
+                textColor: "#0f172a",
               },
             },
             {
@@ -192,6 +195,8 @@ const templates: {
                 brand: { ar: "أحمد علي", en: "Ahmad Ali", fr: "Ahmad Ali" },
                 text: { ar: "© 2026 أحمد علي — صُنع بعناية", en: "© 2026 Ahmad Ali — crafted with care", fr: "© 2026 Ahmad Ali" },
                 links: { ar: "LinkedIn,GitHub,Email", en: "LinkedIn,GitHub,Email", fr: "LinkedIn,GitHub,Email" },
+                bgColor: "#0f172a",
+                textColor: "#f8fafc",
               },
             },
           ],
@@ -274,6 +279,7 @@ const templates: {
           id: "page-home",
           title: "الأعمال",
           slug: "home",
+          layout: "canvas",
           blocks: [
             {
               id: "pf-nav",
@@ -285,6 +291,8 @@ const templates: {
                 ctaLabel: { ar: "ابدأ مشروعك", en: "Start a project", es: "Empezar proyecto" },
                 ctaHref: "#contact",
                 sticky: "true",
+                bgColor: "#ffffff",
+                textColor: "#0b1220",
               },
             },
             {
@@ -348,10 +356,32 @@ const templates: {
               },
             },
             {
+              id: "pf-stats",
+              type: "stats",
+              props: {
+                ...defaultPropsFor("stats"),
+                title: { ar: "أرقام نفتخر بها", en: "Numbers we stand behind", es: "Números reales" },
+                items: {
+                  ar: "48|مشروعاً مُسلّماً,12|علامة أُعيد بناؤها,4.9★|متوسط تقييم العملاء,6|أسابيع متوسط التسليم",
+                  en: "48|Projects shipped,12|Brands rebuilt,4.9★|Avg client rating,6|Weeks median delivery",
+                  es: "48|Proyectos,12|Marcas,4.9★|Valoración,6|Semanas",
+                },
+                effectPreset: "soft-fade",
+                entranceAnim: "fade",
+                scrollReveal: "true",
+              },
+            },
+            {
               id: "pf-testimonials",
               type: "testimonials",
               props: {
                 ...defaultPropsFor("testimonials"),
+                title: { ar: "شركاء يتحدثون بصوت عالٍ", en: "Partners who speak loudly", es: "Partners que hablan" },
+                items: {
+                  ar: "ليان خ.|مديرة منتج|سلّموا موقعاً بدا وكأنه تمويل سلسلة A — قبل أن نجمع التمويل.,عمر ف.|مؤسس|العربية ليست ترجمة لاحقة هنا؛ هي الطبقة الأولى.,ميا ر.|رئيسة تصميم|الإيقاع والتباين يذكران بـ Framer المدفوع دون تعقيد الأداة.",
+                  en: "Lyan K.|Product lead|They shipped a site that felt Series-A ready — before we raised.,Omar F.|Founder|Arabic isn't an afterthought here; it's the first layer.,Mia R.|Design head|Rhythm and contrast recall paid Framer without the tool tax.",
+                  es: "Lyan K.|Producto|Sitio listo para Serie A.,Omar F.|Fundador|El árabe es la primera capa.,Mia R.|Diseño|Ritmo tipo Framer.",
+                },
                 effectPreset: "soft-fade",
                 entranceAnim: "fade",
                 scrollReveal: "true",
@@ -362,6 +392,17 @@ const templates: {
               type: "pricing",
               props: {
                 ...defaultPropsFor("pricing"),
+                title: { ar: "شراكات واضحة", en: "Clear engagements", es: "Colaboraciones claras" },
+                subtitle: {
+                  ar: "أسعار ثابتة · نطاق مكتوب · مراجعات أسبوعية",
+                  en: "Fixed fees · Written scope · Weekly reviews",
+                  es: "Precio fijo · Alcance escrito · Revisiones semanales",
+                },
+                items: {
+                  ar: "إطلاق|٤٬٨٠٠$|صفحة هبوط + هوية خفيفة|نسختان AR/EN|تسليم ١٤ يوماً,استوديو|٩٬٢٠٠$|موقع متعدد الصفحات|نظام مكوّنات|دعم ٣٠ يوماً|الأكثر اختياراً,شراكة|حسب النطاق|منتج مستمر|فريق مدمج|SLA شهري",
+                  en: "Launch|$4,800|Landing + light identity|AR/EN copy|14-day delivery,Studio|$9,200|Multi-page site|Component system|30-day support|Most chosen,Partner|Custom|Ongoing product|Embedded team|Monthly SLA",
+                  es: "Launch|$4,800|Landing,Studio|$9,200|Multi-página|Popular,Partner|A medida|SLA",
+                },
                 effectPreset: "slide-up",
                 entranceAnim: "slide-up",
                 scrollReveal: "true",
@@ -405,6 +446,9 @@ const templates: {
                 ...defaultPropsFor("footer"),
                 brand: { ar: "Studio Nova", en: "Studio Nova", es: "Studio Nova" },
                 text: { ar: "© 2026 Studio Nova — صُنع للتميّز", en: "© 2026 Studio Nova — built for craft", es: "© 2026 Studio Nova" },
+                bgColor: "#0b1220",
+                textColor: "#f8fafc",
+                links: { ar: "أعمال,خصوصية,تواصل", en: "Work,Privacy,Contact", es: "Trabajo,Privacidad,Contacto" },
               },
             },
           ],

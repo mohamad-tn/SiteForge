@@ -16,6 +16,9 @@ import {
   normalizeTimeline,
   writeTimelineProps,
   createTimelineStep,
+  defaultEntranceKeyframes,
+  normalizeKeyframes,
+  type MotionKeyframe,
   type MotionTimelineStep,
   type MotionTrigger,
   MOTION_ANIM_IDS,
@@ -751,6 +754,7 @@ function MotionTimelineEditor({
 }) {
   const steps = normalizeTimeline(props);
   const [selectedStepId, setSelectedStepId] = useState<string | null>(null);
+  const [selectedKeyframeT, setSelectedKeyframeT] = useState<number | null>(null);
   const activeStepId =
     (selectedStepId && steps.some((s) => s.id === selectedStepId) ? selectedStepId : null) ||
     steps[0]?.id ||
@@ -856,6 +860,11 @@ function MotionTimelineEditor({
           onChangeDelay={(id, delayMs) => {
             onChange(steps.map((s) => (s.id === id ? { ...s, delayMs } : s)));
           }}
+          onChangeKeyframes={(id, keys) => {
+            onChange(steps.map((s) => (s.id === id ? { ...s, keyframes: keys } : s)));
+          }}
+          onSelectKeyframe={(_id, t) => setSelectedKeyframeT(t)}
+          selectedKeyframeT={selectedKeyframeT}
           uiLang={uiLang}
         />
       ) : null}
@@ -958,6 +967,156 @@ function MotionTimelineEditor({
                 step={50}
                 hint="ms"
               />
+
+              <div className="space-y-1.5 rounded-xl border border-dashed border-[var(--border)] bg-[var(--card)] p-2">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--muted)]">
+                      {t("keyframesTitle")}
+                    </div>
+                    <p className="mt-0.5 text-[10px] leading-4 text-[var(--muted)]">{t("keyframesHelp")}</p>
+                  </div>
+                  <button
+                    type="button"
+                    className="shrink-0 rounded-full bg-[var(--accent)] px-2 py-1 text-[10px] font-bold text-[var(--accent-fg)]"
+                    onClick={() => {
+                      const existing = normalizeKeyframes(step.keyframes) || [];
+                      const seed =
+                        existing.length >= 2
+                          ? existing
+                          : defaultEntranceKeyframes(step.anim || "fade");
+                      const nextT = existing.length ? Math.min(1, (existing[existing.length - 1]?.t ?? 0) + 0.25) : 0.5;
+                      const next = [...seed, { t: nextT, opacity: 1 }].sort((a, b) => a.t - b.t);
+                      updateAt(index, { keyframes: next });
+                      setSelectedKeyframeT(nextT);
+                    }}
+                  >
+                    {t("keyframesAdd")}
+                  </button>
+                </div>
+                {(normalizeKeyframes(step.keyframes) || []).length === 0 ? (
+                  <p className="text-[10px] text-[var(--muted)]">{t("keyframesEmpty")}</p>
+                ) : (
+                  <ul className="space-y-1.5">
+                    {(normalizeKeyframes(step.keyframes) || []).map((k, ki) => {
+                      const keys = normalizeKeyframes(step.keyframes) || [];
+                      const patchKey = (pk: Partial<MotionKeyframe>) => {
+                        const next = keys.map((kk, j) => (j === ki ? { ...kk, ...pk } : kk));
+                        updateAt(index, { keyframes: next });
+                      };
+                      return (
+                        <li
+                          key={`${step.id}-kf-${ki}`}
+                          className={`grid grid-cols-3 gap-1 rounded-lg border p-1.5 ${
+                            selectedKeyframeT != null && Math.abs(selectedKeyframeT - k.t) < 0.001
+                              ? "border-[var(--accent)] bg-[color-mix(in_oklab,var(--accent)_8%,var(--card))]"
+                              : "border-[var(--border)]"
+                          }`}
+                          onClick={() => setSelectedKeyframeT(k.t)}
+                        >
+                          <label className="space-y-0.5 text-[9px] font-bold text-[var(--foreground)]">
+                            t
+                            <Input
+                              className="h-7 rounded-lg text-[11px]"
+                              type="number"
+                              min={0}
+                              max={1}
+                              step={0.05}
+                              value={k.t}
+                              onChange={(e) => patchKey({ t: Number(e.target.value) })}
+                            />
+                          </label>
+                          <label className="space-y-0.5 text-[9px] font-bold text-[var(--foreground)]">
+                            opacity
+                            <Input
+                              className="h-7 rounded-lg text-[11px]"
+                              type="number"
+                              min={0}
+                              max={1}
+                              step={0.05}
+                              value={k.opacity ?? ""}
+                              placeholder="—"
+                              onChange={(e) =>
+                                patchKey({
+                                  opacity: e.target.value === "" ? undefined : Number(e.target.value),
+                                })
+                              }
+                            />
+                          </label>
+                          <label className="space-y-0.5 text-[9px] font-bold text-[var(--foreground)]">
+                            y
+                            <Input
+                              className="h-7 rounded-lg text-[11px]"
+                              type="number"
+                              step={1}
+                              value={k.y ?? ""}
+                              placeholder="—"
+                              onChange={(e) =>
+                                patchKey({ y: e.target.value === "" ? undefined : Number(e.target.value) })
+                              }
+                            />
+                          </label>
+                          <label className="space-y-0.5 text-[9px] font-bold text-[var(--foreground)]">
+                            x
+                            <Input
+                              className="h-7 rounded-lg text-[11px]"
+                              type="number"
+                              step={1}
+                              value={k.x ?? ""}
+                              placeholder="—"
+                              onChange={(e) =>
+                                patchKey({ x: e.target.value === "" ? undefined : Number(e.target.value) })
+                              }
+                            />
+                          </label>
+                          <label className="space-y-0.5 text-[9px] font-bold text-[var(--foreground)]">
+                            scale
+                            <Input
+                              className="h-7 rounded-lg text-[11px]"
+                              type="number"
+                              min={0}
+                              max={8}
+                              step={0.05}
+                              value={k.scale ?? ""}
+                              placeholder="—"
+                              onChange={(e) =>
+                                patchKey({
+                                  scale: e.target.value === "" ? undefined : Number(e.target.value),
+                                })
+                              }
+                            />
+                          </label>
+                          <label className="space-y-0.5 text-[9px] font-bold text-[var(--foreground)]">
+                            rotate
+                            <Input
+                              className="h-7 rounded-lg text-[11px]"
+                              type="number"
+                              step={1}
+                              value={k.rotate ?? ""}
+                              placeholder="—"
+                              onChange={(e) =>
+                                patchKey({
+                                  rotate: e.target.value === "" ? undefined : Number(e.target.value),
+                                })
+                              }
+                            />
+                          </label>
+                          <button
+                            type="button"
+                            className="col-span-3 rounded-lg px-2 py-1 text-[10px] font-semibold text-rose-700 hover:bg-rose-50 dark:text-rose-300"
+                            onClick={() => {
+                              const next = keys.filter((_, j) => j !== ki);
+                              updateAt(index, { keyframes: next.length ? next : undefined });
+                            }}
+                          >
+                            {t("timelineRemoveStep")}
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
 
               {step.trigger === "load" && index === steps.findIndex((s) => s.trigger === "load") ? (
                 <div className="space-y-1.5 rounded-xl border border-dashed border-[var(--border)] p-2">

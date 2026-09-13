@@ -3,6 +3,7 @@ import { z } from "zod";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { createBlankContent, ensureContentDefaults, siteContentSchema } from "@/lib/design";
+import { builtinTemplateContent } from "@/lib/builtin-templates";
 import { slugify } from "@/lib/utils";
 import { nanoid } from "nanoid";
 import { jsonError, parseJsonBody, requireSession } from "@/lib/api";
@@ -94,8 +95,13 @@ export async function POST(req: Request) {
     if (body.importContent) {
       content = ensureContentDefaults(body.importContent);
     } else if (body.templateSlug) {
-      const template = await prisma.template.findUnique({ where: { slug: body.templateSlug } });
-      if (template) content = ensureContentDefaults(siteContentSchema.parse(template.content));
+      const builtin = builtinTemplateContent(body.templateSlug, body.name);
+      if (builtin) {
+        content = ensureContentDefaults(builtin);
+      } else {
+        const template = await prisma.template.findUnique({ where: { slug: body.templateSlug } });
+        if (template) content = ensureContentDefaults(siteContentSchema.parse(template.content));
+      }
     }
 
     const site = await prisma.site.create({

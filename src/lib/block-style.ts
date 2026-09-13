@@ -9,6 +9,8 @@ import {
   scrollSequenceHoldMs,
   primaryEntranceStep,
   resolveEaseCss as timelineResolveEaseCss,
+  compileKeyframesCss,
+  stepUsesKeyframes,
 } from "@/lib/motion-timeline";
 
 /** Shared visual + link props applied to every block */
@@ -450,7 +452,10 @@ export const MOTION_LABELS: Record<string, string> = {
 };
 
 /** CSS class + style vars for public renderer motion (respects prefers-reduced-motion via CSS). */
-export function blockMotionAttrs(p: Record<string, unknown>): {
+export function blockMotionAttrs(
+  p: Record<string, unknown>,
+  opts?: { blockId?: string }
+): {
   className: string;
   style: Record<string, string | number>;
   scrollReveal: boolean;
@@ -459,6 +464,8 @@ export function blockMotionAttrs(p: Record<string, unknown>): {
   scrollAnimClass: string;
   scrollStyle: Record<string, string | number>;
   scrollHoldMs: number;
+  /** Injected <style> CSS for custom @keyframes (no user JS). */
+  keyframeCss: string;
 } {
   const steps = normalizeTimeline(p);
   const loadStep = firstLoadStep(steps);
@@ -473,11 +480,39 @@ export function blockMotionAttrs(p: Record<string, unknown>): {
   const scrollReveal = hasScrollTrigger(steps) || strProp(p, "scrollReveal", "false") === "true";
 
   const classes: string[] = [];
-  const loadAnim = loadStep && loadStep.anim !== "none" ? entranceClassFor(loadStep.anim) : "";
-  const scrollAnim = scrollStep && scrollStep.anim !== "none" ? entranceClassFor(scrollStep.anim) : "";
+  let keyframeCss = "";
+
+  // Prefer compiled keyframes on the primary entrance step when present (override preset name).
+  const kfSource = primary && stepUsesKeyframes(primary) ? primary : loadStep && stepUsesKeyframes(loadStep) ? loadStep : null;
+  let loadAnim = loadStep && loadStep.anim !== "none" ? entranceClassFor(loadStep.anim) : "";
+  let scrollAnim = scrollStep && scrollStep.anim !== "none" ? entranceClassFor(scrollStep.anim) : "";
+
+  if (kfSource) {
+    const animName = `sf-kf-${(opts?.blockId || kfSource.id || "x").replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 40)}`;
+    const compiled = compileKeyframesCss(animName, kfSource.keyframes);
+    if (compiled) {
+      keyframeCss = compiled.css;
+      loadAnim = compiled.className;
+      // When primary is scroll-only with keys, still treat as entrance class.
+      if (kfSource.trigger === "scroll" && !firstLoadStep(steps)) {
+        scrollAnim = compiled.className;
+      }
+    }
+  }
+
+  // Scroll step may also carry its own keys (follow-up).
+  if (scrollStep && stepUsesKeyframes(scrollStep) && scrollStep.id !== kfSource?.id) {
+    const animName = `sf-kf-scroll-${(opts?.blockId || scrollStep.id || "x").replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 36)}`;
+    const compiled = compileKeyframesCss(animName, scrollStep.keyframes);
+    if (compiled) {
+      keyframeCss = (keyframeCss ? keyframeCss + "\n" : "") + compiled.css;
+      scrollAnim = compiled.className;
+    }
+  }
+
   const onlyScroll = Boolean(scrollAnim) && !loadAnim;
   const mainEntrance = loadAnim || (onlyScroll ? scrollAnim : "");
-  const hasEntrance = Boolean(mainEntrance || scrollAnim) || staggerChildren;
+  const hasEntrance = Boolean(mainEntrance || scrollAnim) || staggerChildren || Boolean(keyframeCss);
 
   if (mainEntrance) classes.push("sf-anim", mainEntrance);
   if (staggerChildren) classes.push("sf-stagger");
@@ -492,7 +527,7 @@ export function blockMotionAttrs(p: Record<string, unknown>): {
   }
 
   const style = timelineToCssVars(steps);
-  if (primary && (mainEntrance || staggerChildren)) {
+  if (primary && (mainEntrance || staggerChildren || keyframeCss)) {
     if (!style["--sf-anim-dur"]) style["--sf-anim-dur"] = `${primary.durationMs}ms`;
     if (!style["--sf-anim-delay"]) style["--sf-anim-delay"] = `${primary.delayMs}ms`;
     if (!style["--sf-ease"]) style["--sf-ease"] = resolveEaseCss(primary.ease);
@@ -511,8 +546,9 @@ export function blockMotionAttrs(p: Record<string, unknown>): {
     scrollReveal,
     hasEntrance,
     hasLoadEntrance: Boolean(loadAnim),
-    scrollAnimClass: loadAnim && scrollAnim ? `sf-anim ${scrollAnim}` : "",
+    scrollAnimClass: loadAnim && scrollAnim && loadAnim !== scrollAnim ? `sf-anim ${scrollAnim}` : "",
     scrollStyle,
     scrollHoldMs: scrollSequenceHoldMs(steps),
+    keyframeCss,
   };
 }

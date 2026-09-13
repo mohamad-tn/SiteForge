@@ -419,3 +419,229 @@ export function applyPositions(
     };
   });
 }
+
+/** Minimum resize box (Framer-like floor). */
+export const CANVAS_MIN_SIZE = 40;
+export const CANVAS_ZOOM_MIN = 0.25;
+export const CANVAS_ZOOM_MAX = 2;
+export const CANVAS_ZOOM_STEP = 0.25;
+
+export type ResizeHandle = "e" | "s" | "se";
+
+export type LiveCanvasPos = { x: number; y: number; w?: number; h?: number };
+
+export function clampZoom(z: number): number {
+  if (!Number.isFinite(z)) return 1;
+  const stepped = Math.round(z / CANVAS_ZOOM_STEP) * CANVAS_ZOOM_STEP;
+  return Math.min(CANVAS_ZOOM_MAX, Math.max(CANVAS_ZOOM_MIN, Math.round(stepped * 100) / 100));
+}
+
+export function clampResizeSize(w: number, h: number, min = CANVAS_MIN_SIZE): { w: number; h: number } {
+  return {
+    w: Math.max(min, Number.isFinite(w) ? w : min),
+    h: Math.max(min, Number.isFinite(h) ? h : min),
+  };
+}
+
+/**
+ * Map a client point into canvas-local coords (accounts for root scroll + zoom scale).
+ * `rootRect` is getBoundingClientRect of the canvas root; sizes are in unscaled canvas units.
+ */
+export function clientToCanvasLocal(
+  clientX: number,
+  clientY: number,
+  rootRect: { left: number; top: number },
+  scrollLeft: number,
+  scrollTop: number,
+  zoom = 1
+): { x: number; y: number } {
+  const z = zoom > 0 ? zoom : 1;
+  return {
+    x: (clientX - rootRect.left + scrollLeft) / z,
+    y: (clientY - rootRect.top + scrollTop) / z,
+  };
+}
+
+/**
+ * Map a DOM getBoundingClientRect into canvas-local x/y/w/h relative to the canvas root.
+ */
+export function measureRectToLocal(
+  elRect: { left: number; top: number; width: number; height: number },
+  rootRect: { left: number; top: number },
+  scrollLeft: number,
+  scrollTop: number,
+  zoom = 1
+): { x: number; y: number; w: number; h: number } {
+  const z = zoom > 0 ? zoom : 1;
+  return {
+    x: (elRect.left - rootRect.left + scrollLeft) / z,
+    y: (elRect.top - rootRect.top + scrollTop) / z,
+    w: Math.max(1, elRect.width / z),
+    h: Math.max(1, elRect.height / z),
+  };
+}
+
+/**
+ * Query live `[data-block-id]` boxes under root and merge with block lock/props.
+ * Falls back to estimate-based readBlockRect when a node is missing (pre-layout).
+ */
+export function measureBlockRects(
+  root: HTMLElement | null | undefined,
+  blocks: Block[],
+  opts?: { zoom?: number; live?: Record<string, LiveCanvasPos> }
+): CanvasRect[] {
+  const zoom = opts?.zoom ?? 1;
+  const live = opts?.live || {};
+  if (!root || typeof root.querySelectorAll !== "function") {
+    return blocks.map((b, i) => {
+      const r = readBlockRect(b, i);
+      const l = live[b.id];
+      return l ? { ...r, x: l.x, y: l.y, w: l.w ?? r.w, h: l.h ?? r.h } : r;
+    });
+  }
+  const rootRect = root.getBoundingClientRect();
+  const byId = new Map<string, { x: number; y: number; w: number; h: number }>();
+  const nodes = root.querySelectorAll("[data-block-id]");
+  nodes.forEach((node) => {
+    const el = node as HTMLElement;
+    const id = el.getAttribute("data-block-id");
+    if (!id) return;
+    const r = el.getBoundingClientRect();
+    byId.set(
+      id,
+      measureRectToLocal(r, rootRect, root.scrollLeft, root.scrollTop, zoom)
+    );
+  });
+
+  return blocks.map((b, i) => {
+    const base = readBlockRect(b, i);
+    const measured = byId.get(b.id);
+    const l = live[b.id];
+    const w = l?.w ?? measured?.w ?? base.w;
+    const h = l?.h ?? measured?.h ?? base.h;
+    const x = l?.x ?? measured?.x ?? base.x;
+    const y = l?.y ?? measured?.y ?? base.y;
+    return { id: b.id, x, y, w, h, locked: base.locked };
+  });
+}
+
+/** Apply resize delta from an origin rect for e / s / se handles. */
+export function applyResizeDelta(
+  origin: { x: number; y: number; w: number; h: number },
+  dx: number,
+  dy: number,
+  handle: ResizeHandle,
+  min = CANVAS_MIN_SIZE
+): { x: number; y: number; w: number; h: number } {
+  const x = origin.x;
+  const y = origin.y;
+  let w = origin.w;
+  let h = origin.h;
+  if (handle === "e" || handle === "se") {
+    w = origin.w + dx;
+  }
+  if (handle === "s" || handle === "se") {
+    h = origin.h + dy;
+  }
+  const clamped = clampResizeSize(w, h, min);
+  // Keep top-left fixed for e/s/se (no west/north handles yet).
+  return { x, y, w: clamped.w, h: clamped.h };
+}
+
+/**
+ * Snap a resizing rect's right/bottom (and centers) to peers + grid.
+ * Returns updated x/y/w/h and guides.
+ */
+export function snapResizeRect(
+  moving: { x: number; y: number; w: number; h: number },
+  peers: CanvasRect[],
+  handle: ResizeHandle,
+  opts?: { threshold?: number; grid?: number; disableSnap?: boolean; min?: number }
+): { x: number; y: number; w: number; h: number; guides: GuideLine[] } {
+  const threshold = opts?.threshold ?? CANVAS_SNAP_THRESHOLD;
+  const grid = opts?.grid ?? CANVAS_GRID;
+  const min = opts?.min ?? CANVAS_MIN_SIZE;
+  if (opts?.disableSnap) {
+    const c = clampResizeSize(moving.w, moving.h, min);
+    return { ...moving, w: c.w, h: c.h, guides: [] };
+  }
+
+  const x = moving.x;
+  const y = moving.y;
+  let w = moving.w;
+  let h = moving.h;
+  const guides: GuideLine[] = [];
+  let bestDw = threshold + 1;
+  let bestDh = threshold + 1;
+  let guideV: number | null = null;
+  let guideH: number | null = null;
+
+  const right = x + w;
+  const bottom = y + h;
+
+  for (const peer of peers) {
+    if (handle === "e" || handle === "se") {
+      const targets = [peer.x, peer.x + peer.w / 2, peer.x + peer.w];
+      for (const t of targets) {
+        const d = Math.abs(right - t);
+        if (d <= threshold && d < bestDw) {
+          bestDw = d;
+          w = t - x;
+          guideV = t;
+        }
+      }
+    }
+    if (handle === "s" || handle === "se") {
+      const targets = [peer.y, peer.y + peer.h / 2, peer.y + peer.h];
+      for (const t of targets) {
+        const d = Math.abs(bottom - t);
+        if (d <= threshold && d < bestDh) {
+          bestDh = d;
+          h = t - y;
+          guideH = t;
+        }
+      }
+    }
+  }
+
+  if ((handle === "e" || handle === "se") && guideV == null) {
+    const gr = snapToGrid(right, grid);
+    if (Math.abs(gr - right) <= threshold) {
+      w = gr - x;
+      guideV = gr;
+    }
+  }
+  if ((handle === "s" || handle === "se") && guideH == null) {
+    const gb = snapToGrid(bottom, grid);
+    if (Math.abs(gb - bottom) <= threshold) {
+      h = gb - y;
+      guideH = gb;
+    }
+  }
+
+  const c = clampResizeSize(w, h, min);
+  w = c.w;
+  h = c.h;
+  if (guideV != null) guides.push({ orientation: "v", at: guideV });
+  if (guideH != null) guides.push({ orientation: "h", at: guideH });
+  return { x, y, w, h, guides };
+}
+
+/** Apply position + size patches onto blocks (immutable). */
+export function applySizePatches(
+  blocks: Block[],
+  patches: { id: string; x?: number; y?: number; w?: number; h?: number }[]
+): Block[] {
+  const map = new Map(patches.map((p) => [p.id, p]));
+  return blocks.map((b) => {
+    const p = map.get(b.id);
+    if (!p) return b;
+    if (isLockedProp(b.props as Record<string, unknown>)) return b;
+    const next: Record<string, unknown> = { ...b.props };
+    if (p.x != null) next.posX = formatPos(p.x);
+    if (p.y != null) next.posY = formatPos(p.y);
+    if (p.w != null) next.width = formatPos(p.w);
+    if (p.h != null) next.height = formatPos(p.h);
+    return { ...b, props: next };
+  });
+}

@@ -14,6 +14,11 @@ import {
   normalizeEase,
   normalizeStep,
   resolveEaseCss,
+  interpolateKeyframes,
+  clampKeyframeT,
+  normalizeKeyframes,
+  serializeKeyframes,
+  compileKeyframesCss,
 } from "@/lib/motion-timeline";
 import { blockMotionAttrs, effectPresetProps } from "@/lib/block-style";
 
@@ -183,5 +188,72 @@ describe("bezier ease", () => {
     expect(resolveEaseCss(step.ease)).toMatch(/^cubic-bezier/);
     const vars = timelineToCssVars([step]);
     expect(String(vars["--sf-ease"])).toMatch(/^cubic-bezier/);
+  });
+});
+
+
+describe("keyframes", () => {
+  it("clampKeyframeT stays in 0..1", () => {
+    expect(clampKeyframeT(-1)).toBe(0);
+    expect(clampKeyframeT(2)).toBe(1);
+    expect(clampKeyframeT(0.42)).toBeCloseTo(0.42);
+  });
+
+  it("normalizeKeyframes sorts and clamps", () => {
+    const keys = normalizeKeyframes([
+      { t: 1.2, opacity: 1 },
+      { t: -0.1, opacity: 0, y: 20 },
+      { t: 0.5, scale: 1.1 },
+    ]);
+    expect(keys![0].t).toBe(0);
+    expect(keys![keys!.length - 1].t).toBe(1);
+  });
+
+  it("serialize/parse round-trip via normalize", () => {
+    const raw = serializeKeyframes([
+      { t: 0, opacity: 0, y: 16 },
+      { t: 1, opacity: 1, y: 0 },
+    ]);
+    const again = normalizeKeyframes(raw);
+    expect(again).toHaveLength(2);
+    expect(again![0].opacity).toBe(0);
+    expect(again![1].y).toBe(0);
+  });
+
+  it("interpolateKeyframes lerps between keys", () => {
+    const mid = interpolateKeyframes(
+      [
+        { t: 0, opacity: 0, y: 20 },
+        { t: 1, opacity: 1, y: 0 },
+      ],
+      0.5
+    );
+    expect(mid.opacity).toBeCloseTo(0.5);
+    expect(mid.y).toBeCloseTo(10);
+  });
+
+  it("compileKeyframesCss emits @keyframes when 2+ keys", () => {
+    const compiled = compileKeyframesCss("sf-kf-demo", [
+      { t: 0, opacity: 0, x: 12 },
+      { t: 1, opacity: 1, x: 0 },
+    ]);
+    expect(compiled).toBeTruthy();
+    expect(compiled!.css).toContain("@keyframes sf-kf-demo");
+    expect(compiled!.css).toContain("transform:");
+    expect(compileKeyframesCss("x", [{ t: 0, opacity: 1 }])).toBeNull();
+  });
+
+  it("normalizeStep keeps keyframes on the step", () => {
+    const step = normalizeStep({
+      trigger: "load",
+      anim: "fade",
+      delayMs: 0,
+      durationMs: 400,
+      keyframes: [
+        { t: 0, opacity: 0 },
+        { t: 1, opacity: 1 },
+      ],
+    });
+    expect(step.keyframes).toHaveLength(2);
   });
 });

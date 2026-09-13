@@ -1691,9 +1691,9 @@ export function SiteRenderer({
               editable
                 ? `outline-none transition-[box-shadow,border-radius,opacity] ${canvas ? "" : "relative "} ${
                     selected
-                      ? "ring-2 ring-teal-600/80 ring-offset-0 z-10 rounded-2xl"
+                      ? "ring-2 ring-[var(--accent)]/80 ring-offset-0 z-10 rounded-2xl"
                       : hovered
-                        ? "ring-2 ring-teal-600/35 z-[5] rounded-2xl"
+                        ? "ring-2 ring-[var(--accent)]/35 z-[5] rounded-2xl"
                         : ""
                   } ${hidden ? "opacity-40 [background-image:repeating-linear-gradient(135deg,transparent,transparent_6px,rgba(28,25,23,0.06)_6px,rgba(28,25,23,0.06)_12px)]" : ""} ${
                     locked ? "cursor-not-allowed" : canvas ? "cursor-move" : ""
@@ -1726,7 +1726,7 @@ export function SiteRenderer({
               </div>
             ) : null}
             {(() => {
-              const motion = blockMotionAttrs(block.props as Record<string, unknown>);
+              const motion = blockMotionAttrs(block.props as Record<string, unknown>, { blockId: block.id });
               const cssClass = strProp(block.props as Record<string, unknown>, "customCss")
                 ? `sf-block-${block.id}`
                 : "";
@@ -1742,6 +1742,9 @@ export function SiteRenderer({
               scrollHoldMs={motion.scrollHoldMs}
               editable={editable}
             >
+              {motion.keyframeCss ? (
+                <style dangerouslySetInnerHTML={{ __html: motion.keyframeCss }} />
+              ) : null}
               {sanitizeBlockCss(strProp(block.props as Record<string, unknown>, "customCss")) ? (
                 <style
                   dangerouslySetInnerHTML={{

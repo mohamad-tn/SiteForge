@@ -32,14 +32,17 @@ import {
 } from "@/lib/editor-selection";
 import {
   alignRects,
+  clampZoom,
   distributeRects,
   defaultInsertPosition,
+  measureBlockRects,
   nudgeRects,
   pageUsesCanvas,
   readBlockRect,
   applyPositions,
   type AlignAxis,
   type GuideLine,
+  type LiveCanvasPos,
 } from "@/lib/editor-canvas";
 import { EditorCanvasLayer, mergeLivePositions } from "@/components/editor/editor-canvas-layer";
 import { SiteRenderer } from "@/components/site-renderer";
@@ -89,6 +92,8 @@ import {
   Monitor,
   Moon,
   Plus,
+  ZoomIn,
+  ZoomOut,
   Redo2,
   Save,
   Settings2,
@@ -139,8 +144,9 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
   const [selectedIds, setSelectedIds] = useState<string[]>(
     initialContent.pages[0]?.blocks[0]?.id ? [initialContent.pages[0].blocks[0].id] : []
   );
-  const [canvasLivePos, setCanvasLivePos] = useState<Record<string, { x: number; y: number }>>({});
+  const [canvasLivePos, setCanvasLivePos] = useState<Record<string, LiveCanvasPos>>({});
   const [canvasGuides, setCanvasGuides] = useState<GuideLine[]>([]);
+  const [canvasZoom, setCanvasZoom] = useState(1);
   const canvasRootRef = useRef<HTMLDivElement | null>(null);
   const [selectedPart, setSelectedPart] = useState<BlockPart | null>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
@@ -375,9 +381,17 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
     );
   }
 
+  function canvasRectsForOps() {
+    if (!page) return [] as ReturnType<typeof measureBlockRects>;
+    return measureBlockRects(canvasRootRef.current, page.blocks, {
+      zoom: canvasZoom,
+      live: canvasLivePos,
+    });
+  }
+
   function applyCanvasAlign(axis: AlignAxis) {
     if (!page) return;
-    const rects = page.blocks.map((b, i) => readBlockRect(b, i));
+    const rects = canvasRectsForOps();
     const patches = alignRects(rects, selectedIds, axis);
     if (!patches.length) return;
     updatePageBlocks((blocks) => applyPositions(blocks, patches));
@@ -385,7 +399,7 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
 
   function applyCanvasDistribute(axis: "horizontal" |"vertical") {
     if (!page) return;
-    const rects = page.blocks.map((b, i) => readBlockRect(b, i));
+    const rects = canvasRectsForOps();
     const patches = distributeRects(rects, selectedIds, axis);
     if (!patches.length) return;
     updatePageBlocks((blocks) => applyPositions(blocks, patches));
@@ -476,7 +490,19 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
   function insertSavedComponent(componentId: string) {
     const cmp = (content.components || []).find((c) => c.id === componentId);
     if (!cmp) return;
-    const clones = cmp.blocks.map((b) => cloneBlock(b, `b-${nanoid(8)}`));
+    const insertPos = page && pageUsesCanvas(page) ? defaultInsertPosition(page.blocks) : null;
+    const clones = cmp.blocks.map((b, idx) => {
+      const clone = cloneBlock(b, `b-${nanoid(8)}`);
+      const props = { ...(clone.props as Record<string, unknown>) };
+      props.instanceOf = cmp.id;
+      // Text overrides live on the instance props themselves — no extra Prisma table.
+      if (insertPos && idx === 0 && !props.posX && !props.posY) {
+        props.posX = insertPos.posX;
+        props.posY = insertPos.posY;
+        if (!props.width) props.width = insertPos.width;
+      }
+      return { ...clone, props };
+    });
     updatePageBlocks((blocks) => {
       if (!selectedId) return [...blocks, ...clones];
       const i = blocks.findIndex((b) => b.id === selectedId);
@@ -1573,9 +1599,38 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
                   {isLocaleCode(editLocale) ? LOCALE_META[editLocale].nativeLabel : editLocale}
                 </span>
               </span>
-              <span className="font-mono" dir="ltr" title={t("deviceFrame")}>
-                {typeof canvasWidth === "number" ? `${canvasWidth}px · ${viewport}` :"fluid · laptop"}
-              </span>
+              <div className="flex items-center gap-1">
+                {isCanvasPage ? (
+                  <div className="me-2 flex items-center gap-0.5 rounded-xl border border-[var(--border)] bg-[var(--card)] p-0.5">
+                    <button
+                      type="button"
+                      className="rounded-lg p-1.5 text-[var(--foreground)] hover:bg-[var(--surface)] disabled:opacity-40"
+                      title={t("canvasZoomOut")}
+                      aria-label={t("canvasZoomOut")}
+                      disabled={canvasZoom <= 0.25}
+                      onClick={() => setCanvasZoom((z) => clampZoom(z - 0.25))}
+                    >
+                      <ZoomOut className="h-3.5 w-3.5" />
+                    </button>
+                    <span className="min-w-[3rem] text-center font-mono text-[10px] font-bold text-[var(--foreground)]" dir="ltr">
+                      {Math.round(canvasZoom * 100)}%
+                    </span>
+                    <button
+                      type="button"
+                      className="rounded-lg p-1.5 text-[var(--foreground)] hover:bg-[var(--surface)] disabled:opacity-40"
+                      title={t("canvasZoomIn")}
+                      aria-label={t("canvasZoomIn")}
+                      disabled={canvasZoom >= 2}
+                      onClick={() => setCanvasZoom((z) => clampZoom(z + 0.25))}
+                    >
+                      <ZoomIn className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ) : null}
+                <span className="font-mono" dir="ltr" title={t("deviceFrame")}>
+                  {typeof canvasWidth === "number" ? `${canvasWidth}px · ${viewport}` : "fluid · laptop"}
+                </span>
+              </div>
             </div>
             {selectedIds.length >= 1 ? (
               <div className="mb-3 flex flex-wrap items-center gap-1 rounded-2xl border border-[var(--border)] bg-[var(--card)] p-1.5 shadow-sm backdrop-blur">
@@ -1647,6 +1702,8 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
                         setLivePositions={setCanvasLivePos}
                         guides={canvasGuides}
                         setGuides={setCanvasGuides}
+                        zoom={canvasZoom}
+                        onZoomChange={(z) => setCanvasZoom(clampZoom(z))}
                       >
                         <SiteRenderer
                           content={canvasPreviewContent}
@@ -1694,6 +1751,8 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
                         setLivePositions={setCanvasLivePos}
                         guides={canvasGuides}
                         setGuides={setCanvasGuides}
+                        zoom={canvasZoom}
+                        onZoomChange={(z) => setCanvasZoom(clampZoom(z))}
                       >
                         <SiteRenderer
                       content={canvasPreviewContent}

@@ -1,17 +1,23 @@
 import { describe, expect, it } from "vitest";
 import {
   alignRects,
+  applyResizeDelta,
   autoPlaceBlocks,
+  clampResizeSize,
+  clampZoom,
+  clientToCanvasLocal,
   distributeRects,
   defaultInsertPosition,
   formatPos,
   marqueeHitTest,
+  measureRectToLocal,
   normalizeMarquee,
   nudgeRects,
   pageUsesCanvas,
   parsePos,
   readBlockRect,
   snapRect,
+  snapResizeRect,
   snapToGrid,
 } from "@/lib/editor-canvas";
 import type { Block } from "@/lib/design";
@@ -113,5 +119,59 @@ describe("editor-canvas math", () => {
     const r = readBlockRect(block("x", "hero"));
     expect(r.w).toBeGreaterThan(100);
     expect(r.h).toBeGreaterThan(100);
+  });
+});
+
+
+describe("DOM measure / resize / zoom", () => {
+  it("measureRectToLocal maps client box into canvas-local coords", () => {
+    const local = measureRectToLocal(
+      { left: 140, top: 220, width: 200, height: 80 },
+      { left: 40, top: 100 },
+      10,
+      20,
+      1
+    );
+    expect(local.x).toBe(110); // 140-40+10
+    expect(local.y).toBe(140); // 220-100+20
+    expect(local.w).toBe(200);
+    expect(local.h).toBe(80);
+  });
+
+  it("clientToCanvasLocal respects zoom", () => {
+    const p = clientToCanvasLocal(140, 220, { left: 40, top: 100 }, 0, 0, 2);
+    expect(p.x).toBe(50);
+    expect(p.y).toBe(60);
+  });
+
+  it("clampZoom stays within 25%–200%", () => {
+    expect(clampZoom(0.1)).toBe(0.25);
+    expect(clampZoom(3)).toBe(2);
+    expect(clampZoom(1.1)).toBe(1);
+  });
+
+  it("clampResizeSize enforces ~40×40 minimum", () => {
+    expect(clampResizeSize(10, 12)).toEqual({ w: 40, h: 40 });
+    expect(clampResizeSize(120, 80)).toEqual({ w: 120, h: 80 });
+  });
+
+  it("applyResizeDelta grows e/s/se from origin", () => {
+    const o = { x: 10, y: 20, w: 100, h: 50 };
+    expect(applyResizeDelta(o, 20, 0, "e").w).toBe(120);
+    expect(applyResizeDelta(o, 0, 30, "s").h).toBe(80);
+    const se = applyResizeDelta(o, 20, 30, "se");
+    expect(se.w).toBe(120);
+    expect(se.h).toBe(80);
+  });
+
+  it("snapResizeRect snaps right edge to peer", () => {
+    const r = snapResizeRect(
+      { x: 0, y: 0, w: 98, h: 40 },
+      [{ id: "p", x: 100, y: 0, w: 50, h: 40 }],
+      "e",
+      { threshold: 6 }
+    );
+    expect(r.w).toBe(100);
+    expect(r.guides.some((g) => g.orientation === "v" && g.at === 100)).toBe(true);
   });
 });
