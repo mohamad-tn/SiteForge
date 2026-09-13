@@ -652,7 +652,11 @@ html[data-theme="dark"] .sf-device-screen {
 .sf-hover-scale-md,
 .sf-hover-shadow,
 .sf-hover-glow {
-  transition: transform 0.28s var(--sf-ease), box-shadow 0.28s var(--sf-ease), filter 0.28s var(--sf-ease);
+  transition:
+    transform var(--sf-hover-dur, 0.28s) var(--sf-hover-ease, var(--sf-ease)),
+    box-shadow var(--sf-hover-dur, 0.28s) var(--sf-hover-ease, var(--sf-ease)),
+    filter var(--sf-hover-dur, 0.28s) var(--sf-hover-ease, var(--sf-ease));
+  transition-delay: var(--sf-hover-delay, 0ms);
 }
 .sf-hover-scale-sm:hover {
   transform: scale(1.02);

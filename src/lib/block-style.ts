@@ -1,3 +1,15 @@
+import {
+  normalizeTimeline,
+  timelineToCssVars,
+  entranceClassFor,
+  firstLoadStep,
+  firstScrollStep,
+  firstHoverStep,
+  hasScrollTrigger,
+  scrollSequenceHoldMs,
+  primaryEntranceStep,
+} from "@/lib/motion-timeline";
+
 /** Shared visual + link props applied to every block */
 
 export const STYLE_KEYS = [
@@ -311,6 +323,7 @@ export const MOTION_KEYS = [
   "hoverScale",
   "hoverShadow",
   "scrollReveal",
+  "motionTimeline",
 ] as const;
 
 export type MotionKey = (typeof MOTION_KEYS)[number];
@@ -409,6 +422,7 @@ export function defaultMotionProps(): Record<string, string> {
     hoverScale: "none",
     hoverShadow: "false",
     scrollReveal: "false",
+    motionTimeline: "",
   };
 }
 
@@ -423,6 +437,7 @@ export const MOTION_LABELS: Record<string, string> = {
   hoverScale: "تكبير عند التمرير",
   hoverShadow: "ظل عند التمرير",
   scrollReveal: "ظهور عند التمرير",
+  motionTimeline: "الخط الزمني للحركة",
 };
 
 const ENTRANCE_CLASS: Record<string, string> = {
@@ -445,21 +460,31 @@ export function blockMotionAttrs(p: Record<string, unknown>): {
   style: Record<string, string | number>;
   scrollReveal: boolean;
   hasEntrance: boolean;
+  hasLoadEntrance: boolean;
+  scrollAnimClass: string;
+  scrollStyle: Record<string, string | number>;
+  scrollHoldMs: number;
 } {
-  const anim = strProp(p, "entranceAnim", "none");
-  const ease = strProp(p, "animEase", "ease-out");
-  const dur = strProp(p, "animDuration", "600");
-  const delay = strProp(p, "animDelay", "0");
-  const staggerChildren = strProp(p, "staggerChildren", "false") === "true";
-  const staggerMs = strProp(p, "staggerMs", "80");
+  const steps = normalizeTimeline(p);
+  const loadStep = firstLoadStep(steps);
+  const scrollStep = firstScrollStep(steps);
+  const hoverStep = firstHoverStep(steps);
+  const primary = primaryEntranceStep(steps);
+
+  const staggerChildren =
+    Boolean(loadStep?.staggerChildren) || strProp(p, "staggerChildren", "false") === "true";
   const hoverScale = strProp(p, "hoverScale", "none");
   const hoverShadow = strProp(p, "hoverShadow", "false");
-  const scrollReveal = strProp(p, "scrollReveal", "false") === "true";
+  const scrollReveal = hasScrollTrigger(steps) || strProp(p, "scrollReveal", "false") === "true";
 
   const classes: string[] = [];
-  const entrance = ENTRANCE_CLASS[anim] || "";
-  const hasEntrance = Boolean(entrance) || staggerChildren;
-  if (entrance) classes.push("sf-anim", entrance);
+  const loadAnim = loadStep && loadStep.anim !== "none" ? entranceClassFor(loadStep.anim) : "";
+  const scrollAnim = scrollStep && scrollStep.anim !== "none" ? entranceClassFor(scrollStep.anim) : "";
+  const onlyScroll = Boolean(scrollAnim) && !loadAnim;
+  const mainEntrance = loadAnim || (onlyScroll ? scrollAnim : "");
+  const hasEntrance = Boolean(mainEntrance || scrollAnim) || staggerChildren;
+
+  if (mainEntrance) classes.push("sf-anim", mainEntrance);
   if (staggerChildren) classes.push("sf-stagger");
 
   if (hoverScale === "sm") classes.push("sf-hover-scale-sm");
@@ -467,18 +492,32 @@ export function blockMotionAttrs(p: Record<string, unknown>): {
   if (hoverShadow === "true") classes.push("sf-hover-shadow");
   else if (hoverShadow === "glow") classes.push("sf-hover-glow");
 
-  const style: Record<string, string | number> = {};
-  const d = Number(dur);
-  const dl = Number(delay);
-  const sm = Number(staggerMs);
-  if (entrance || staggerChildren) {
-    if (Number.isFinite(d) && d > 0) style["--sf-anim-dur"] = `${d}ms`;
-    if (Number.isFinite(dl) && dl >= 0) style["--sf-anim-delay"] = `${dl}ms`;
-    style["--sf-ease"] = resolveEaseCss(ease);
+  if (hoverStep && hoverStep.anim !== "none" && hoverScale === "none") {
+    if (!classes.some((c) => c.startsWith("sf-hover-"))) classes.push("sf-hover-scale-sm");
   }
-  if (staggerChildren && Number.isFinite(sm) && sm >= 0) {
-    style["--sf-stagger-ms"] = `${sm}ms`;
-    if (!style["--sf-ease"]) style["--sf-ease"] = resolveEaseCss(ease);
+
+  const style = timelineToCssVars(steps);
+  if (primary && (mainEntrance || staggerChildren)) {
+    if (!style["--sf-anim-dur"]) style["--sf-anim-dur"] = `${primary.durationMs}ms`;
+    if (!style["--sf-anim-delay"]) style["--sf-anim-delay"] = `${primary.delayMs}ms`;
+    if (!style["--sf-ease"]) style["--sf-ease"] = resolveEaseCss(primary.ease);
   }
-  return { className: classes.join(" "), style, scrollReveal, hasEntrance };
+
+  const scrollStyle: Record<string, string | number> = {};
+  if (scrollStep && scrollAnim && loadAnim) {
+    scrollStyle["--sf-anim-dur"] = `${scrollStep.durationMs}ms`;
+    scrollStyle["--sf-anim-delay"] = `${scrollStep.delayMs}ms`;
+    scrollStyle["--sf-ease"] = resolveEaseCss(scrollStep.ease);
+  }
+
+  return {
+    className: classes.join(" "),
+    style,
+    scrollReveal,
+    hasEntrance,
+    hasLoadEntrance: Boolean(loadAnim),
+    scrollAnimClass: loadAnim && scrollAnim ? `sf-anim ${scrollAnim}` : "",
+    scrollStyle,
+    scrollHoldMs: scrollSequenceHoldMs(steps),
+  };
 }

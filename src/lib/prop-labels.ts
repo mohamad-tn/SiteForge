@@ -126,6 +126,7 @@ export const MOTION_LABELS_I18N: Record<MotionKey, Bi> = {
   hoverScale: { ar: "تكبير عند التمرير", en: "Hover scale" },
   hoverShadow: { ar: "ظل عند التمرير", en: "Hover shadow" },
   scrollReveal: { ar: "ظهور عند التمرير للأسفل", en: "Reveal on scroll" },
+  motionTimeline: { ar: "الخط الزمني للحركة", en: "Motion timeline" },
 };
 
 export const EASE_PRESET_LABELS: Record<string, Bi> = {

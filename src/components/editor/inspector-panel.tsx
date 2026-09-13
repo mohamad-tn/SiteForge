@@ -12,6 +12,14 @@ import {
   type SiteContent,
 } from "@/lib/design";
 import { STYLE_KEYS, LINK_KEYS, MOTION_KEYS, EFFECT_PRESETS, EASE_PRESETS, detectEffectPreset, effectPresetProps, type EffectPresetId, type EasePresetId } from "@/lib/block-style";
+import {
+  normalizeTimeline,
+  writeTimelineProps,
+  createTimelineStep,
+  type MotionTimelineStep,
+  type MotionTrigger,
+  MOTION_ANIM_IDS,
+} from "@/lib/motion-timeline";
 import { propLabel, styleLabel, motionLabel, effectPresetLabel, easePresetLabel } from "@/lib/prop-labels";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -650,9 +658,22 @@ export function InspectorPanel({
                   value={detectEffectPreset(selected.props as Record<string, unknown>)}
                   onValueChange={(v) => {
                     const patch = effectPresetProps(v as EffectPresetId);
-                    if (onUpdatePropsObject) onUpdatePropsObject(selected.id, patch);
+                    const props = { ...(selected.props as Record<string, unknown>), ...patch };
+                    const steps = normalizeTimeline(props).map((s, i) =>
+                      i === 0
+                        ? {
+                            ...s,
+                            anim: patch.entranceAnim || s.anim,
+                            trigger: String(props.scrollReveal) === "true" ? ("scroll" as const) : s.trigger,
+                          }
+                        : s
+                    );
+                    const next = writeTimelineProps(props, steps.length ? steps : [createTimelineStep({ anim: patch.entranceAnim || "fade" })]);
+                    if (onUpdatePropsObject) onUpdatePropsObject(selected.id, { ...patch, ...next });
                     else {
-                      for (const [k, val] of Object.entries(patch)) onUpdateProp(selected.id, k, val);
+                      for (const [k, val] of Object.entries({ ...patch, ...next })) {
+                        if (typeof val === "string") onUpdateProp(selected.id, k, val);
+                      }
                     }
                   }}
                   options={EFFECT_PRESETS.map((p) => ({
@@ -663,40 +684,22 @@ export function InspectorPanel({
                 />
                 <p className="text-[10px] leading-4 text-stone-600 dark:text-[var(--muted)]">{t("tipMotion")}</p>
               </div>
-              <div className="space-y-1.5">
-                <Label className="text-[11px] text-stone-600 dark:text-stone-300">{motionLabel("entranceAnim", uiLang)}</Label>
-                <Select
-                  value={String(selected.props.entranceAnim || "none")}
-                  onValueChange={(v) => onUpdateProp(selected.id, "entranceAnim", v)}
-                  options={[
-                    { value: "none", label: uiLang === "ar" ? "بدون" : "None" },
-                    { value: "fade", label: uiLang === "ar" ? "تلاشي" : "Fade" },
-                    { value: "slide-up", label: uiLang === "ar" ? "انزلاق لأعلى" : "Slide up" },
-                    { value: "slide-down", label: uiLang === "ar" ? "انزلاق لأسفل" : "Slide down" },
-                    { value: "slide-left", label: uiLang === "ar" ? "انزلاق لليسار" : "Slide left" },
-                    { value: "slide-right", label: uiLang === "ar" ? "انزلاق لليمين" : "Slide right" },
-                    { value: "scale", label: uiLang === "ar" ? "تكبير" : "Scale" },
-                    { value: "float", label: uiLang === "ar" ? "طفو" : "Float" },
-                    { value: "blur-in", label: uiLang === "ar" ? "ضباب" : "Blur in" },
-                    { value: "bounce-in", label: uiLang === "ar" ? "ارتداد" : "Bounce" },
-                    { value: "zoom-fade", label: uiLang === "ar" ? "تكبير مع تلاشي" : "Zoom fade" },
-                  ]}
-                  triggerClassName="h-9 rounded-xl text-xs font-semibold"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-[11px] text-stone-600 dark:text-stone-300">{motionLabel("animEase", uiLang)}</Label>
-                <Select
-                  value={String(selected.props.animEase || "ease-out")}
-                  onValueChange={(v) => onUpdateProp(selected.id, "animEase", v)}
-                  options={(Object.keys(EASE_PRESETS) as EasePresetId[]).map((id) => ({
-                    value: id,
-                    label: easePresetLabel(id, uiLang),
-                  }))}
-                  triggerClassName="h-9 rounded-xl text-xs font-semibold"
-                />
-                <p className="text-[10px] leading-4 text-stone-600 dark:text-[var(--muted)]">{t("easeHelp")}</p>
-              </div>
+
+              <MotionTimelineEditor
+                props={selected.props as Record<string, unknown>}
+                uiLang={uiLang}
+                t={t}
+                onChange={(steps) => {
+                  const next = writeTimelineProps(selected.props as Record<string, unknown>, steps);
+                  if (onUpdatePropsObject) onUpdatePropsObject(selected.id, next);
+                  else {
+                    for (const [k, val] of Object.entries(next)) {
+                      if (typeof val === "string") onUpdateProp(selected.id, k, val);
+                    }
+                  }
+                }}
+              />
+
               <div className="grid grid-cols-2 gap-2">
                 <div className="space-y-1.5">
                   <Label className="text-[11px] text-stone-600 dark:text-stone-300">{motionLabel("hoverScale", uiLang)}</Label>
@@ -725,23 +728,202 @@ export function InspectorPanel({
                   />
                 </div>
               </div>
-              <div className="space-y-1.5">
-                <Label className="text-[11px] text-stone-600 dark:text-stone-300">{motionLabel("scrollReveal", uiLang)}</Label>
-                <Select
-                  value={String(selected.props.scrollReveal || "false")}
-                  onValueChange={(v) => onUpdateProp(selected.id, "scrollReveal", v)}
-                  options={[
-                    { value: "false", label: uiLang === "ar" ? "فوراً عند التحميل" : "On page load" },
-                    { value: "true", label: uiLang === "ar" ? "عند التمرير للعنصر" : "When scrolled into view" },
-                  ]}
-                  triggerClassName="h-9 rounded-xl text-xs font-semibold"
-                />
-                <p className="text-[10px] leading-4 text-stone-600 dark:text-[var(--muted)]">{t("scrollRevealHelp")}</p>
+            </div>
+          ) : null}
+
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MotionTimelineEditor({
+  props,
+  uiLang,
+  t,
+  onChange,
+}: {
+  props: Record<string, unknown>;
+  uiLang: "ar" | "en";
+  t: (key: string) => string;
+  onChange: (steps: MotionTimelineStep[]) => void;
+}) {
+  const steps = normalizeTimeline(props);
+  const animOptions = MOTION_ANIM_IDS.map((id) => ({
+    value: id,
+    label:
+      id === "none"
+        ? uiLang === "ar"
+          ? "بدون"
+          : "None"
+        : id === "fade"
+          ? uiLang === "ar"
+            ? "تلاشي"
+            : "Fade"
+          : id === "slide-up"
+            ? uiLang === "ar"
+              ? "انزلاق لأعلى"
+              : "Slide up"
+            : id === "slide-down"
+              ? uiLang === "ar"
+                ? "انزلاق لأسفل"
+                : "Slide down"
+              : id === "slide-left"
+                ? uiLang === "ar"
+                  ? "انزلاق لليسار"
+                  : "Slide left"
+                : id === "slide-right"
+                  ? uiLang === "ar"
+                    ? "انزلاق لليمين"
+                    : "Slide right"
+                  : id === "scale"
+                    ? uiLang === "ar"
+                      ? "تكبير"
+                      : "Scale"
+                    : id === "float"
+                      ? uiLang === "ar"
+                        ? "طفو"
+                        : "Float"
+                      : id === "blur-in"
+                        ? uiLang === "ar"
+                          ? "ضباب"
+                          : "Blur in"
+                        : id === "bounce-in"
+                          ? uiLang === "ar"
+                            ? "ارتداد"
+                            : "Bounce"
+                          : id === "zoom-fade"
+                            ? uiLang === "ar"
+                              ? "تكبير مع تلاشي"
+                              : "Zoom fade"
+                            : id,
+  }));
+
+  function updateAt(index: number, patch: Partial<MotionTimelineStep>) {
+    const next = steps.map((s, i) => (i === index ? { ...s, ...patch } : s));
+    onChange(next);
+  }
+
+  function move(index: number, dir: -1 | 1) {
+    const j = index + dir;
+    if (j < 0 || j >= steps.length) return;
+    const next = steps.slice();
+    const tmp = next[index];
+    next[index] = next[j];
+    next[j] = tmp;
+    onChange(next);
+  }
+
+  return (
+    <div className="space-y-2 rounded-2xl border border-stone-300/80 p-3 dark:border-stone-800">
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-stone-600 dark:text-stone-400">
+            {t("timelineTitle")}
+          </div>
+          <p className="mt-1 text-[10px] leading-4 text-stone-600 dark:text-[var(--muted)]">{t("timelineHelp")}</p>
+        </div>
+        <button
+          type="button"
+          className="shrink-0 rounded-full bg-teal-800 px-2.5 py-1 text-[10px] font-bold text-white hover:bg-teal-700"
+          onClick={() =>
+            onChange([
+              ...steps,
+              createTimelineStep({
+                trigger: steps.some((s) => s.trigger === "load") ? "scroll" : "load",
+                anim: "fade",
+                delayMs: 0,
+                durationMs: 600,
+              }),
+            ])
+          }
+        >
+          {t("timelineAddStep")}
+        </button>
+      </div>
+
+      {steps.length === 0 ? (
+        <p className="text-[11px] text-stone-600 dark:text-stone-400">{t("timelineEmpty")}</p>
+      ) : (
+        <ul className="space-y-2">
+          {steps.map((step, index) => (
+            <li
+              key={step.id}
+              className="space-y-2 rounded-xl border border-stone-200/90 bg-stone-50/60 p-2.5 dark:border-stone-700 dark:bg-stone-950/40"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-teal-800 dark:text-teal-300">
+                  {t("timelineStep")} {index + 1}
+                </span>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    className="rounded-lg px-1.5 py-0.5 text-[10px] font-semibold text-stone-600 hover:bg-stone-200 dark:text-stone-300 dark:hover:bg-stone-800"
+                    onClick={() => move(index, -1)}
+                    disabled={index === 0}
+                  >
+                    {t("timelineMoveUp")}
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded-lg px-1.5 py-0.5 text-[10px] font-semibold text-stone-600 hover:bg-stone-200 dark:text-stone-300 dark:hover:bg-stone-800"
+                    onClick={() => move(index, 1)}
+                    disabled={index === steps.length - 1}
+                  >
+                    {t("timelineMoveDown")}
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded-lg px-1.5 py-0.5 text-[10px] font-semibold text-rose-700 hover:bg-rose-50 dark:text-rose-300 dark:hover:bg-rose-950/40"
+                    onClick={() => onChange(steps.filter((_, i) => i !== index))}
+                  >
+                    {t("timelineRemoveStep")}
+                  </button>
+                </div>
               </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <Label className="text-[10px] text-stone-600 dark:text-stone-300">{t("timelineTrigger")}</Label>
+                  <Select
+                    value={step.trigger}
+                    onValueChange={(v) => updateAt(index, { trigger: v as MotionTrigger })}
+                    options={[
+                      { value: "load", label: t("timelineTriggerLoad") },
+                      { value: "scroll", label: t("timelineTriggerScroll") },
+                      { value: "hover", label: t("timelineTriggerHover") },
+                    ]}
+                    triggerClassName="h-8 rounded-xl text-xs font-semibold"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-[10px] text-stone-600 dark:text-stone-300">{t("timelineAnim")}</Label>
+                  <Select
+                    value={step.anim}
+                    onValueChange={(v) => updateAt(index, { anim: v })}
+                    options={animOptions}
+                    triggerClassName="h-8 rounded-xl text-xs font-semibold"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-[10px] text-stone-600 dark:text-stone-300">{motionLabel("animEase", uiLang)}</Label>
+                <Select
+                  value={step.ease || "ease-out"}
+                  onValueChange={(v) => updateAt(index, { ease: v })}
+                  options={(Object.keys(EASE_PRESETS) as EasePresetId[]).map((id) => ({
+                    value: id,
+                    label: easePresetLabel(id, uiLang),
+                  }))}
+                  triggerClassName="h-8 rounded-xl text-xs font-semibold"
+                />
+              </div>
+
               <NumField
                 label={motionLabel("animDuration", uiLang)}
-                value={String(selected.props.animDuration ?? "600")}
-                onChange={(v) => onUpdateProp(selected.id, "animDuration", v)}
+                value={String(step.durationMs)}
+                onChange={(v) => updateAt(index, { durationMs: Number(v) || 600 })}
                 min={100}
                 max={2000}
                 step={50}
@@ -749,41 +931,47 @@ export function InspectorPanel({
               />
               <NumField
                 label={motionLabel("animDelay", uiLang)}
-                value={String(selected.props.animDelay ?? "0")}
-                onChange={(v) => onUpdateProp(selected.id, "animDelay", v)}
+                value={String(step.delayMs)}
+                onChange={(v) => updateAt(index, { delayMs: Number(v) || 0 })}
                 min={0}
                 max={1500}
                 step={50}
                 hint="ms"
               />
-              <div className="space-y-1.5 rounded-2xl border border-stone-300/80 p-3 dark:border-stone-800">
-                <Label className="text-[11px] text-stone-600 dark:text-stone-300">{motionLabel("staggerChildren", uiLang)}</Label>
-                <Select
-                  value={String(selected.props.staggerChildren || "false")}
-                  onValueChange={(v) => onUpdateProp(selected.id, "staggerChildren", v)}
-                  options={[
-                    { value: "false", label: uiLang === "ar" ? "إيقاف" : "Off" },
-                    { value: "true", label: uiLang === "ar" ? "تشغيل" : "On" },
-                  ]}
-                  triggerClassName="h-9 rounded-xl text-xs font-semibold"
-                />
-                <p className="text-[10px] leading-4 text-stone-600 dark:text-[var(--muted)]">{t("staggerHelp")}</p>
-                {String(selected.props.staggerChildren) === "true" ? (
-                  <NumField
-                    label={motionLabel("staggerMs", uiLang)}
-                    value={String(selected.props.staggerMs ?? "80")}
-                    onChange={(v) => onUpdateProp(selected.id, "staggerMs", v)}
-                    min={40}
-                    max={400}
-                    step={20}
-                    hint="ms"
-                  />
-                ) : null}
-              </div>
-            </div>
-          ) : null}
 
-        </div>
+              {step.trigger === "load" && index === steps.findIndex((s) => s.trigger === "load") ? (
+                <div className="space-y-1.5 rounded-xl border border-dashed border-stone-300/80 p-2 dark:border-stone-700">
+                  <Label className="text-[10px] text-stone-600 dark:text-stone-300">{t("timelineStaggerOnStep")}</Label>
+                  <Select
+                    value={step.staggerChildren ? "true" : "false"}
+                    onValueChange={(v) =>
+                      updateAt(index, {
+                        staggerChildren: v === "true",
+                        staggerMs: step.staggerMs ?? 80,
+                      })
+                    }
+                    options={[
+                      { value: "false", label: uiLang === "ar" ? "إيقاف" : "Off" },
+                      { value: "true", label: uiLang === "ar" ? "تشغيل" : "On" },
+                    ]}
+                    triggerClassName="h-8 rounded-xl text-xs font-semibold"
+                  />
+                  {step.staggerChildren ? (
+                    <NumField
+                      label={motionLabel("staggerMs", uiLang)}
+                      value={String(step.staggerMs ?? 80)}
+                      onChange={(v) => updateAt(index, { staggerMs: Number(v) || 80 })}
+                      min={40}
+                      max={400}
+                      step={20}
+                      hint="ms"
+                    />
+                  ) : null}
+                </div>
+              ) : null}
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   );

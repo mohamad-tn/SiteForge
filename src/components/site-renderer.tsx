@@ -1680,6 +1680,10 @@ export function SiteRenderer({
               className={[cssClass, motion.className].filter(Boolean).join(" ") || undefined}
               scrollReveal={motion.scrollReveal}
               hasEntrance={motion.hasEntrance}
+              hasLoadEntrance={motion.hasLoadEntrance}
+              scrollAnimClass={motion.scrollAnimClass}
+              scrollStyle={motion.scrollStyle as CSSProperties}
+              scrollHoldMs={motion.scrollHoldMs}
               editable={editable}
             >
               {sanitizeBlockCss(strProp(block.props as Record<string, unknown>, "customCss")) ? (
