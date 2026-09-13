@@ -76,6 +76,8 @@ export const pageSchema = z.object({
   title: z.string(),
   slug: z.string(),
   blocks: z.array(blockSchema),
+  /** flow = document stack; canvas = absolute free layout (default for new pages). */
+  layout: z.enum(["flow", "canvas"]).optional().default("canvas"),
   seoTitle: z.string().optional(),
   seoDescription: z.string().optional(),
   seoOgImage: z.string().optional(),
@@ -416,9 +418,9 @@ export function ensureContentDefaults(raw: SiteContent): SiteContent {
       radius: raw.tokens.radius ?? defaultTokens.radius,
       rtl: raw.tokens.rtl ?? true,
     },
-    pages: (raw.pages || []).map((page) => ({
-      ...page,
-      blocks: page.blocks.map((block) => {
+    pages: (raw.pages || []).map((page) => {
+      const layout = page.layout === "flow" ? "flow" : "canvas";
+      let blocks = page.blocks.map((block) => {
         if (block.type !== "navbar") return block;
         const props = { ...(block.props as Record<string, unknown>) };
         if (!Array.isArray(props.navItems)) {
@@ -426,9 +428,66 @@ export function ensureContentDefaults(raw: SiteContent): SiteContent {
           props.links = syncLinksCsvFromNavItems(props.navItems as NavItem[], locales);
         }
         return { ...block, props };
-      }),
-    })),
+      });
+      if (layout === "canvas") {
+        blocks = autoPlacePageBlocks(blocks);
+      }
+      return { ...page, layout, blocks };
+    }),
   };
+}
+
+/** Stack unpositioned blocks into a canvas column (kept local to avoid import cycles). */
+function autoPlacePageBlocks(blocks: Block[]): Block[] {
+  const ORIGIN_X = 24;
+  const ORIGIN_Y = 72;
+  const GAP = 24;
+  const heights: Record<string, number> = {
+    navbar: 64,
+    hero: 420,
+    features: 360,
+    gallery: 360,
+    pricing: 360,
+    testimonials: 360,
+    faq: 360,
+    stats: 360,
+    collectionList: 360,
+    cta: 280,
+    contact: 280,
+    form: 280,
+    footer: 200,
+    heading: 56,
+    text: 120,
+    image: 320,
+    video: 320,
+    button: 48,
+    spacer: 56,
+    columns: 200,
+    divider: 24,
+    list: 160,
+  };
+  let y = ORIGIN_Y;
+  return blocks.map((block) => {
+    const props = { ...(block.props as Record<string, unknown>) };
+    const hasPos =
+      (typeof props.posX === "string" && props.posX !== "") ||
+      (typeof props.posY === "string" && props.posY !== "");
+    if (hasPos) {
+      const h = heights[block.type] || 160;
+      const py = Number(String(props.posY || "0").replace(/px$/i, ""));
+      if (Number.isFinite(py)) y = Math.max(y, py + h + GAP);
+      return { ...block, props };
+    }
+    const h = heights[block.type] || 160;
+    const nextProps: Record<string, unknown> = {
+      ...props,
+      posX: String(ORIGIN_X),
+      posY: String(y),
+    };
+    if (!props.width) nextProps.width = block.type === "button" ? "200" : "720";
+    y += h + GAP;
+    return { ...block, props: nextProps };
+  });
 }
 
 export function createBlankContent(title = "صفحتي"): SiteContent {
@@ -448,6 +507,7 @@ export function createBlankContent(title = "صفحتي"): SiteContent {
         id: "page-home",
         title: "الرئيسية",
         slug: "home",
+        layout: "canvas",
         blocks: [
           { id: "b-nav", type: "navbar", props: defaultPropsFor("navbar") },
           {

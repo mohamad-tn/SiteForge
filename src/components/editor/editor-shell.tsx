@@ -30,6 +30,18 @@ import {
   isLockedProp,
   isHiddenProp,
 } from "@/lib/editor-selection";
+import {
+  alignRects,
+  distributeRects,
+  defaultInsertPosition,
+  nudgeRects,
+  pageUsesCanvas,
+  readBlockRect,
+  applyPositions,
+  type AlignAxis,
+  type GuideLine,
+} from "@/lib/editor-canvas";
+import { EditorCanvasLayer, mergeLivePositions } from "@/components/editor/editor-canvas-layer";
 import { SiteRenderer } from "@/components/site-renderer";
 import { TokensPanel } from "@/components/editor/tokens-panel";
 import { SiteChromeProvider } from "@/components/site-chrome-context";
@@ -68,6 +80,8 @@ import {
   AlignLeft,
   AlignCenter,
   AlignRight,
+  AlignHorizontalDistributeCenter,
+  AlignVerticalDistributeCenter,
   MoreHorizontal,
   FilePlus2,
   Languages,
@@ -105,11 +119,11 @@ type SiteMeta = {
   favicon?: string;
   customCss?: string;
   customDomain?: string;
-  domainStatus?: "none" | "pending" | "active" | "error";
+  domainStatus?: "none" |"pending" |"active" |"error";
 };
-type LeftTab = "insert" | "layers" | "pages" | "langs" | "cms";
-type RightTab = "inspect" | "style" | "site" | "replies";
-type Viewport = "mobile" | "tablet" | "laptop";
+type LeftTab = "insert" |"layers" |"pages" |"langs" |"cms";
+type RightTab = "inspect" |"style" |"site" |"replies";
+type Viewport = "mobile" |"tablet" |"laptop";
 
 const VIEWPORT_WIDTH: Record<Viewport, number | string> = {
   mobile: 390,
@@ -125,11 +139,14 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
   const [selectedIds, setSelectedIds] = useState<string[]>(
     initialContent.pages[0]?.blocks[0]?.id ? [initialContent.pages[0].blocks[0].id] : []
   );
+  const [canvasLivePos, setCanvasLivePos] = useState<Record<string, { x: number; y: number }>>({});
+  const [canvasGuides, setCanvasGuides] = useState<GuideLine[]>([]);
+  const canvasRootRef = useRef<HTMLDivElement | null>(null);
   const [selectedPart, setSelectedPart] = useState<BlockPart | null>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [leftTab, setLeftTab] = useState<LeftTab>("insert");
   const [viewport, setViewport] = useState<Viewport>("laptop");
-  const [previewMode, setPreviewMode] = useState<"light" | "dark">("light");
+  const [previewMode, setPreviewMode] = useState<"light" |"dark">("light");
   const [editLocale, setEditLocale] = useState(initialContent.defaultLocale || "ar");
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
@@ -150,13 +167,13 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
   const [rightTab, setRightTab] = useState<RightTab>("inspect");
   const [siteFocus, setSiteFocus] = useState<SiteSettingsFocus>(null);
   const [siteFocusNonce, setSiteFocusNonce] = useState(0);
-  const [mobilePanel, setMobilePanel] = useState<"none" | "left" | "right">("none");
+  const [mobilePanel, setMobilePanel] = useState<"none" |"left" |"right">("none");
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [rightCollapsed, setRightCollapsed] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const [siteMenuOpen, setSiteMenuOpen] = useState(false);
   const [publishedAt, setPublishedAt] = useState<string | null>(site.publishedAt);
-  const [saveState, setSaveState] = useState<"saved" | "saving" | "dirty">("saved");
+  const [saveState, setSaveState] = useState<"saved" |"saving" |"dirty">("saved");
   const autosaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const skipDirtyRef = useRef(true);
   const moreRef = useRef<HTMLDivElement | null>(null);
@@ -194,6 +211,16 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
 
   const pageIndex = Math.max(0, content.pages.findIndex((p) => p.id === pageId));
   const page = content.pages[pageIndex] ?? content.pages[0];
+  const isCanvasPage = pageUsesCanvas(page);
+  const canvasPreviewContent = useMemo(() => {
+    if (!isCanvasPage || !Object.keys(canvasLivePos).length) return content;
+    return {
+      ...content,
+      pages: content.pages.map((p) =>
+        p.id === page?.id ? { ...p, blocks: mergeLivePositions(p.blocks, canvasLivePos) } : p
+      ),
+    };
+  }, [canvasLivePos, content, isCanvasPage, page?.id]);
   const locales = useMemo(
     () => (content.locales?.length ? content.locales : [content.defaultLocale || "ar"]),
     [content.locales, content.defaultLocale]
@@ -293,7 +320,7 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
       else if (group === "spacing" && key) (tokens.spacing as Record<string, number>)[key] = Number(value);
       else if (path === "radius") tokens.radius = Number(value);
       else if (path === "rtl") tokens.rtl = Boolean(value);
-      else if (path === "themeMode") tokens.themeMode = value as "light" | "dark" | "system";
+      else if (path === "themeMode") tokens.themeMode = value as"light" |"dark" |"system";
       return { ...prev, tokens };
     });
   }
@@ -332,7 +359,7 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
     );
   }
 
-  function toggleBlockFlag(id: string, key: "hidden" | "locked") {
+  function toggleBlockFlag(id: string, key: "hidden" |"locked") {
     const b = page?.blocks.find((x) => x.id === id);
     if (!b) return;
     const cur = isStyleFlag(b.props as Record<string, unknown>, key);
@@ -348,8 +375,47 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
     );
   }
 
+  function applyCanvasAlign(axis: AlignAxis) {
+    if (!page) return;
+    const rects = page.blocks.map((b, i) => readBlockRect(b, i));
+    const patches = alignRects(rects, selectedIds, axis);
+    if (!patches.length) return;
+    updatePageBlocks((blocks) => applyPositions(blocks, patches));
+  }
+
+  function applyCanvasDistribute(axis: "horizontal" |"vertical") {
+    if (!page) return;
+    const rects = page.blocks.map((b, i) => readBlockRect(b, i));
+    const patches = distributeRects(rects, selectedIds, axis);
+    if (!patches.length) return;
+    updatePageBlocks((blocks) => applyPositions(blocks, patches));
+  }
+
+  function commitCanvasBlocks(nextBlocks: Block[]) {
+    updatePageBlocks(() => nextBlocks);
+  }
+
+  function selectCanvasIds(ids: string[], opts?: { primary?: string | null }) {
+    setSelectedIds(ids);
+    setSelectedId(primaryOf(ids, opts?.primary ?? ids[ids.length - 1] ?? null));
+    setSelectedPart(null);
+  }
+
   function addBlock(type: BlockType, afterId?: string | null) {
-    const block: Block = { id: `b-${nanoid(8)}`, type, props: withEditableDefaults(defaultPropsFor(type)) };
+    const baseProps = withEditableDefaults(defaultPropsFor(type));
+    const insertPos = page && pageUsesCanvas(page) ? defaultInsertPosition(page.blocks) : null;
+    const block: Block = {
+      id: `b-${nanoid(8)}`,
+      type,
+      props: insertPos
+        ? {
+            ...baseProps,
+            posX: insertPos.posX,
+            posY: insertPos.posY,
+            width: (baseProps as Record<string, unknown>).width || insertPos.width,
+          }
+        : baseProps,
+    };
     updatePageBlocks((blocks) => {
       if (!afterId) return [...blocks, block];
       const i = blocks.findIndex((b) => b.id === afterId);
@@ -487,9 +553,18 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
           id,
           title: `صفحة ${n}`,
           slug: slugifyPage(`page-${n}`),
+          layout: "canvas" as const,
           blocks: [
-            { id: `b-${nanoid(8)}`, type: "heading", props: withEditableDefaults(defaultPropsFor("heading")) },
-            { id: `b-${nanoid(8)}`, type: "text", props: withEditableDefaults(defaultPropsFor("text")) },
+            {
+              id: `b-${nanoid(8)}`,
+              type: "heading" as const,
+              props: { ...withEditableDefaults(defaultPropsFor("heading")), posX:"24", posY:"72", width:"560" },
+            },
+            {
+              id: `b-${nanoid(8)}`,
+              type: "text" as const,
+              props: { ...withEditableDefaults(defaultPropsFor("text")), posX:"24", posY:"152", width:"560" },
+            },
           ],
         },
       ],
@@ -572,7 +647,7 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
     try {
       const res = await fetch(`/api/sites/${site.id}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type":"application/json" },
         body: JSON.stringify({
           draftContent: content,
           publish,
@@ -626,6 +701,22 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
       if (e.key === "Escape") {
         e.preventDefault();
         selectBlock(null);
+        setCanvasLivePos({});
+        setCanvasGuides([]);
+        return;
+      }
+      if (
+        isCanvasPage &&
+        selectedIds.length > 0 &&
+        (e.key === "ArrowLeft" || e.key === "ArrowRight" || e.key === "ArrowUp" || e.key === "ArrowDown")
+      ) {
+        e.preventDefault();
+        const step = e.shiftKey ? 8 : 1;
+        const dx = e.key === "ArrowLeft" ? -step : e.key === "ArrowRight" ? step : 0;
+        const dy = e.key === "ArrowUp" ? -step : e.key === "ArrowDown" ? step : 0;
+        const rects = (page?.blocks || []).map((b, i) => readBlockRect(b, i));
+        const patches = nudgeRects(rects, selectedIds, dx, dy);
+        if (patches.length) updatePageBlocks((blocks) => applyPositions(blocks, patches));
         return;
       }
       if (mod && e.key.toLowerCase() === "a") {
@@ -649,7 +740,7 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedId, selectedIds, undo, redo, page?.blocks]);
+  }, [selectedId, selectedIds, undo, redo, page?.blocks, isCanvasPage]);
 
   useEffect(() => {
     if (saveState !== "dirty") return;
@@ -687,7 +778,7 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
     { id: "settings", label: t("cmdSettings"), action: () => openSiteSection(null) },
     { id: "replies", label: t("cmdReplies"), action: () => setRightTab("replies") },
     { id: "cms", label: t("cmdCms"), action: () => setLeftTab("cms") },
-    { id: "dashboard", label: t("cmdDashboard"), action: () => { window.location.href = "/dashboard"; } },
+    { id: "dashboard", label: t("cmdDashboard"), action: () => { window.location.href ="/dashboard"; } },
   ];
 
   if (!page) return null;
@@ -704,7 +795,7 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
       <CommandPalette items={commands} />
       {publishConfirmOpen ? (
         <div
-          className="fixed inset-0 z-[70] flex items-end justify-center bg-stone-950/45 p-4 sm:items-center"
+          className="fixed inset-0 z-[70] flex items-end justify-center bg-[color-mix(in_oklab,var(--foreground)_40%,transparent)] p-4 sm:items-center"
           role="presentation"
           onClick={() => setPublishConfirmOpen(false)}
         >
@@ -712,14 +803,14 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
             role="dialog"
             aria-modal="true"
             aria-labelledby="sf-publish-confirm-title"
-            className="w-full max-w-md rounded-2xl border border-stone-200 bg-white p-5 shadow-xl dark:border-stone-700 dark:bg-stone-950"
+            className="w-full max-w-md rounded-2xl border border-[var(--border)] bg-[var(--card)] p-5 text-[var(--foreground)] shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 id="sf-publish-confirm-title" className="text-base font-bold text-stone-900 dark:text-stone-50">
+            <h2 id="sf-publish-confirm-title" className="text-base font-bold text-[var(--foreground)]">
               {t("publishConfirmTitle")}
             </h2>
-            <p className="mt-2 text-sm leading-6 text-stone-600 dark:text-stone-300">{t("publishConfirmBody")}</p>
-            <p className="mt-2 font-mono text-[11px] text-stone-500" dir="ltr">
+            <p className="mt-2 text-sm leading-6 text-[var(--muted)]">{t("publishConfirmBody")}</p>
+            <p className="mt-2 font-mono text-[11px] text-[var(--muted)]" dir="ltr">
               /s/{site.slug}
               {publishedAt
                 ? ` · ${new Date(publishedAt).toLocaleString(uiLang === "ar" ? "ar-SY" : "en-GB", { timeZone: "Asia/Damascus" })}`
@@ -752,7 +843,7 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
               asChild
               variant="ghost"
               size="sm"
-              className="rounded-full px-2 text-stone-700 focus-visible:ring-[3px] dark:text-stone-200"
+              className="rounded-full px-2 text-[var(--foreground)] focus-visible:ring-[3px]"
               title={t("backDashboard")}
               aria-label={t("backDashboard")}
             >
@@ -764,7 +855,7 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
             <div className="sf-toolbar-divider hidden sm:block" aria-hidden />
             <div className="min-w-0 pe-1.5">
               <div className="max-w-[6.5rem] truncate text-sm font-semibold tracking-tight sm:max-w-[10rem]">{site.name}</div>
-              <div className="hidden truncate font-mono text-[10px] text-stone-600 sm:block dark:text-[var(--muted)]" dir="ltr">/s/{site.slug}</div>
+              <div className="hidden truncate font-mono text-[10px] text-[var(--muted)] sm:block dark:text-[var(--muted)]" dir="ltr">/s/{site.slug}</div>
             </div>
           </div>
         </div>
@@ -783,7 +874,7 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
                   setSelectedPart(null);
                 }}
                 aria-label={t("pageSelect")}
-                triggerClassName="h-8 w-auto min-w-[5rem] max-w-[8.5rem] rounded-full border-0 bg-[var(--card)] px-2.5 text-[11px] font-bold text-stone-800 shadow-none dark:bg-stone-950/50 dark:text-stone-100"
+                triggerClassName="h-8 w-auto min-w-[5rem] max-w-[8.5rem] rounded-full border-0 bg-[var(--card)] px-2.5 text-[11px] font-bold text-[var(--foreground)] shadow-none"
                 wrapperClassName="w-auto min-w-0"
                 options={content.pages.map((p) => ({ value: p.id, label: p.title }))}
               />
@@ -805,7 +896,7 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
             </label>
             <div className="sf-toolbar-divider sf-hide-until-xl" aria-hidden />
             <div
-              className="sf-hide-until-xl inline-flex items-center gap-0.5 rounded-full bg-[var(--card)] p-0.5 dark:bg-stone-950/40"
+              className="sf-hide-until-xl inline-flex items-center gap-0.5 rounded-full bg-[var(--card)] p-0.5"
               role="group"
               aria-label={t("helpViewport")}
               title={t("toolbarDevice")}
@@ -826,8 +917,8 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
                   onClick={() => setViewport(key)}
                   className={`inline-flex items-center justify-center rounded-full p-2 text-xs transition focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--ring)] ${
                     viewport === key
-                      ? "bg-stone-900 text-white shadow-sm dark:bg-stone-100 dark:text-stone-900"
-                      : "text-stone-600 hover:text-stone-900 dark:text-[var(--muted)] dark:hover:text-stone-100"
+                      ? "bg-[var(--foreground)] text-[var(--card)] shadow-sm"
+                      : "text-[var(--muted)] hover:text-[var(--foreground)]"
                   }`}
                 >
                   <Icon className="h-3.5 w-3.5" aria-hidden />
@@ -837,7 +928,7 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
             <button
               type="button"
               onClick={() => setPreviewMode((m) => (m === "light" ? "dark" : "light"))}
-              className="sf-hide-until-xl inline-flex items-center justify-center rounded-full p-2 text-xs text-stone-600 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--ring)] dark:text-stone-300"
+              className="sf-hide-until-xl inline-flex items-center justify-center rounded-full p-2 text-xs text-[var(--muted)] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--ring)]"
               title={t("previewTheme")}
               aria-label={t("previewTheme")}
             >
@@ -892,22 +983,22 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
             {siteMenuOpen ? (
               <div className="absolute end-0 top-full z-50 mt-1 w-72 max-w-[min(18rem,calc(100vw-1.25rem))] rounded-2xl border border-[var(--border)] bg-[var(--card)] p-2 text-[var(--foreground)] shadow-[var(--shadow-md)]" data-sf-chrome="platform">
                 <div className="px-2.5 py-1.5 text-[9px] font-bold uppercase tracking-[0.12em] text-[var(--muted)]">{t("toolbarSite")}</div>
-                <button type="button" className="flex min-h-[44px] w-full items-center gap-2 rounded-xl px-3 py-2.5 text-start text-xs font-semibold hover:bg-stone-100 dark:hover:bg-stone-800" onClick={() => { openSiteSection(null); setSiteMenuOpen(false); }}>
+                <button type="button" className="flex min-h-[44px] w-full items-center gap-2 rounded-xl px-3 py-2.5 text-start text-xs font-semibold hover:bg-[var(--surface)]" onClick={() => { openSiteSection(null); setSiteMenuOpen(false); }}>
                   <Settings2 className="h-3.5 w-3.5" aria-hidden /> {t("openSiteSettings")}
                 </button>
-                <button type="button" className="flex min-h-[44px] w-full items-center gap-2 rounded-xl px-3 py-2.5 text-start text-xs font-semibold hover:bg-stone-100 dark:hover:bg-stone-800" onClick={() => { openSiteSection("seo"); setSiteMenuOpen(false); }}>
+                <button type="button" className="flex min-h-[44px] w-full items-center gap-2 rounded-xl px-3 py-2.5 text-start text-xs font-semibold hover:bg-[var(--surface)]" onClick={() => { openSiteSection("seo"); setSiteMenuOpen(false); }}>
                   <Search className="h-3.5 w-3.5" aria-hidden /> {t("openSeo")}
                 </button>
-                <button type="button" className="flex min-h-[44px] w-full items-center gap-2 rounded-xl px-3 py-2.5 text-start text-xs font-semibold hover:bg-stone-100 dark:hover:bg-stone-800" onClick={() => { openSiteSection("domain"); setSiteMenuOpen(false); }}>
+                <button type="button" className="flex min-h-[44px] w-full items-center gap-2 rounded-xl px-3 py-2.5 text-start text-xs font-semibold hover:bg-[var(--surface)]" onClick={() => { openSiteSection("domain"); setSiteMenuOpen(false); }}>
                   <Globe className="h-3.5 w-3.5" aria-hidden /> {t("openDomain")}
                 </button>
-                <button type="button" className="flex min-h-[44px] w-full items-center gap-2 rounded-xl px-3 py-2.5 text-start text-xs font-semibold hover:bg-stone-100 dark:hover:bg-stone-800" onClick={() => { openSiteSection("secrets"); setSiteMenuOpen(false); }}>
+                <button type="button" className="flex min-h-[44px] w-full items-center gap-2 rounded-xl px-3 py-2.5 text-start text-xs font-semibold hover:bg-[var(--surface)]" onClick={() => { openSiteSection("secrets"); setSiteMenuOpen(false); }}>
                   <KeyRound className="h-3.5 w-3.5" aria-hidden /> {t("openSecrets")}
                 </button>
-                <button type="button" className="flex min-h-[44px] w-full items-center gap-2 rounded-xl px-3 py-2.5 text-start text-xs font-semibold hover:bg-stone-100 dark:hover:bg-stone-800" onClick={() => { openCmsPanel(); setSiteMenuOpen(false); }}>
+                <button type="button" className="flex min-h-[44px] w-full items-center gap-2 rounded-xl px-3 py-2.5 text-start text-xs font-semibold hover:bg-[var(--surface)]" onClick={() => { openCmsPanel(); setSiteMenuOpen(false); }}>
                   <Library className="h-3.5 w-3.5" aria-hidden /> {t("openCms")}
                 </button>
-                <div className="my-1 h-px bg-stone-200 dark:bg-stone-700" />
+                <div className="my-1 h-px bg-[var(--border)]" />
                 <div className="flex items-center justify-between gap-2 rounded-xl px-3 py-2">
                   <span className="text-xs font-semibold">{t("chromeTheme")}</span>
                   <ThemeToggleButton />
@@ -916,8 +1007,8 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
                   <span className="text-xs font-semibold">{t("appUiLang")}</span>
                   <PlatformLangSwitcher size="compact" />
                 </div>
-                <div className="my-1 h-px bg-stone-200 dark:bg-stone-700 xl:hidden" />
-                <div className="px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.12em] text-stone-600 xl:hidden dark:text-[var(--muted)]">{t("toolbarDevice")}</div>
+                <div className="my-1 h-px bg-[var(--border)] xl:hidden" />
+                <div className="px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.12em] text-[var(--muted)] xl:hidden dark:text-[var(--muted)]">{t("toolbarDevice")}</div>
                 <div className="flex gap-1 px-2 pb-1 xl:hidden" role="group" aria-label={t("helpViewport")}>
                   {(
                     [
@@ -944,10 +1035,10 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
                     </button>
                   ))}
                 </div>
-                <button type="button" className="flex min-h-[44px] w-full items-center gap-2 rounded-xl px-3 py-2.5 text-start text-xs font-semibold hover:bg-stone-100 xl:hidden dark:hover:bg-stone-800" onClick={() => { undo(); setSiteMenuOpen(false); }} disabled={!canUndo}>
+                <button type="button" className="flex min-h-[44px] w-full items-center gap-2 rounded-xl px-3 py-2.5 text-start text-xs font-semibold hover:bg-[var(--surface)] xl:hidden" onClick={() => { undo(); setSiteMenuOpen(false); }} disabled={!canUndo}>
                   <Undo2 className="h-3.5 w-3.5" aria-hidden /> {t("undo")}
                 </button>
-                <button type="button" className="flex min-h-[44px] w-full items-center gap-2 rounded-xl px-3 py-2.5 text-start text-xs font-semibold hover:bg-stone-100 xl:hidden dark:hover:bg-stone-800" onClick={() => { redo(); setSiteMenuOpen(false); }} disabled={!canRedo}>
+                <button type="button" className="flex min-h-[44px] w-full items-center gap-2 rounded-xl px-3 py-2.5 text-start text-xs font-semibold hover:bg-[var(--surface)] xl:hidden" onClick={() => { redo(); setSiteMenuOpen(false); }} disabled={!canRedo}>
                   <Redo2 className="h-3.5 w-3.5" aria-hidden /> {t("redo")}
                 </button>
               </div>
@@ -987,10 +1078,10 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
               <span className="hidden sm:inline">{saving ? t("saving") : t("save")}</span>
             </Button>
             <div className="hidden flex-col items-end leading-tight sm:flex">
-              <span className="text-[9px] font-bold uppercase tracking-wider text-stone-600 dark:text-[var(--muted)]">
+              <span className="text-[9px] font-bold uppercase tracking-wider text-[var(--muted)]">
                 {t("lastPublished")}
               </span>
-              <span className="max-w-[9rem] truncate font-mono text-[10px] text-stone-700 dark:text-stone-300" dir="ltr" title={publishedAt || undefined}>
+              <span className="max-w-[9rem] truncate font-mono text-[10px] text-[var(--foreground)]" dir="ltr" title={publishedAt || undefined}>
                 {publishedAt
                   ? new Date(publishedAt).toLocaleString(uiLang === "ar" ? "ar-SY" : "en-GB", {
                       timeZone: "Asia/Damascus",
@@ -1029,7 +1120,7 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
               </Button>
               {moreOpen ? (
                 <div className="absolute end-0 top-full z-50 mt-1 w-64 max-w-[min(16rem,calc(100vw-1.25rem))] rounded-2xl border border-[var(--border)] bg-[var(--card)] p-2 text-[var(--foreground)] shadow-[var(--shadow-md)]" data-sf-chrome="platform">
-                  <div className="px-2.5 py-1.5 text-[9px] font-bold uppercase tracking-[0.12em] text-stone-600 sm:hidden dark:text-[var(--muted)]">{t("toolbarContent")}</div>
+                  <div className="px-2.5 py-1.5 text-[9px] font-bold uppercase tracking-[0.12em] text-[var(--muted)] sm:hidden dark:text-[var(--muted)]">{t("toolbarContent")}</div>
                   <div className="space-y-0.5 sm:hidden">
                     <div className="px-2 py-1">
                       <Select
@@ -1053,21 +1144,21 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
                       />
                     </div>
                   </div>
-                  <div className="my-1 h-px bg-stone-200 sm:hidden dark:bg-stone-700" />
-                  <div className="px-2.5 py-1.5 text-[9px] font-bold uppercase tracking-[0.12em] text-stone-600 sm:hidden dark:text-[var(--muted)]">{t("toolbarSite")}</div>
-                  <button type="button" className="flex min-h-[44px] w-full items-center gap-2 rounded-xl px-3 py-2.5 text-start text-xs font-semibold hover:bg-stone-100 sm:hidden dark:hover:bg-stone-800" onClick={() => { openSiteSection(null); setMoreOpen(false); }}>
+                  <div className="my-1 h-px bg-[var(--border)] sm:hidden" />
+                  <div className="px-2.5 py-1.5 text-[9px] font-bold uppercase tracking-[0.12em] text-[var(--muted)] sm:hidden dark:text-[var(--muted)]">{t("toolbarSite")}</div>
+                  <button type="button" className="flex min-h-[44px] w-full items-center gap-2 rounded-xl px-3 py-2.5 text-start text-xs font-semibold hover:bg-[var(--surface)] sm:hidden" onClick={() => { openSiteSection(null); setMoreOpen(false); }}>
                     <Settings2 className="h-3.5 w-3.5" aria-hidden /> {t("openSiteSettings")}
                   </button>
-                  <button type="button" className="flex min-h-[44px] w-full items-center gap-2 rounded-xl px-3 py-2.5 text-start text-xs font-semibold hover:bg-stone-100 sm:hidden dark:hover:bg-stone-800" onClick={() => { openSiteSection("seo"); setMoreOpen(false); }}>
+                  <button type="button" className="flex min-h-[44px] w-full items-center gap-2 rounded-xl px-3 py-2.5 text-start text-xs font-semibold hover:bg-[var(--surface)] sm:hidden" onClick={() => { openSiteSection("seo"); setMoreOpen(false); }}>
                     <Search className="h-3.5 w-3.5" aria-hidden /> {t("openSeo")}
                   </button>
-                  <button type="button" className="flex min-h-[44px] w-full items-center gap-2 rounded-xl px-3 py-2.5 text-start text-xs font-semibold hover:bg-stone-100 sm:hidden dark:hover:bg-stone-800" onClick={() => { openSiteSection("domain"); setMoreOpen(false); }}>
+                  <button type="button" className="flex min-h-[44px] w-full items-center gap-2 rounded-xl px-3 py-2.5 text-start text-xs font-semibold hover:bg-[var(--surface)] sm:hidden" onClick={() => { openSiteSection("domain"); setMoreOpen(false); }}>
                     <Globe className="h-3.5 w-3.5" aria-hidden /> {t("openDomain")}
                   </button>
-                  <button type="button" className="flex min-h-[44px] w-full items-center gap-2 rounded-xl px-3 py-2.5 text-start text-xs font-semibold hover:bg-stone-100 sm:hidden dark:hover:bg-stone-800" onClick={() => { openSiteSection("secrets"); setMoreOpen(false); }}>
+                  <button type="button" className="flex min-h-[44px] w-full items-center gap-2 rounded-xl px-3 py-2.5 text-start text-xs font-semibold hover:bg-[var(--surface)] sm:hidden" onClick={() => { openSiteSection("secrets"); setMoreOpen(false); }}>
                     <KeyRound className="h-3.5 w-3.5" aria-hidden /> {t("openSecrets")}
                   </button>
-                  <button type="button" className="flex min-h-[44px] w-full items-center gap-2 rounded-xl px-3 py-2.5 text-start text-xs font-semibold hover:bg-stone-100 sm:hidden dark:hover:bg-stone-800" onClick={() => { openCmsPanel(); setMoreOpen(false); }}>
+                  <button type="button" className="flex min-h-[44px] w-full items-center gap-2 rounded-xl px-3 py-2.5 text-start text-xs font-semibold hover:bg-[var(--surface)] sm:hidden" onClick={() => { openCmsPanel(); setMoreOpen(false); }}>
                     <Library className="h-3.5 w-3.5" aria-hidden /> {t("openCms")}
                   </button>
                   <div className="flex items-center justify-between gap-2 rounded-xl px-3 py-2 sm:hidden">
@@ -1078,23 +1169,23 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
                     <span className="text-xs font-semibold">{t("appUiLang")}</span>
                     <PlatformLangSwitcher size="compact" />
                   </div>
-                  <div className="my-1 h-px bg-stone-200 dark:bg-stone-700" />
+                  <div className="my-1 h-px bg-[var(--border)]" />
                   {publishedAt ? (
-                    <Link href={`/s/${site.slug}`} target="_blank" className="flex min-h-[44px] w-full items-center gap-2 rounded-xl px-3 py-2.5 text-xs font-semibold hover:bg-stone-100 md:hidden dark:hover:bg-stone-800" onClick={() => setMoreOpen(false)}>
+                    <Link href={`/s/${site.slug}`} target="_blank" className="flex min-h-[44px] w-full items-center gap-2 rounded-xl px-3 py-2.5 text-xs font-semibold hover:bg-[var(--surface)] md:hidden" onClick={() => setMoreOpen(false)}>
                       <Eye className="h-3.5 w-3.5" aria-hidden /> {t("view")}
                     </Link>
                   ) : (
-                    <div className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-stone-600 md:hidden dark:text-[var(--muted)]" title={t("viewPublicDisabled")}>
+                    <div className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-[var(--muted)] md:hidden dark:text-[var(--muted)]" title={t("viewPublicDisabled")}>
                       <EyeOff className="h-3.5 w-3.5" aria-hidden /> {t("viewPublicDisabled")}
                     </div>
                   )}
-                  <Link href={`/editor/${site.id}/preview`} target="_blank" className="flex min-h-[44px] w-full items-center gap-2 rounded-xl px-3 py-2.5 text-xs font-semibold hover:bg-stone-100 dark:hover:bg-stone-800" onClick={() => setMoreOpen(false)}>
+                  <Link href={`/editor/${site.id}/preview`} target="_blank" className="flex min-h-[44px] w-full items-center gap-2 rounded-xl px-3 py-2.5 text-xs font-semibold hover:bg-[var(--surface)]" onClick={() => setMoreOpen(false)}>
                     <Eye className="h-3.5 w-3.5" aria-hidden /> {t("previewDraft")}
                   </Link>
-                  <button type="button" className="flex min-h-[44px] w-full items-center gap-2 rounded-xl px-3 py-2.5 text-start text-xs font-semibold hover:bg-stone-100 disabled:opacity-40 dark:hover:bg-stone-800" onClick={() => { undo(); setMoreOpen(false); }} disabled={!canUndo}>
+                  <button type="button" className="flex min-h-[44px] w-full items-center gap-2 rounded-xl px-3 py-2.5 text-start text-xs font-semibold hover:bg-[var(--surface)] disabled:opacity-40" onClick={() => { undo(); setMoreOpen(false); }} disabled={!canUndo}>
                     <Undo2 className="h-3.5 w-3.5" aria-hidden /> {t("undo")}
                   </button>
-                  <button type="button" className="flex min-h-[44px] w-full items-center gap-2 rounded-xl px-3 py-2.5 text-start text-xs font-semibold hover:bg-stone-100 disabled:opacity-40 dark:hover:bg-stone-800" onClick={() => { redo(); setMoreOpen(false); }} disabled={!canRedo}>
+                  <button type="button" className="flex min-h-[44px] w-full items-center gap-2 rounded-xl px-3 py-2.5 text-start text-xs font-semibold hover:bg-[var(--surface)] disabled:opacity-40" onClick={() => { redo(); setMoreOpen(false); }} disabled={!canRedo}>
                     <Redo2 className="h-3.5 w-3.5" aria-hidden /> {t("redo")}
                   </button>
                 </div>
@@ -1129,7 +1220,7 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
 
       <div className="relative flex flex-1 min-h-0 px-2 pb-2 sm:px-3 sm:pb-3 gap-2 sm:gap-3">
 {mobilePanel !== "none" ? (
-          <button type="button" aria-label={t("close")} className="fixed inset-0 z-40 bg-stone-950/40 backdrop-blur-[2px] xl:hidden" onClick={() => setMobilePanel("none")} />
+          <button type="button" aria-label={t("close")} className="fixed inset-0 z-40 bg-[color-mix(in_oklab,var(--foreground)_40%,transparent)] backdrop-blur-[2px] xl:hidden" onClick={() => setMobilePanel("none")} />
         ) : null}
         {/* Left panel + Figma-like seam (xl+) / drawer (mobile) */}
         <div
@@ -1150,18 +1241,18 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
             </button>
           ) : null}
           <aside
-            className={`sf-panel flex min-h-0 flex-col overflow-hidden rounded-[var(--radius-card)] backdrop-blur-xl
+            className={`sf-panel sf-mobile-sheet flex min-h-0 flex-col overflow-hidden rounded-[var(--radius-card)] bg-[var(--card)] text-[var(--foreground)]
               max-w-[92vw] transition-[opacity] duration-300 ease-out
-              sf-mobile-sheet max-xl:fixed max-xl:inset-y-0 max-xl:start-0 max-xl:z-50 max-xl:w-[min(100%,320px)] max-xl:rounded-none max-xl:border-e
+              max-xl:fixed max-xl:inset-y-0 max-xl:start-0 max-xl:z-50 max-xl:w-[min(100%,320px)] max-xl:rounded-none max-xl:border-e
               ${mobilePanel === "left" ? "max-xl:flex" : "max-xl:hidden"}
               ${leftCollapsed ? "xl:pointer-events-none xl:invisible xl:absolute xl:opacity-0" : "xl:relative xl:flex xl:h-full xl:w-full xl:opacity-100"}`}
             aria-hidden={leftCollapsed || undefined}
           >
-          <div className="flex items-center justify-between border-b border-stone-300/70 px-3 py-2 xl:hidden dark:border-stone-800">
+          <div className="flex items-center justify-between border-b border-[var(--border)] px-3 py-2 xl:hidden">
             <span className="text-xs font-bold">{t("leftPanel")}</span>
-            <button type="button" onClick={() => setMobilePanel("none")} className="rounded-full p-1.5 hover:bg-stone-100 dark:hover:bg-stone-800"><X className="h-4 w-4" /></button>
+            <button type="button" onClick={() => setMobilePanel("none")} className="rounded-full p-1.5 hover:bg-[var(--surface)]"><X className="h-4 w-4" /></button>
           </div>
-          <div className="flex border-b border-stone-300/70 p-1.5 gap-0.5 dark:border-stone-800" title={t("helpInsert")}>
+          <div className="flex border-b border-[var(--border)] p-1.5 gap-0.5" title={t("helpInsert")}>
             {(
               [
                 ["insert", Plus, t("insert"), t("helpInsert")],
@@ -1178,8 +1269,8 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
                 onClick={() => setLeftTab(key)}
                 className={`flex-1 flex flex-col items-center justify-center gap-0.5 rounded-2xl py-2 text-[10px] font-semibold transition ${
                   leftTab === key
-                    ? "bg-stone-900 text-white shadow-sm dark:bg-stone-100 dark:text-stone-900"
-                    : "text-stone-600 hover:bg-stone-100/80 dark:text-[var(--muted)] dark:hover:bg-stone-800"
+                    ? "bg-[var(--foreground)] text-[var(--card)] shadow-sm"
+                    : "text-[var(--muted)] hover:bg-[var(--surface)]"
                 }`}
               >
                 <Icon className="h-3.5 w-3.5" />
@@ -1192,21 +1283,21 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
             {leftTab === "insert" ? (
               <div className="space-y-4">
                 <div>
-                  <div className="mb-2 text-[10px] font-bold uppercase tracking-[0.14em] text-stone-600 dark:text-[var(--muted)]">{t("addSection")}</div>
+                  <div className="mb-2 text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--muted)]">{t("addSection")}</div>
                   <InsertPalette mode="sections" onInsert={(t) => addBlock(t, selectedId)} />
                 </div>
                 <div>
-                  <div className="mb-2 text-[10px] font-bold uppercase tracking-[0.14em] text-stone-600 dark:text-[var(--muted)]">{t("addElement")}</div>
+                  <div className="mb-2 text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--muted)]">{t("addElement")}</div>
                   <InsertPalette mode="elements" onInsert={(t) => addBlock(t, selectedId)} />
                 </div>
                 <div>
-                  <div className="mb-2 text-[10px] font-bold uppercase tracking-[0.14em] text-stone-600 dark:text-[var(--muted)]">{t("savedSections")}</div>
+                  <div className="mb-2 text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--muted)]">{t("savedSections")}</div>
                   {(content.components || []).length === 0 ? (
-                    <p className="text-[11px] text-stone-600 leading-5 dark:text-[var(--muted)]">{t("savedSectionsEmpty")}</p>
+                    <p className="text-[11px] text-[var(--muted)] leading-5 dark:text-[var(--muted)]">{t("savedSectionsEmpty")}</p>
                   ) : (
                     <div className="space-y-1">
                       {(content.components || []).map((c) => (
-                        <div key={c.id} className="flex items-center gap-1 rounded-2xl border border-stone-300/70 px-2 py-1.5 dark:border-stone-800">
+                        <div key={c.id} className="flex items-center gap-1 rounded-2xl border border-[var(--border)] px-2 py-1.5">
                           <button type="button" className="flex-1 text-start text-xs font-semibold" onClick={() => insertSavedComponent(c.id)}>
                             {c.name}
                           </button>
@@ -1226,15 +1317,15 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
             {leftTab === "layers" ? (
               <div className="space-y-1">
                 <div className="flex items-center justify-between px-1 mb-2">
-                  <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-stone-600 dark:text-[var(--muted)]">{page.title}</span>
+                  <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--muted)]">{page.title}</span>
                   <button type="button" className="text-[10px] font-semibold text-teal-800" onClick={() => setLeftTab("insert")}>
                     + {t("add")}
                   </button>
                 </div>
                 {page.blocks.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-stone-300/80 bg-stone-50/60 px-4 py-8 text-center dark:border-stone-700 dark:bg-stone-950/40">
-                    <p className="text-xs font-semibold text-stone-600 dark:text-stone-300">{t("layersEmpty")}</p>
-                    <p className="mt-1 text-[11px] leading-5 text-stone-600 dark:text-[var(--muted)]">{t("layersEmptyHint")}</p>
+                  <div className="rounded-2xl border border-dashed border-[var(--border)] bg-[var(--surface)] px-4 py-8 text-center">
+                    <p className="text-xs font-semibold text-[var(--muted)]">{t("layersEmpty")}</p>
+                    <p className="mt-1 text-[11px] leading-5 text-[var(--muted)]">{t("layersEmptyHint")}</p>
                     <button
                       type="button"
                       className="mt-3 inline-flex min-h-11 items-center gap-1 rounded-full bg-teal-800 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-teal-700 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--ring)]"
@@ -1262,13 +1353,13 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
                         ? "border-teal-600/40 bg-teal-50 shadow-sm dark:bg-teal-950/40"
                         : blockSelected
                           ? "border-teal-600/25 bg-teal-50/50 dark:bg-teal-950/20"
-                          : "border-transparent hover:bg-stone-50 dark:hover:bg-stone-800/60"
+                          : "border-transparent hover:bg-[var(--surface)]"
                     } ${hidden ? "opacity-60" : ""}`}
                   >
                     <div className="flex items-center gap-1">
                       <button
                         type="button"
-                        className="min-w-0 flex-1 text-start font-medium text-[12px] text-stone-800 dark:text-stone-100"
+                        className="min-w-0 flex-1 text-start font-medium text-[12px] text-[var(--foreground)]"
                         onClick={(e) => selectBlock(b.id, { toggle: e.shiftKey })}
                       >
                         {BLOCK_META[b.type].label}
@@ -1287,7 +1378,7 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
                       </IconBtn>
                     </div>
                     {parts.length > 0 ? (
-                      <div className="mt-1.5 ms-2 space-y-0.5 border-s border-stone-300/80 ps-2 dark:border-stone-700">
+                      <div className="mt-1.5 ms-2 space-y-0.5 border-s border-[var(--border)] ps-2">
                         {parts.map((ch) => (
                           <button
                             key={ch.part}
@@ -1296,7 +1387,7 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
                             className={`block w-full truncate rounded-lg px-2 py-1 text-start text-[11px] transition ${
                               primary && selectedPart === ch.part
                                 ? "bg-teal-700/90 text-white"
-                                : "text-stone-600 hover:bg-stone-100 hover:text-stone-900 dark:text-[var(--muted)] dark:hover:bg-stone-800 dark:hover:text-stone-100"
+                                : "text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--foreground)]"
                             }`}
                           >
                                                         <span
@@ -1332,8 +1423,8 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
                     key={p.id}
                     className={`rounded-2xl border p-3 ${
                       p.id === page.id
-                        ? "border-teal-600/30 bg-white shadow-sm dark:bg-stone-950"
-                        : "border-stone-300/70 bg-white/50 dark:border-stone-800 dark:bg-stone-900/40"
+                        ? "border-teal-600/30 bg-[var(--card)] shadow-sm"
+                        : "border-[var(--border)] bg-[var(--card)]"
                     }`}
                   >
                     <button
@@ -1345,7 +1436,7 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
                       }}
                     >
                       <div className="text-sm font-semibold">{p.title}</div>
-                      <div className="text-[10px] text-stone-600 font-mono dark:text-[var(--muted)]" dir="ltr">
+                      <div className="text-[10px] text-[var(--muted)] font-mono dark:text-[var(--muted)]" dir="ltr">
                         /{p.slug} · {p.blocks.length}
                       </div>
                     </button>
@@ -1361,8 +1452,8 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
                           className="h-9 rounded-2xl text-xs"
                         />
                         
-                        <div className="space-y-1.5 rounded-2xl border border-stone-300/80 p-2.5 dark:border-stone-800">
-                          <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-stone-600 dark:text-[var(--muted)]">{t("pageSeo")}</div>
+                        <div className="space-y-1.5 rounded-2xl border border-[var(--border)] p-2.5">
+                          <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--muted)]">{t("pageSeo")}</div>
                           <Input
                             value={p.seoTitle || ""}
                             onChange={(e) => updatePageSeo(p.id, { seoTitle: e.target.value })}
@@ -1382,7 +1473,7 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
                             kind="image"
                             accept="image/*"
                           />
-                          <p className="text-[9px] leading-4 text-stone-600 dark:text-[var(--muted)]">{t("seoFallbackHint")}</p>
+                          <p className="text-[9px] leading-4 text-[var(--muted)]">{t("seoFallbackHint")}</p>
                         </div>
 <div className="flex gap-0.5">
                           <IconBtn onClick={() => movePage(p.id, -1)} disabled={i === 0}><ChevronUp className="h-3.5 w-3.5" /></IconBtn>
@@ -1398,7 +1489,7 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
 
             {leftTab === "langs" ? (
               <div className="space-y-3">
-                <p className="text-xs text-stone-600 leading-6 dark:text-stone-300">{t("langsHelp")}</p>
+                <p className="text-xs text-[var(--muted)] leading-6">{t("langsHelp")}</p>
                 <div className="space-y-2">
                   {LOCALE_CODES.map((code) => {
                     const active = locales.includes(code);
@@ -1407,12 +1498,12 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
                       <div
                         key={code}
                         className={`flex items-center justify-between rounded-2xl border px-3 py-2.5 ${
-                          active ? "border-teal-600/30 bg-teal-50/70 dark:bg-teal-950/30" : "border-stone-300 dark:border-stone-800"
+                          active ? "border-teal-600/30 bg-teal-50/70 dark:bg-teal-950/30" : "border-[var(--border)]"
                         }`}
                       >
                         <div>
                           <div className="text-sm font-semibold">{LOCALE_META[code].nativeLabel}</div>
-                          <div className="text-[10px] text-stone-600 dark:text-[var(--muted)]">
+                          <div className="text-[10px] text-[var(--muted)]">
                             {LOCALE_META[code].label} · {LOCALE_META[code].dir.toUpperCase()}
                           </div>
                         </div>
@@ -1423,8 +1514,8 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
                               onClick={() => setDefaultLocale(code)}
                               className={`rounded-full px-2 py-1 text-[10px] font-bold ${
                                 isDefault
-                                  ? "bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-900"
-                                  : "bg-white text-stone-700 border border-stone-300 dark:bg-stone-900 dark:text-stone-300 dark:border-stone-600"
+                                  ? "bg-[var(--foreground)] text-[var(--card)]"
+                                  : "bg-[var(--card)] text-[var(--foreground)] border border-[var(--border)]"
                               }`}
                             >
                               {t("default")}
@@ -1436,7 +1527,7 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
                             className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${
                               active
                                 ? "bg-teal-800 text-white dark:bg-teal-500 dark:text-teal-950"
-                                : "bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300"
+                                : "bg-[var(--surface)] text-[var(--muted)]"
                             }`}
                           >
                             {active ? t("enabled") : t("enable")}
@@ -1465,7 +1556,7 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
         </div>
 
         {/* Canvas */}
-        <main id="sf-editor-main" className="relative flex-1 overflow-auto rounded-[1.75rem] border border-stone-300/25 bg-[#dfd9cf]/45 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.28)] md:p-8 dark:border-stone-800 dark:bg-stone-950/40 dark:shadow-none" onClick={() => { setSelectedId(null); setSelectedPart(null); }}>
+        <main id="sf-editor-main" className="relative flex-1 overflow-auto rounded-[1.75rem] border border-[var(--border)] bg-[#dfd9cf]/45 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.28)] md:p-8 dark:shadow-none" onClick={() => { setSelectedId(null); setSelectedPart(null); }}>
           <div
             className="sf-device-shell"
             style={{
@@ -1474,68 +1565,109 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="mb-3 flex items-center justify-between px-1 text-[10px] text-stone-600 dark:text-[var(--muted)]">
+            <div className="mb-3 flex items-center justify-between px-1 text-[10px] text-[var(--muted)]">
               <span>
                 {page.title}
                 <span className="font-mono ms-2" dir="ltr">/{page.slug}</span>
-                <span className="ms-2 rounded-full bg-[var(--card)] px-2 py-0.5 text-stone-700 dark:bg-stone-900 dark:text-stone-200">
+                <span className="ms-2 rounded-full bg-[var(--card)] px-2 py-0.5 text-[var(--foreground)]">
                   {isLocaleCode(editLocale) ? LOCALE_META[editLocale].nativeLabel : editLocale}
                 </span>
               </span>
               <span className="font-mono" dir="ltr" title={t("deviceFrame")}>
-                {typeof canvasWidth === "number" ? `${canvasWidth}px · ${viewport}` : "fluid · laptop"}
+                {typeof canvasWidth === "number" ? `${canvasWidth}px · ${viewport}` :"fluid · laptop"}
               </span>
             </div>
             {selectedIds.length >= 1 ? (
-              <div className="mb-3 flex flex-wrap items-center gap-1 rounded-2xl border border-stone-300/70 bg-white/90 p-1.5 shadow-sm backdrop-blur dark:border-stone-700 dark:bg-stone-950/80">
-                <span className="px-2 text-[10px] font-bold uppercase tracking-[0.12em] text-stone-600 dark:text-[var(--muted)]">
+              <div className="mb-3 flex flex-wrap items-center gap-1 rounded-2xl border border-[var(--border)] bg-[var(--card)] p-1.5 shadow-sm backdrop-blur">
+                <span className="px-2 text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--muted)]">
                   {t("alignBar")}
-                  {selectedIds.length > 1 ? ` · ${selectedIds.length} ${t("multiSelected")}` : ""}
+                  {selectedIds.length > 1 ? ` · ${selectedIds.length} ${t("multiSelected")}` :""}
                 </span>
-                <button type="button" title={t("alignStart")} className="rounded-xl p-1.5 hover:bg-stone-100 dark:hover:bg-stone-800" onClick={() => applyAlignToSelection({ textAlign: "start" })}>
+                <button type="button" title={t("alignStart")} className="rounded-xl p-1.5 hover:bg-[var(--surface)]" onClick={() => applyAlignToSelection({ textAlign:"start" })}>
                   <AlignLeft className="h-3.5 w-3.5" />
                 </button>
-                <button type="button" title={t("alignCenter")} className="rounded-xl p-1.5 hover:bg-stone-100 dark:hover:bg-stone-800" onClick={() => applyAlignToSelection({ textAlign: "center" })}>
+                <button type="button" title={t("alignCenter")} className="rounded-xl p-1.5 hover:bg-[var(--surface)]" onClick={() => applyAlignToSelection({ textAlign:"center" })}>
                   <AlignCenter className="h-3.5 w-3.5" />
                 </button>
-                <button type="button" title={t("alignEnd")} className="rounded-xl p-1.5 hover:bg-stone-100 dark:hover:bg-stone-800" onClick={() => applyAlignToSelection({ textAlign: "end" })}>
+                <button type="button" title={t("alignEnd")} className="rounded-xl p-1.5 hover:bg-[var(--surface)]" onClick={() => applyAlignToSelection({ textAlign:"end" })}>
                   <AlignRight className="h-3.5 w-3.5" />
                 </button>
-                <span className="mx-1 h-4 w-px bg-stone-300 dark:bg-stone-700" aria-hidden />
-                <button type="button" title={t("widthFull")} className="rounded-xl px-2 py-1 text-[10px] font-semibold hover:bg-stone-100 dark:hover:bg-stone-800" onClick={() => applyAlignToSelection({ width: "100%" })}>
+                {isCanvasPage && selectedIds.length >= 2 ? (
+                  <>
+                    <span className="mx-1 h-4 w-px bg-[var(--border)]" aria-hidden />
+                    <button type="button" title={t("canvasAlignLeft")} className="rounded-xl px-2 py-1 text-[10px] font-bold hover:bg-[var(--surface)]" onClick={() => applyCanvasAlign("left")}>L</button>
+                    <button type="button" title={t("canvasAlignCenter")} className="rounded-xl px-2 py-1 text-[10px] font-bold hover:bg-[var(--surface)]" onClick={() => applyCanvasAlign("center")}>C</button>
+                    <button type="button" title={t("canvasAlignRight")} className="rounded-xl px-2 py-1 text-[10px] font-bold hover:bg-[var(--surface)]" onClick={() => applyCanvasAlign("right")}>R</button>
+                    <button type="button" title={t("canvasAlignTop")} className="rounded-xl px-2 py-1 text-[10px] font-bold hover:bg-[var(--surface)]" onClick={() => applyCanvasAlign("top")}>T</button>
+                    <button type="button" title={t("canvasAlignMiddle")} className="rounded-xl px-2 py-1 text-[10px] font-bold hover:bg-[var(--surface)]" onClick={() => applyCanvasAlign("middle")}>M</button>
+                    <button type="button" title={t("canvasAlignBottom")} className="rounded-xl px-2 py-1 text-[10px] font-bold hover:bg-[var(--surface)]" onClick={() => applyCanvasAlign("bottom")}>B</button>
+                    {selectedIds.length >= 3 ? (
+                      <>
+                        <button type="button" title={t("canvasDistributeH")} className="rounded-xl p-1.5 hover:bg-[var(--surface)]" onClick={() => applyCanvasDistribute("horizontal")}>
+                          <AlignHorizontalDistributeCenter className="h-3.5 w-3.5" />
+                        </button>
+                        <button type="button" title={t("canvasDistributeV")} className="rounded-xl p-1.5 hover:bg-[var(--surface)]" onClick={() => applyCanvasDistribute("vertical")}>
+                          <AlignVerticalDistributeCenter className="h-3.5 w-3.5" />
+                        </button>
+                      </>
+                    ) : null}
+                  </>
+                ) : null}
+                <span className="mx-1 h-4 w-px bg-[var(--border)]" aria-hidden />
+                <button type="button" title={t("widthFull")} className="rounded-xl px-2 py-1 text-[10px] font-semibold hover:bg-[var(--surface)]" onClick={() => applyAlignToSelection({ width:"100%" })}>
                   {t("widthFull")}
                 </button>
-                <button type="button" title={t("widthAuto")} className="rounded-xl px-2 py-1 text-[10px] font-semibold hover:bg-stone-100 dark:hover:bg-stone-800" onClick={() => applyAlignToSelection({ width: "" })}>
+                <button type="button" title={t("widthAuto")} className="rounded-xl px-2 py-1 text-[10px] font-semibold hover:bg-[var(--surface)]" onClick={() => applyAlignToSelection({ width:"" })}>
                   {t("widthAuto")}
                 </button>
+                {isCanvasPage ? (
+                  <span className="ms-auto px-2 text-[10px] text-[var(--muted)]" title={t("canvasSnapHint")}>
+                    {t("canvasSnapHintShort")}
+                  </span>
+                ) : null}
               </div>
             ) : null}
             {viewport === "laptop" ? (
               <div
-                className="overflow-hidden rounded-[1.75rem] border border-stone-300/40 bg-white shadow-[0_30px_80px_-36px_rgba(28,25,23,0.5)] dark:border-stone-700"
+                className="overflow-hidden rounded-[1.75rem] border border-[var(--border)] bg-[var(--card)] shadow-[0_30px_80px_-36px_rgba(28,25,23,0.5)]"
                 lang={editLocale}
                 dir={localeDir(editLocale)}
                 data-sf-preview="content"
               >
                 <SiteChromeProvider value={siteChrome}>
-                    <SiteRenderer
-                      content={content}
-                      pageId={page.id}
-                      selectedBlockId={selectedId}
-                      selectedBlockIds={selectedIds}
-                      selectedPart={selectedPart}
-                      hoveredBlockId={hoveredId}
-                      onSelectBlock={selectBlock}
-                      onSelectPart={selectTarget}
-                      onHoverBlock={setHoveredId}
-                      locale={editLocale}
-                      colorMode={previewMode}
-                      siteSlug={site.slug}
-                      onRequestInsert={() => {
-                        setMobilePanel("left");
-                        setLeftTab("insert");
-                      }}
-                    />
+                    <div ref={canvasRootRef} className="relative">
+                      <EditorCanvasLayer
+                        enabled={isCanvasPage}
+                        blocks={page.blocks}
+                        selectedIds={selectedIds}
+                        rootRef={canvasRootRef}
+                        onSelectIds={selectCanvasIds}
+                        onCommitPositions={commitCanvasBlocks}
+                        livePositions={canvasLivePos}
+                        setLivePositions={setCanvasLivePos}
+                        guides={canvasGuides}
+                        setGuides={setCanvasGuides}
+                      >
+                        <SiteRenderer
+                          content={canvasPreviewContent}
+                          pageId={page.id}
+                          selectedBlockId={selectedId}
+                          selectedBlockIds={selectedIds}
+                          selectedPart={selectedPart}
+                          hoveredBlockId={hoveredId}
+                          onSelectBlock={selectBlock}
+                          onSelectPart={selectTarget}
+                          onHoverBlock={setHoveredId}
+                          locale={editLocale}
+                          colorMode={previewMode}
+                          siteSlug={site.slug}
+                          onRequestInsert={() => {
+                            setMobilePanel("left");
+                            setLeftTab("insert");
+                          }}
+                        />
+                      </EditorCanvasLayer>
+                    </div>
                     <SiteModalHost uiLang={uiLang === "ar" ? "ar" : "en"} />
                 </SiteChromeProvider>
               </div>
@@ -1547,11 +1679,24 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
                   lang={editLocale}
                   dir={localeDir(editLocale)}
                   data-sf-preview="content"
-                  style={{ width: typeof canvasWidth === "number" ? canvasWidth : "100%", maxWidth: "100%", marginInline: "auto" }}
+                  style={{ width: typeof canvasWidth === "number" ? canvasWidth :"100%", maxWidth:"100%", marginInline:"auto" }}
                 >
                   <SiteChromeProvider value={siteChrome}>
-                    <SiteRenderer
-                      content={content}
+                    <div ref={canvasRootRef} className="relative">
+                      <EditorCanvasLayer
+                        enabled={isCanvasPage}
+                        blocks={page.blocks}
+                        selectedIds={selectedIds}
+                        rootRef={canvasRootRef}
+                        onSelectIds={selectCanvasIds}
+                        onCommitPositions={commitCanvasBlocks}
+                        livePositions={canvasLivePos}
+                        setLivePositions={setCanvasLivePos}
+                        guides={canvasGuides}
+                        setGuides={setCanvasGuides}
+                      >
+                        <SiteRenderer
+                      content={canvasPreviewContent}
                       pageId={page.id}
                       selectedBlockId={selectedId}
                       selectedBlockIds={selectedIds}
@@ -1568,6 +1713,8 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
                         setLeftTab("insert");
                       }}
                     />
+                      </EditorCanvasLayer>
+                    </div>
                     <SiteModalHost uiLang={uiLang === "ar" ? "ar" : "en"} />
                   </SiteChromeProvider>
                 </div>
@@ -1596,26 +1743,26 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
             </button>
           ) : null}
           <aside
-            className={`sf-panel flex min-h-0 flex-col overflow-hidden rounded-[var(--radius-card)] backdrop-blur-xl
+            className={`sf-panel sf-mobile-sheet flex min-h-0 flex-col overflow-hidden rounded-[var(--radius-card)] bg-[var(--card)] text-[var(--foreground)]
               max-w-[92vw] transition-[opacity] duration-300 ease-out
-              sf-mobile-sheet max-xl:fixed max-xl:inset-y-0 max-xl:end-0 max-xl:z-50 max-xl:w-[min(100%,340px)] max-xl:rounded-none max-xl:border-s
+              max-xl:fixed max-xl:inset-y-0 max-xl:end-0 max-xl:z-50 max-xl:w-[min(100%,340px)] max-xl:rounded-none max-xl:border-s
               ${mobilePanel === "right" ? "max-xl:flex" : "max-xl:hidden"}
               ${rightCollapsed ? "xl:pointer-events-none xl:invisible xl:absolute xl:opacity-0" : "xl:relative xl:flex xl:h-full xl:w-full xl:opacity-100"}`}
             aria-hidden={rightCollapsed || undefined}
           >
-          <div className="flex items-center justify-between border-b border-stone-300/70 px-3 py-2 xl:hidden dark:border-stone-800">
+          <div className="flex items-center justify-between border-b border-[var(--border)] px-3 py-2 xl:hidden">
             <span className="text-xs font-bold">{t("inspector")}</span>
-            <button type="button" onClick={() => setMobilePanel("none")} className="rounded-full p-1.5 hover:bg-stone-100 dark:hover:bg-stone-800"><X className="h-4 w-4" /></button>
+            <button type="button" onClick={() => setMobilePanel("none")} className="rounded-full p-1.5 hover:bg-[var(--surface)]"><X className="h-4 w-4" /></button>
           </div>
-          <div className="border-b border-stone-300/70 p-3 dark:border-stone-800">
+          <div className="border-b border-[var(--border)] p-3">
             <div className="mb-2 hidden xl:block">
-              <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-stone-600 dark:text-[var(--muted)]">{t("inspector")}</span>
+              <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--muted)]">{t("inspector")}</span>
             </div>
-            <div className="flex gap-1 rounded-2xl bg-stone-100/80 p-1 dark:bg-stone-950">
-              <button type="button" title={t("helpInspect")} onClick={() => setRightTab("inspect")} className={`flex-1 rounded-xl py-1.5 text-[10px] font-semibold ${rightTab === "inspect" ? "bg-white text-stone-900 shadow-sm dark:bg-stone-800 dark:text-stone-50" : "text-stone-600 dark:text-[var(--muted)]"}`}>{t("inspect")}</button>
-              <button type="button" title={t("helpStyle")} onClick={() => setRightTab("style")} className={`flex-1 rounded-xl py-1.5 text-[10px] font-semibold ${rightTab === "style" ? "bg-white text-stone-900 shadow-sm dark:bg-stone-800 dark:text-stone-50" : "text-stone-600 dark:text-[var(--muted)]"}`}>{t("styleTab")}</button>
-              <button type="button" title={t("helpSite")} onClick={() => { setRightTab("site"); setSiteFocus(null); }} className={`flex-1 rounded-xl py-1.5 text-[10px] font-semibold ${rightTab === "site" ? "bg-white text-stone-900 shadow-sm dark:bg-stone-800 dark:text-stone-50" : "text-stone-600 dark:text-[var(--muted)]"}`}>{t("site")}</button>
-              <button type="button" title={t("helpReplies")} onClick={() => setRightTab("replies")} className={`flex-1 rounded-xl py-1.5 text-[10px] font-semibold ${rightTab === "replies" ? "bg-white text-stone-900 shadow-sm dark:bg-stone-800 dark:text-stone-50" : "text-stone-600 dark:text-[var(--muted)]"}`}>{t("replies")}</button>
+            <div className="flex gap-1 rounded-2xl bg-[var(--surface)] p-1">
+              <button type="button" title={t("helpInspect")} onClick={() => setRightTab("inspect")} className={`flex-1 rounded-xl py-1.5 text-[10px] font-semibold ${rightTab === "inspect" ? "bg-[var(--foreground)] text-[var(--card)] shadow-sm" : "text-[var(--muted)]"}`}>{t("inspect")}</button>
+              <button type="button" title={t("helpStyle")} onClick={() => setRightTab("style")} className={`flex-1 rounded-xl py-1.5 text-[10px] font-semibold ${rightTab === "style" ? "bg-[var(--foreground)] text-[var(--card)] shadow-sm" : "text-[var(--muted)]"}`}>{t("styleTab")}</button>
+              <button type="button" title={t("helpSite")} onClick={() => { setRightTab("site"); setSiteFocus(null); }} className={`flex-1 rounded-xl py-1.5 text-[10px] font-semibold ${rightTab === "site" ? "bg-[var(--foreground)] text-[var(--card)] shadow-sm" : "text-[var(--muted)]"}`}>{t("site")}</button>
+              <button type="button" title={t("helpReplies")} onClick={() => setRightTab("replies")} className={`flex-1 rounded-xl py-1.5 text-[10px] font-semibold ${rightTab === "replies" ? "bg-[var(--foreground)] text-[var(--card)] shadow-sm" : "text-[var(--muted)]"}`}>{t("replies")}</button>
             </div>
           </div>
           <div className="flex-1 sf-scroll overflow-y-auto p-4">
@@ -1713,7 +1860,7 @@ function IconBtn({
       className={`inline-flex h-11 w-11 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--ring)] disabled:opacity-30 sm:h-7 sm:w-7 ${
         danger
           ? "text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-950/50"
-          : "text-stone-600 hover:bg-stone-100 hover:text-stone-900 dark:text-[var(--muted)] dark:hover:bg-stone-800 dark:hover:text-stone-100"
+          : "text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--foreground)]"
       }`}
     >
       {children}

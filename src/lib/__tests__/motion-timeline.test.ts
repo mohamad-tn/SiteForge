@@ -9,6 +9,11 @@ import {
   scrollSequenceHoldMs,
   hasScrollTrigger,
   parseTimelineProp,
+  parseBezier,
+  serializeBezier,
+  normalizeEase,
+  normalizeStep,
+  resolveEaseCss,
 } from "@/lib/motion-timeline";
 import { blockMotionAttrs, effectPresetProps } from "@/lib/block-style";
 
@@ -149,5 +154,34 @@ describe("blockMotionAttrs + timeline", () => {
     expect(m.hasLoadEntrance).toBe(true);
     expect(m.className).toContain("sf-anim-fade");
     expect(m.scrollAnimClass).toContain("sf-anim-slide-up");
+  });
+});
+
+
+describe("bezier ease", () => {
+  it("parseBezier / serializeBezier round-trip", () => {
+    const p = parseBezier("cubic-bezier(0.22, 1, 0.36, 1)");
+    expect(p.x1).toBeCloseTo(0.22);
+    expect(serializeBezier(p)).toContain("cubic-bezier");
+  });
+
+  it("normalizeEase keeps custom curves and named presets", () => {
+    expect(normalizeEase("springy")).toBe("springy");
+    expect(normalizeEase("cubic-bezier(0.1, 0.2, 0.3, 0.4)")).toMatch(/^cubic-bezier/);
+    expect(normalizeEase("nope")).toBe("ease-out");
+  });
+
+  it("normalizeStep + resolveEaseCss pass custom curve to CSS", () => {
+    const step = normalizeStep({
+      trigger: "load",
+      anim: "fade",
+      delayMs: 0,
+      durationMs: 400,
+      ease: "cubic-bezier(0.15, 0.85, 0.35, 1)",
+    });
+    expect(step.ease).toMatch(/^cubic-bezier/);
+    expect(resolveEaseCss(step.ease)).toMatch(/^cubic-bezier/);
+    const vars = timelineToCssVars([step]);
+    expect(String(vars["--sf-ease"])).toMatch(/^cubic-bezier/);
   });
 });

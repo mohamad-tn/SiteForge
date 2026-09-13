@@ -56,6 +56,7 @@ export default function LoginPage() {
               required
               dir="ltr"
               autoComplete="email"
+              placeholder={t("placeholderEmail")}
             />
           </div>
           <div className="space-y-2">
@@ -68,6 +69,7 @@ export default function LoginPage() {
               required
               dir="ltr"
               autoComplete="current-password"
+              placeholder={t("placeholderPassword")}
             />
           </div>
           {error ? <p className="text-sm text-rose-600 dark:text-rose-400">{error}</p> : null}

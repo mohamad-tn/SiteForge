@@ -90,7 +90,7 @@ export async function POST(req: Request) {
       if (i > 8) break;
     }
 
-    let content = createBlankContent(body.name);
+    let content = ensureContentDefaults(createBlankContent(body.name));
     if (body.importContent) {
       content = ensureContentDefaults(body.importContent);
     } else if (body.templateSlug) {

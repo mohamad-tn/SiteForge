@@ -24,6 +24,7 @@ import {
   getPartStyles,
 } from "@/lib/block-parts";
 import { blockFrameStyle, blockMotionAttrs, resolveBlockHref, strProp, sanitizeBlockCss } from "@/lib/block-style";
+import { pageUsesCanvas } from "@/lib/editor-canvas";
 import { MotionBlock } from "@/components/motion-block";
 import { PublicForm } from "@/components/public-form";
 import { CollectionListView } from "@/components/collection-list-view";
@@ -1590,11 +1591,14 @@ export function SiteRenderer({
   const autoCollection =
     !editable && !!siteSlug && !!focusCol && !hasFocusCollectionBlock;
 
+  const canvas = pageUsesCanvas(page);
+
   return (
     <div
       dir={tokens.rtl ? "rtl" : "ltr"}
-      className="sf-tenant-root min-h-full transition-colors duration-300"
+      className={`sf-tenant-root min-h-full transition-colors duration-300 ${canvas ? "sf-page-canvas" : ""}`}
       data-sf-site-surface=""
+      data-sf-layout={canvas ? "canvas" : "flow"}
       style={{
         background: tokens.colors.background,
         color: tokens.colors.text,
@@ -1604,6 +1608,12 @@ export function SiteRenderer({
         ["--sf-site-text" as string]: tokens.colors.text,
         ["--sf-site-surface" as string]: tokens.colors.surface,
         ["--sf-site-primary" as string]: tokens.colors.primary,
+        ...(canvas
+          ? {
+              position: "relative" as const,
+              minHeight: "100vh",
+            }
+          : {}),
       }}
     >
       {page.blocks.map((block) => {
@@ -1624,15 +1634,28 @@ export function SiteRenderer({
         if (hidden && !editable) {
           return null;
         }
-        const frame = blockFrameStyle(propsRec);
+        const frame = blockFrameStyle(propsRec, { canvas });
         const selfFramed = SELF_FRAMED.has(block.type);
+        const canvasPosKeys = ["position", "left", "top", "width", "height", "minWidth", "maxWidth", "minHeight", "maxHeight", "zIndex"];
+        const wrapperCanvasStyle = canvas
+          ? (Object.fromEntries(Object.entries(frame).filter(([k]) => canvasPosKeys.includes(k))) as CSSProperties)
+          : undefined;
         const outerFrame = selfFramed
           ? Object.fromEntries(
               Object.entries(frame).filter(([k]) =>
-                ["marginTop", "marginRight", "marginBottom", "marginLeft", "opacity", "zIndex"].includes(k)
+                [
+                  "marginTop",
+                  "marginRight",
+                  "marginBottom",
+                  "marginLeft",
+                  "opacity",
+                  ...(canvas ? [] : ["zIndex"]),
+                ].includes(k)
               )
             )
-          : frame;
+          : canvas
+            ? Object.fromEntries(Object.entries(frame).filter(([k]) => !canvasPosKeys.includes(k) || k === "opacity"))
+            : frame;
         return (
           <div
             key={block.id}
@@ -1666,18 +1689,21 @@ export function SiteRenderer({
             }
             className={
               editable
-                ? `relative outline-none transition-[box-shadow,border-radius,opacity] ${
+                ? `outline-none transition-[box-shadow,border-radius,opacity] ${canvas ? "" : "relative "} ${
                     selected
                       ? "ring-2 ring-teal-600/80 ring-offset-0 z-10 rounded-2xl"
                       : hovered
                         ? "ring-2 ring-teal-600/35 z-[5] rounded-2xl"
                         : ""
                   } ${hidden ? "opacity-40 [background-image:repeating-linear-gradient(135deg,transparent,transparent_6px,rgba(28,25,23,0.06)_6px,rgba(28,25,23,0.06)_12px)]" : ""} ${
-                    locked ? "cursor-not-allowed" : ""
+                    locked ? "cursor-not-allowed" : canvas ? "cursor-move" : ""
                   }`
                 : undefined
             }
-            style={editable && locked ? { pointerEvents: "none" } : undefined}
+            style={{
+              ...(wrapperCanvasStyle || {}),
+              ...(editable && locked ? { pointerEvents: "none" as const } : {}),
+            }}
           >
             {editable && (selected || hidden || locked) ? (
               <div className="absolute top-3 start-3 z-20 flex flex-wrap gap-1 pointer-events-none">
@@ -1728,7 +1754,17 @@ export function SiteRenderer({
                 tokens={tokens}
                 siteSlug={siteSlug}
                 rawProps={block.props as Record<string, unknown>}
-                frameStyle={selfFramed ? frame : undefined}
+                frameStyle={
+                  selfFramed
+                    ? canvas
+                      ? Object.fromEntries(
+                          Object.entries(frame).filter(
+                            ([k]) => !["position", "left", "top"].includes(k)
+                          )
+                        )
+                      : frame
+                    : undefined
+                }
                 editable={editable}
                 selectedPart={selected ? selectedPart : null}
                 onSelectPart={

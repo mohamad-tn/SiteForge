@@ -16,9 +16,9 @@ const SelectTrigger = React.forwardRef<
   <SelectPrimitive.Trigger
     ref={ref}
     className={cn(
-      "sf-select sf-field flex h-10 w-full min-w-0 items-center justify-between gap-2 rounded-[var(--radius-lg)] pe-3 ps-3.5 text-sm font-medium outline-none",
+      "sf-select sf-field flex h-10 w-full min-w-0 items-center justify-between gap-2 rounded-[var(--radius-lg)] pe-3 ps-3.5 text-sm font-medium text-[var(--foreground)] outline-none",
       "disabled:cursor-not-allowed disabled:opacity-50",
-      "data-[placeholder]:text-[color-mix(in_oklab,var(--muted)_80%,transparent)]",
+      "data-[placeholder]:text-[var(--placeholder)]",
       className
     )}
     {...props}
@@ -96,7 +96,7 @@ const SelectLabel = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <SelectPrimitive.Label
     ref={ref}
-    className={cn("px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-stone-600 dark:text-[var(--muted)]", className)}
+    className={cn("px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--muted)]", className)}
     {...props}
   />
 ));
@@ -106,7 +106,7 @@ const SelectSeparator = React.forwardRef<
   React.ElementRef<typeof SelectPrimitive.Separator>,
   React.ComponentPropsWithoutRef<typeof SelectPrimitive.Separator>
 >(({ className, ...props }, ref) => (
-  <SelectPrimitive.Separator ref={ref} className={cn("-mx-1 my-1 h-px bg-stone-200 dark:bg-stone-800", className)} {...props} />
+  <SelectPrimitive.Separator ref={ref} className={cn("-mx-1 my-1 h-px bg-[var(--border)]", className)} {...props} />
 ));
 SelectSeparator.displayName = SelectPrimitive.Separator.displayName;
 

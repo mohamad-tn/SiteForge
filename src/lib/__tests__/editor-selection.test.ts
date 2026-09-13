@@ -79,12 +79,19 @@ describe("locked + optional free layout style keys", () => {
     expect(isStyleFlag({ hidden: "false" }, "hidden")).toBe(false);
   });
 
-  it("applies absolute layout only when both posX and posY are set", () => {
-    expect(blockFrameStyle({ posX: "12" }).position).toBeUndefined();
-    expect(blockFrameStyle({ posY: "8" }).position).toBeUndefined();
+  it("absolutizes when either posX or posY is set (canvas model)", () => {
+    const xOnly = blockFrameStyle({ posX: "12" });
+    expect(xOnly.position).toBe("absolute");
+    expect(xOnly.left).toBe("12px");
+    expect(xOnly.top).toBe("0px");
+    const yOnly = blockFrameStyle({ posY: "8" });
+    expect(yOnly.position).toBe("absolute");
+    expect(yOnly.top).toBe("8px");
     const both = blockFrameStyle({ posX: "12", posY: "8" });
     expect(both.position).toBe("absolute");
     expect(both.left).toBe("12px");
     expect(both.top).toBe("8px");
+    const forced = blockFrameStyle({}, { canvas: true });
+    expect(forced.position).toBe("absolute");
   });
 });

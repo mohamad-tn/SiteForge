@@ -5,7 +5,7 @@ export const Textarea = React.forwardRef<HTMLTextAreaElement, React.ComponentPro
   ({ className, ...props }, ref) => (
     <textarea
       className={cn(
-        "sf-field flex min-h-[88px] w-full min-w-0 rounded-[var(--radius-lg)] px-3.5 py-2.5 text-sm",
+        "sf-field flex min-h-[88px] w-full min-w-0 rounded-[var(--radius-lg)] px-3.5 py-2.5 text-sm text-[var(--foreground)] placeholder:text-[var(--placeholder)]",
         className
       )}
       ref={ref}

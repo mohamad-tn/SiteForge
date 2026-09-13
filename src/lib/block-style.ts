@@ -8,6 +8,7 @@ import {
   hasScrollTrigger,
   scrollSequenceHoldMs,
   primaryEntranceStep,
+  resolveEaseCss as timelineResolveEaseCss,
 } from "@/lib/motion-timeline";
 
 /** Shared visual + link props applied to every block */
@@ -123,7 +124,7 @@ export function sanitizeBlockCss(raw: string): string {
   return css.slice(0, 4000).trim();
 }
 
-export function blockFrameStyle(p: Record<string, unknown>): Record<string, string | number> {
+export function blockFrameStyle(p: Record<string, unknown>, opts?: { canvas?: boolean }): Record<string, string | number> {
   const style: Record<string, string | number> = {};
 
   const width = strProp(p, "width");
@@ -208,13 +209,20 @@ export function blockFrameStyle(p: Record<string, unknown>): Record<string, stri
     if (!Number.isNaN(z)) style.zIndex = z;
   }
 
-  // Optional free layout — only when BOTH are set; unset = normal document flow.
+  // Free canvas: absolutize when either axis is set, or when opts.canvas forces it.
+  // Missing axis defaults to 0 so single-axis edits still place the block.
   const posX = strProp(p, "posX");
   const posY = strProp(p, "posY");
-  if (posX && posY) {
+  const forceCanvas = Boolean(opts?.canvas);
+  if (forceCanvas || posX || posY) {
     style.position = "absolute";
-    style.left = px(posX);
-    style.top = px(posY);
+    style.left = px(posX || "0") || "0px";
+    style.top = px(posY || "0") || "0px";
+    // Prevent collapse to 0-width when width is unset on canvas.
+    if (!width && forceCanvas) {
+      style.minWidth = style.minWidth || "120px";
+      if (!style.width) style.width = "min(100%, 720px)";
+    }
   }
 
   return style;
@@ -374,17 +382,18 @@ export const EFFECT_PRESETS: EffectPresetDef[] = [
 ];
 
 /** Optional easing presets mapped to CSS timing functions (inspector keeps this small). */
-export type EasePresetId = "ease-out" | "springy" | "soft";
+export type EasePresetId = "ease-out" | "springy" | "soft" | "linear" | "custom";
 
-export const EASE_PRESETS: Record<EasePresetId, string> = {
+export const EASE_PRESETS: Record<Exclude<EasePresetId, "custom">, string> = {
   "ease-out": "cubic-bezier(0.22, 1, 0.36, 1)",
   springy: "cubic-bezier(0.34, 1.45, 0.64, 1)",
   soft: "cubic-bezier(0.4, 0, 0.2, 1)",
+  linear: "cubic-bezier(0, 0, 1, 1)",
 };
 
+/** Named presets + custom cubic-bezier(...) strings. */
 export function resolveEaseCss(id: string | undefined): string {
-  const key = (id || "ease-out") as EasePresetId;
-  return EASE_PRESETS[key] || EASE_PRESETS["ease-out"];
+  return timelineResolveEaseCss(id);
 }
 
 export function effectPresetProps(id: EffectPresetId): Record<string, string> {

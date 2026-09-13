@@ -9,12 +9,12 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default:
-          "bg-teal-800 text-white shadow-[var(--shadow-xs)] hover:bg-teal-700 dark:bg-teal-500 dark:text-teal-950 dark:hover:bg-teal-400",
+          "bg-[var(--accent)] text-[var(--accent-fg)] shadow-[var(--shadow-xs)] hover:opacity-90",
         secondary:
-          "bg-stone-900 text-white hover:bg-stone-800 dark:bg-stone-100 dark:text-stone-900 dark:hover:bg-white",
+          "bg-[var(--foreground)] text-[var(--card)] hover:opacity-90",
         outline:
-          "border border-stone-200/90 bg-[var(--card)] text-[var(--foreground)] shadow-[var(--shadow-xs)] hover:bg-[var(--surface)] dark:border-stone-600",
-        ghost: "text-stone-700 hover:bg-stone-100/90 dark:text-stone-200 dark:hover:bg-stone-800",
+          "border border-[var(--border)] bg-[var(--card)] text-[var(--foreground)] shadow-[var(--shadow-xs)] hover:bg-[var(--surface)]",
+        ghost: "text-[var(--foreground)] hover:bg-[var(--surface)]",
         danger: "bg-rose-600 text-white shadow-[var(--shadow-xs)] hover:bg-rose-500",
       },
       size: {

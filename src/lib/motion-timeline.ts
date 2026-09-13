@@ -9,10 +9,76 @@ const EASE_CSS: Record<string, string> = {
   "ease-out": "cubic-bezier(0.22, 1, 0.36, 1)",
   springy: "cubic-bezier(0.34, 1.45, 0.64, 1)",
   soft: "cubic-bezier(0.4, 0, 0.2, 1)",
+  linear: "cubic-bezier(0, 0, 1, 1)",
 };
 
-function resolveEaseCss(id: string | undefined): string {
-  return EASE_CSS[id || "ease-out"] || EASE_CSS["ease-out"];
+export type BezierPoints = { x1: number; y1: number; x2: number; y2: number };
+
+const CUBIC_RE =
+  /^cubic-bezier\(\s*([+-]?\d*\.?\d+)\s*,\s*([+-]?\d*\.?\d+)\s*,\s*([+-]?\d*\.?\d+)\s*,\s*([+-]?\d*\.?\d+)\s*\)$/i;
+
+function clamp01(n: number): number {
+  return Math.min(1, Math.max(0, n));
+}
+
+function clampY(n: number): number {
+  // CSS allows y outside 0–1 for overshoot; keep a sane editor range.
+  return Math.min(2, Math.max(-0.5, n));
+}
+
+/** Parse named preset or cubic-bezier(...) into control points. */
+export function parseBezier(ease: string | undefined | null): BezierPoints {
+  const raw = (ease || "ease-out").trim();
+  const named = EASE_CSS[raw];
+  const css = named || raw;
+  const m = css.match(CUBIC_RE);
+  if (m) {
+    return {
+      x1: clamp01(Number(m[1])),
+      y1: clampY(Number(m[2])),
+      x2: clamp01(Number(m[3])),
+      y2: clampY(Number(m[4])),
+    };
+  }
+  // fallback ease-out
+  return parseBezier("ease-out");
+}
+
+export function serializeBezier(p: BezierPoints): string {
+  const x1 = clamp01(Number(p.x1) || 0);
+  const y1 = clampY(Number(p.y1) || 0);
+  const x2 = clamp01(Number(p.x2) || 1);
+  const y2 = clampY(Number(p.y2) || 1);
+  const fmt = (n: number) => {
+    const r = Math.round(n * 1000) / 1000;
+    return String(r);
+  };
+  return `cubic-bezier(${fmt(x1)}, ${fmt(y1)}, ${fmt(x2)}, ${fmt(y2)})`;
+}
+
+/** Match a curve to a named preset when close; else return the cubic-bezier string. */
+export function easeIdFromPoints(p: BezierPoints): string {
+  const css = serializeBezier(p);
+  for (const [id, val] of Object.entries(EASE_CSS)) {
+    if (val.replace(/\s/g, "") === css.replace(/\s/g, "")) return id;
+  }
+  return css;
+}
+
+export function resolveEaseCss(id: string | undefined): string {
+  const raw = (id || "ease-out").trim();
+  if (EASE_CSS[raw]) return EASE_CSS[raw];
+  if (CUBIC_RE.test(raw)) return serializeBezier(parseBezier(raw));
+  return EASE_CSS["ease-out"];
+}
+
+/** Normalize ease: keep named presets or a validated cubic-bezier string. */
+export function normalizeEase(ease: unknown): string {
+  const raw = typeof ease === "string" ? ease.trim() : "";
+  if (!raw) return "ease-out";
+  if (EASE_CSS[raw]) return raw;
+  if (CUBIC_RE.test(raw)) return serializeBezier(parseBezier(raw));
+  return "ease-out";
 }
 
 export type MotionTrigger = "load" | "scroll" | "hover";
@@ -103,7 +169,7 @@ export function normalizeStep(raw: Partial<MotionTimelineStep> | Record<string, 
   const anim = MOTION_ANIM_IDS.includes(animRaw as MotionAnimId) ? animRaw : "fade";
   const delayMs = clamp(Math.round(num(raw.delayMs, 0)), 0, 5000);
   const durationMs = clamp(Math.round(num(raw.durationMs, 600)), 50, 5000);
-  const ease = str(raw.ease, "ease-out") || "ease-out";
+  const ease = normalizeEase(raw.ease);
   const staggerChildren = Boolean(raw.staggerChildren);
   const staggerMs = clamp(Math.round(num(raw.staggerMs, 80)), 0, 1000);
   return {
@@ -145,7 +211,7 @@ export function normalizeTimeline(props: Record<string, unknown>): MotionTimelin
   const anim = str(props.entranceAnim, "none") || "none";
   const delayMs = clamp(Math.round(num(props.animDelay, 0)), 0, 5000);
   const durationMs = clamp(Math.round(num(props.animDuration, 600)), 50, 5000);
-  const ease = str(props.animEase, "ease-out") || "ease-out";
+  const ease = normalizeEase(props.animEase);
   const scrollReveal = str(props.scrollReveal, "false") === "true";
   const staggerChildren = str(props.staggerChildren, "false") === "true";
   const staggerMs = clamp(Math.round(num(props.staggerMs, 80)), 0, 1000);

@@ -60,7 +60,7 @@ export default function SignupPage() {
         <form onSubmit={onSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="name">{t("name")}</Label>
-            <Input id="name" value={name} onChange={(e) => setName(e.target.value)} required autoComplete="name" />
+            <Input id="name" value={name} onChange={(e) => setName(e.target.value)} required autoComplete="name" placeholder={t("placeholderName")} />
           </div>
           <div className="space-y-2">
             <Label htmlFor="email">{t("email")}</Label>
@@ -72,6 +72,7 @@ export default function SignupPage() {
               required
               dir="ltr"
               autoComplete="email"
+              placeholder={t("placeholderEmail")}
             />
           </div>
           <div className="space-y-2">
@@ -85,6 +86,7 @@ export default function SignupPage() {
               minLength={6}
               dir="ltr"
               autoComplete="new-password"
+              placeholder={t("placeholderPassword")}
             />
           </div>
           {error ? <p className="text-sm text-rose-600 dark:text-rose-400">{error}</p> : null}

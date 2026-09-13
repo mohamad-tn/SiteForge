@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 /*
   SiteForge design tokens — quiet chrome / Vercel+shadcn member-surface idiom.
   Radii ladder: control (lg) → panel (xl) → card (2xl) → soft (2xl+)
@@ -7,14 +9,16 @@
 
 :root {
   --background: #f4f1eb;
-  --foreground: #1c1917;
+  --foreground: #0c0a09;
   --surface: #faf8f5;
   --border: #d6d0c4;
   --border-strong: #a8a29e;
   --accent: #0f766e;
   --accent-fg: #ffffff;
   --card: #ffffff;
-  --muted: #44403c;
+  --muted: #3f3a36;
+  --label: var(--foreground);
+  --placeholder: #57534e;
   --stat-bg: var(--card);
   --stat-fg: var(--foreground);
   --scrollbar-thumb: #a8a29e;
@@ -45,6 +49,8 @@ html[data-theme="dark"] {
   --accent-fg: #042f2e;
   --card: #171412;
   --muted: #a8a29e;
+  --label: var(--foreground);
+  --placeholder: #a8a29e;
   --stat-bg: var(--card);
   --stat-fg: var(--foreground);
   --ring: color-mix(in oklab, var(--accent) 35%, transparent);
@@ -111,17 +117,10 @@ details > summary::-webkit-details-marker {
 
 .sf-soft-card {
   border-radius: var(--radius-card);
-  border: 1px solid color-mix(in oklab, var(--border) 92%, transparent);
-  background: color-mix(in oklab, var(--card) 97%, transparent);
+  border: 1px solid var(--border);
+  background: var(--card);
   color: var(--foreground);
   box-shadow: var(--shadow-md);
-  backdrop-filter: blur(14px);
-}
-
-html.dark .sf-soft-card,
-html[data-theme="dark"] .sf-soft-card {
-  background: color-mix(in oklab, var(--card) 94%, transparent);
-  border-color: color-mix(in oklab, var(--border) 95%, transparent);
 }
 
 /* Metric / stat pill — card surface only, never gray fills in light mode */
@@ -257,7 +256,7 @@ html[data-theme="dark"] .sf-segment button[data-active="true"] {
 }
 
 .sf-field::placeholder {
-  color: color-mix(in oklab, var(--muted) 80%, transparent);
+  color: var(--placeholder);
 }
 
 .sf-field:disabled {
@@ -277,8 +276,9 @@ html[data-theme="dark"] .sf-segment button[data-active="true"] {
 
 .sf-panel {
   border-radius: var(--radius-xl);
-  border: 1px solid color-mix(in oklab, var(--border) 82%, transparent);
-  background: color-mix(in oklab, var(--card) 92%, transparent);
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--foreground);
   box-shadow:
     0 1px 2px color-mix(in oklab, var(--foreground) 4%, transparent),
     0 10px 28px -22px color-mix(in oklab, var(--foreground) 18%, transparent);
@@ -286,8 +286,6 @@ html[data-theme="dark"] .sf-segment button[data-active="true"] {
 
 html.dark .sf-panel,
 html[data-theme="dark"] .sf-panel {
-  background: color-mix(in oklab, var(--card) 90%, transparent);
-  border-color: color-mix(in oklab, var(--border) 95%, transparent);
   box-shadow:
     0 10px 32px -20px rgba(0, 0, 0, 0.65),
     0 0 0 1px color-mix(in oklab, #fff 4%, transparent);
@@ -778,11 +776,37 @@ html[data-theme="dark"] .sf-device-screen {
     justify-self: end;
   }
 }
-/* 768–1279 / 1024–1440: keep Content essentials only; Site lives in end overflow */
-@media (min-width: 768px) and (max-width: 1439px) {
+/* 768–1199: wrap so Content/Site never overlap Publish; hide non-essential mid chips */
+@media (min-width: 768px) and (max-width: 1199px) {
+  .sf-editor-topbar {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: auto auto;
+  }
+  .sf-editor-topbar-start {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  .sf-editor-topbar-end {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: end;
+  }
+  .sf-editor-topbar-mid {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    justify-content: flex-start;
+    overflow: visible;
+    flex-wrap: wrap;
+  }
   .sf-editor-topbar-mid .sf-hide-until-lg,
   .sf-editor-topbar-mid .sf-hide-until-xl {
     display: none !important;
+  }
+}
+@media (min-width: 1200px) {
+  .sf-editor-topbar {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-rows: auto;
   }
 }
 
@@ -827,6 +851,18 @@ html[data-theme="dark"] .sf-device-screen {
 .sf-panel::-webkit-scrollbar-corner,
 [data-sf-chrome="platform"] *::-webkit-scrollbar-corner {
   background: transparent;
+}
+
+/* Labels + fields */
+.sf-label {
+  color: var(--label);
+  font-weight: 600;
+}
+
+.sf-mobile-sheet {
+  background: var(--card);
+  color: var(--foreground);
+  border-color: var(--border);
 }
 
 /* Readable muted / chrome helpers for light + dark */
@@ -902,9 +938,7 @@ html[data-theme="dark"] .sf-device-screen {
   .sf-editor-topbar-start .sf-toolbar-group {
     max-width: min(52vw, 11rem);
   }
-  .sf-editor-topbar .sf-touch-target,
-  .sf-editor-topbar button,
-  .sf-editor-topbar a {
+  .sf-editor-topbar .sf-touch-target {
     min-height: 44px;
     min-width: 44px;
   }

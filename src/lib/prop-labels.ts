@@ -133,6 +133,8 @@ export const EASE_PRESET_LABELS: Record<string, Bi> = {
   "ease-out": { ar: "خروج ناعم", en: "Ease out" },
   springy: { ar: "مرن", en: "Springy" },
   soft: { ar: "ناعم", en: "Soft" },
+  linear: { ar: "خطي", en: "Linear" },
+  custom: { ar: "مخصص", en: "Custom" },
 };
 
 export function easePresetLabel(id: string, lang: PlatformLang): string {
