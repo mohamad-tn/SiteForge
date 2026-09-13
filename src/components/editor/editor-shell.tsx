@@ -125,6 +125,7 @@ import {
   Search,
   Globe,
   KeyRound,
+  Clock,
 } from "lucide-react";
 
 type SiteMeta = {
@@ -457,7 +458,9 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
 
   function addBlock(type: BlockType, afterId?: string | null) {
     const baseProps = withEditableDefaults(defaultPropsFor(type));
-    const insertPos = page && pageUsesCanvas(page) ? defaultInsertPosition(page.blocks) : null;
+    const insertPos = page && pageUsesCanvas(page)
+      ? defaultInsertPosition(page.blocks, type, VIEWPORT_WIDTH[viewport])
+      : null;
     const block: Block = {
       id: `b-${nanoid(8)}`,
       type,
@@ -530,7 +533,9 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
   function insertSavedComponent(componentId: string) {
     const cmp = (content.components || []).find((c) => c.id === componentId);
     if (!cmp) return;
-    const insertPos = page && pageUsesCanvas(page) ? defaultInsertPosition(page.blocks) : null;
+    const insertPos = page && pageUsesCanvas(page)
+      ? defaultInsertPosition(page.blocks, cmp.blocks[0]?.type, VIEWPORT_WIDTH[viewport])
+      : null;
     const clones = cmp.blocks.map((b, idx) => {
       const clone = cloneBlock(b, `b-${nanoid(8)}`);
       const props = { ...(clone.props as Record<string, unknown>) };
@@ -912,6 +917,13 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
   ];
 
   if (!page) return null;
+  const publishedLabel = publishedAt
+    ? new Date(publishedAt).toLocaleString(uiLang === "ar" ? "ar-SY" : "en-GB", {
+        timeZone: "Asia/Damascus",
+        dateStyle: "medium",
+        timeStyle: "short",
+      })
+    : t("neverPublished");
   const canvasWidth = VIEWPORT_WIDTH[viewport];
   const deviceHeight = DEVICE_FRAME_HEIGHT[viewport];
   const artboardH = page
@@ -944,7 +956,7 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
               {t("publishConfirmTitle")}
             </h2>
             <p className="mt-2 text-sm leading-6 text-[var(--muted)]">{t("publishConfirmBody")}</p>
-            <p className="mt-2 font-mono text-[11px] text-[var(--muted)]" dir="ltr">
+            <p className="sf-latin mt-2 text-[11px] text-[var(--muted)]" dir="ltr">
               /s/{site.slug}
               {publishedAt
                 ? ` · ${new Date(publishedAt).toLocaleString(uiLang === "ar" ? "ar-SY" : "en-GB", { timeZone: "Asia/Damascus" })}`
@@ -969,7 +981,7 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
           </div>
         </div>
       ) : null}
-      <header className="sf-editor-topbar" role="banner">
+      <header className="sf-editor-topbar" role="banner" dir={uiDir}>
         {/* Zone A — identity */}
         <div className="sf-editor-topbar-start">
           <div className="sf-toolbar-group shrink-0 pe-1.5 ps-0.5" data-tone="nav" title={site.name}>
@@ -1211,20 +1223,18 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
               <Save className="h-3.5 w-3.5" aria-hidden />
               <span className="hidden sm:inline">{saving ? t("saving") : t("save")}</span>
             </Button>
-            <div className="hidden flex-col items-end leading-tight sm:flex">
-              <span className="text-[9px] font-bold uppercase tracking-wider text-[var(--muted)]">
-                {t("lastPublished")}
-              </span>
-              <span className="max-w-[9rem] truncate font-mono text-[10px] text-[var(--foreground)]" dir="ltr" title={publishedAt || undefined}>
-                {publishedAt
-                  ? new Date(publishedAt).toLocaleString(uiLang === "ar" ? "ar-SY" : "en-GB", {
-                      timeZone: "Asia/Damascus",
-                      dateStyle: "medium",
-                      timeStyle: "short",
-                    })
-                  : t("neverPublished")}
-              </span>
-            </div>
+            <button
+              type="button"
+              className="sf-publish-clock"
+              title={`${t("lastPublished")}: ${publishedLabel}`}
+              aria-label={`${t("lastPublished")}: ${publishedLabel}`}
+              onClick={() => {
+                setMoreOpen(true);
+                setSiteMenuOpen(false);
+              }}
+            >
+              <Clock className="h-3.5 w-3.5" aria-hidden />
+            </button>
             <Button
               size="sm"
               className="rounded-full bg-teal-800 shadow-sm hover:bg-teal-700"
@@ -1304,6 +1314,15 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
                     <PlatformLangSwitcher size="compact" />
                   </div>
                   <div className="my-1 h-px bg-[var(--border)]" />
+                  <div className="flex min-h-[44px] w-full items-start gap-2 rounded-xl px-3 py-2.5 text-xs">
+                    <Clock className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+                    <span className="min-w-0">
+                      <span className="block font-semibold">{t("lastPublished")}</span>
+                      <span className="sf-latin mt-0.5 block text-[11px] text-[var(--muted)]" dir="ltr">
+                        {publishedLabel}
+                      </span>
+                    </span>
+                  </div>
                   {publishedAt ? (
                     <Link href={`/s/${site.slug}`} target="_blank" className="flex min-h-[44px] w-full items-center gap-2 rounded-xl px-3 py-2.5 text-xs font-semibold hover:bg-[var(--surface)] md:hidden" onClick={() => setMoreOpen(false)}>
                       <Eye className="h-3.5 w-3.5" aria-hidden /> {t("view")}
@@ -1746,7 +1765,7 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
                     >
                       <ZoomOut className="h-3.5 w-3.5" />
                     </button>
-                    <span className="min-w-[3rem] text-center font-mono text-[10px] font-bold text-[var(--foreground)]" dir="ltr">
+                    <span className="sf-latin min-w-[3rem] text-center text-[10px] font-bold text-[var(--foreground)]" dir="ltr">
                       {Math.round(canvasZoom * 100)}%
                     </span>
                     <button
@@ -1761,7 +1780,7 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
                     </button>
                   </div>
                 ) : null}
-                <span className="font-mono" dir="ltr" title={t("deviceFrame")}>
+                <span className="sf-latin" dir="ltr" title={t("deviceFrame")}>
                   {`${canvasWidth}px · ${viewport}`}
                 </span>
               </div>
@@ -1871,6 +1890,7 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
                         >
                           <EditorCanvasLayer
                             enabled={isCanvasPage}
+                            allowGeometry={isCanvasPage}
                             blocks={page.blocks}
                             selectedIds={selectedIds}
                             rootRef={canvasRootRef}
@@ -1908,24 +1928,40 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
                       </div>
                     ) : (
                       <div ref={canvasRootRef} className="relative">
-                        <SiteRenderer
-                          content={canvasPreviewContent}
-                          pageId={page.id}
-                          selectedBlockId={selectedId}
-                          selectedBlockIds={selectedIds}
-                          selectedPart={selectedPart}
-                          hoveredBlockId={hoveredId}
-                          onSelectBlock={selectBlock}
-                          onSelectPart={selectTarget}
-                          onHoverBlock={setHoveredId}
-                          locale={editLocale}
-                          colorMode={previewMode}
-                          siteSlug={site.slug}
-                          onRequestInsert={() => {
-                            setMobilePanel("left");
-                            setLeftTab("insert");
-                          }}
-                        />
+                        <EditorCanvasLayer
+                          enabled
+                          allowGeometry={false}
+                          blocks={page.blocks}
+                          selectedIds={selectedIds}
+                          rootRef={canvasRootRef}
+                          onSelectIds={selectCanvasIds}
+                          onCommitPositions={commitCanvasBlocks}
+                          livePositions={canvasLivePos}
+                          setLivePositions={setCanvasLivePos}
+                          guides={canvasGuides}
+                          setGuides={setCanvasGuides}
+                          zoom={1}
+                          applyVisualZoom={false}
+                        >
+                          <SiteRenderer
+                            content={canvasPreviewContent}
+                            pageId={page.id}
+                            selectedBlockId={selectedId}
+                            selectedBlockIds={selectedIds}
+                            selectedPart={selectedPart}
+                            hoveredBlockId={hoveredId}
+                            onSelectBlock={selectBlock}
+                            onSelectPart={selectTarget}
+                            onHoverBlock={setHoveredId}
+                            locale={editLocale}
+                            colorMode={previewMode}
+                            siteSlug={site.slug}
+                            onRequestInsert={() => {
+                              setMobilePanel("left");
+                              setLeftTab("insert");
+                            }}
+                          />
+                        </EditorCanvasLayer>
                       </div>
                     )}
                     <SiteModalHost uiLang={uiLang === "ar" ? "ar" : "en"} />
@@ -1972,6 +2008,7 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
                         >
                           <EditorCanvasLayer
                             enabled={isCanvasPage}
+                            allowGeometry={isCanvasPage}
                             blocks={page.blocks}
                             selectedIds={selectedIds}
                             rootRef={canvasRootRef}
@@ -2009,24 +2046,40 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
                       </div>
                     ) : (
                       <div ref={canvasRootRef} className="relative">
-                        <SiteRenderer
-                          content={canvasPreviewContent}
-                          pageId={page.id}
-                          selectedBlockId={selectedId}
-                          selectedBlockIds={selectedIds}
-                          selectedPart={selectedPart}
-                          hoveredBlockId={hoveredId}
-                          onSelectBlock={selectBlock}
-                          onSelectPart={selectTarget}
-                          onHoverBlock={setHoveredId}
-                          locale={editLocale}
-                          colorMode={previewMode}
-                          siteSlug={site.slug}
-                          onRequestInsert={() => {
-                            setMobilePanel("left");
-                            setLeftTab("insert");
-                          }}
-                        />
+                        <EditorCanvasLayer
+                          enabled
+                          allowGeometry={false}
+                          blocks={page.blocks}
+                          selectedIds={selectedIds}
+                          rootRef={canvasRootRef}
+                          onSelectIds={selectCanvasIds}
+                          onCommitPositions={commitCanvasBlocks}
+                          livePositions={canvasLivePos}
+                          setLivePositions={setCanvasLivePos}
+                          guides={canvasGuides}
+                          setGuides={setCanvasGuides}
+                          zoom={1}
+                          applyVisualZoom={false}
+                        >
+                          <SiteRenderer
+                            content={canvasPreviewContent}
+                            pageId={page.id}
+                            selectedBlockId={selectedId}
+                            selectedBlockIds={selectedIds}
+                            selectedPart={selectedPart}
+                            hoveredBlockId={hoveredId}
+                            onSelectBlock={selectBlock}
+                            onSelectPart={selectTarget}
+                            onHoverBlock={setHoveredId}
+                            locale={editLocale}
+                            colorMode={previewMode}
+                            siteSlug={site.slug}
+                            onRequestInsert={() => {
+                              setMobilePanel("left");
+                              setLeftTab("insert");
+                            }}
+                          />
+                        </EditorCanvasLayer>
                       </div>
                     )}
                     <SiteModalHost uiLang={uiLang === "ar" ? "ar" : "en"} />

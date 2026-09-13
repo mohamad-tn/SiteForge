@@ -205,6 +205,7 @@ const templates: {
           id: "page-projects",
           title: "المشاريع",
           slug: "projects",
+          layout: "flow",
           blocks: [
             {
               id: "cv-p-h",
@@ -495,6 +496,7 @@ const templates: {
           id: "page-home",
           title: "الرئيسية",
           slug: "home",
+          layout: "flow",
           blocks: [
             {
               id: "ld-nav",
@@ -663,6 +665,7 @@ const templates: {
           id: "page-home",
           title: "الرئيسية",
           slug: "home",
+          layout: "flow",
           blocks: [
             {
               id: "bz-nav",
@@ -826,6 +829,7 @@ const templates: {
           id: "page-home",
           title: "الرئيسية",
           slug: "home",
+          layout: "flow",
           blocks: [
             {
               id: "rs-nav",

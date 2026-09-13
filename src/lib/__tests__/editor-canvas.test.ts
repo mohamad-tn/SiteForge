@@ -13,8 +13,12 @@ import {
   distributeRects,
   defaultInsertPosition,
   formatPos,
+  applyPositions,
+  applySizePatches,
   isInvalidCanvasSize,
   layoutStack,
+  pointerMovedPastThreshold,
+  sanitizeFlowBlocks,
   marqueeHitTest,
   measureRectToLocal,
   normalizeMarquee,
@@ -420,5 +424,48 @@ describe("flow default / zoom one-way / artboard height / resize clamp", () => {
     );
     expect(local.w).toBe(100);
     expect(local.h).toBe(40);
+  });
+});
+
+
+describe("click vs drag threshold / flow leftover / resize floor", () => {
+  it("click without move does not change pos", () => {
+    const blocks = [block("a", "hero", { posX: "0", posY: "10" })];
+    expect(pointerMovedPastThreshold(2, 1)).toBe(false);
+    const next = pointerMovedPastThreshold(2, 1)
+      ? applyPositions(blocks, [{ id: "a", x: 24, y: 80 }])
+      : blocks;
+    expect(next[0].props.posX).toBe("0");
+    expect(next[0].props.posY).toBe("10");
+  });
+
+  it("drag after threshold does change pos", () => {
+    expect(pointerMovedPastThreshold(5, 0)).toBe(true);
+    const blocks = [block("a", "hero", { posX: "0", posY: "10" })];
+    const next = applyPositions(blocks, [{ id: "a", x: 0, y: 80 }]);
+    expect(next[0].props.posY).toBe("80");
+  });
+
+  it("flow ignores leftover pos and 720 canvas width", () => {
+    const next = sanitizeFlowBlocks([
+      block("a", "hero", { posX: "0", posY: "420", width: "720" }),
+      block("b", "text", { posX: "24", posY: "900", width: "560" }),
+      block("c", "features", { posX: "0", posY: "10", width: "1120" }),
+    ]);
+    expect(next[0].props.posX).toBeUndefined();
+    expect(next[0].props.posY).toBeUndefined();
+    expect(next[0].props.width).toBeUndefined();
+    expect(next[1].props.posY).toBeUndefined();
+    expect(next[1].props.width).toBe("560");
+    expect(next[2].props.width).toBeUndefined();
+  });
+
+  it("resize below min is not committed", () => {
+    const blocks = [block("a", "text", { posX: "0", posY: "0", width: "200", height: "80" })];
+    const next = applySizePatches(blocks, [{ id: "a", x: 0, y: 0, w: 10, h: 10 }]);
+    expect(next[0].props.width).toBe("200");
+    expect(next[0].props.height).toBe("80");
+    const nan = applySizePatches(blocks, [{ id: "a", x: 0, y: 0, w: Number.NaN, h: 80 }]);
+    expect(nan[0].props.width).toBe("200");
   });
 });

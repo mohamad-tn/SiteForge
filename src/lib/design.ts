@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { autoPlaceBlocks, sanitizeFlowBlocks } from "@/lib/editor-canvas";
 
 export const LOCALE_CODES = ["ar", "en", "fr", "es"] as const;
 export type LocaleCode = (typeof LOCALE_CODES)[number];
@@ -584,81 +585,13 @@ export function ensureContentDefaults(raw: SiteContent): SiteContent {
         return { ...block, props };
       });
       if (layout === "canvas") {
-        blocks = autoPlacePageBlocks(blocks);
+        blocks = autoPlaceBlocks(blocks);
+      } else {
+        blocks = sanitizeFlowBlocks(blocks);
       }
       return { ...page, layout, blocks };
     }),
   };
-}
-
-const FULL_BLEED_TYPES = new Set([
-  "navbar",
-  "hero",
-  "footer",
-  "cta",
-  "features",
-  "pricing",
-  "testimonials",
-  "faq",
-  "stats",
-  "contact",
-  "collectionList",
-]);
-
-/** Stack unpositioned blocks into a canvas column (kept local to avoid import cycles). */
-function autoPlacePageBlocks(blocks: Block[]): Block[] {
-  const ORIGIN_X = 24;
-  const ORIGIN_Y = 0;
-  const GAP = 0;
-  const heights: Record<string, number> = {
-    navbar: 64,
-    hero: 420,
-    features: 360,
-    gallery: 360,
-    pricing: 360,
-    testimonials: 360,
-    faq: 360,
-    stats: 360,
-    collectionList: 360,
-    cta: 280,
-    contact: 280,
-    form: 280,
-    footer: 200,
-    heading: 56,
-    text: 120,
-    image: 320,
-    video: 320,
-    button: 48,
-    spacer: 56,
-    columns: 200,
-    divider: 24,
-    list: 160,
-  };
-  let y = ORIGIN_Y;
-  return blocks.map((block) => {
-    const props = { ...(block.props as Record<string, unknown>) };
-    const hasPos =
-      (typeof props.posX === "string" && props.posX !== "") ||
-      (typeof props.posY === "string" && props.posY !== "");
-    if (hasPos) {
-      const h = heights[block.type] || 160;
-      const py = Number(String(props.posY || "0").replace(/px$/i, ""));
-      if (Number.isFinite(py)) y = Math.max(y, py + h + GAP);
-      return { ...block, props };
-    }
-    const h = heights[block.type] || 160;
-    const bleed = FULL_BLEED_TYPES.has(block.type);
-    const nextProps: Record<string, unknown> = {
-      ...props,
-      posX: String(bleed ? 0 : ORIGIN_X),
-      posY: String(y),
-    };
-    if (!props.width) {
-      nextProps.width = bleed ? "100%" : block.type === "button" ? "200" : "720";
-    }
-    y += h + (bleed ? 0 : 24);
-    return { ...block, props: nextProps };
-  });
 }
 
 export function createBlankContent(title = "صفحتي"): SiteContent {

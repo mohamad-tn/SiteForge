@@ -79,15 +79,17 @@ describe("locked + optional free layout style keys", () => {
     expect(isStyleFlag({ hidden: "false" }, "hidden")).toBe(false);
   });
 
-  it("absolutizes when either posX or posY is set (canvas model)", () => {
-    const xOnly = blockFrameStyle({ posX: "12" });
+  it("absolutizes leftover pos only on canvas pages, never on flow", () => {
+    const leftover = blockFrameStyle({ posX: "12", posY: "8" });
+    expect(leftover.position).toBeUndefined();
+    const xOnly = blockFrameStyle({ posX: "12" }, { canvas: true });
     expect(xOnly.position).toBe("absolute");
     expect(xOnly.left).toBe("12px");
     expect(xOnly.top).toBe("0px");
-    const yOnly = blockFrameStyle({ posY: "8" });
+    const yOnly = blockFrameStyle({ posY: "8" }, { canvas: true });
     expect(yOnly.position).toBe("absolute");
     expect(yOnly.top).toBe("8px");
-    const both = blockFrameStyle({ posX: "12", posY: "8" });
+    const both = blockFrameStyle({ posX: "12", posY: "8" }, { canvas: true });
     expect(both.position).toBe("absolute");
     expect(both.left).toBe("12px");
     expect(both.top).toBe("8px");

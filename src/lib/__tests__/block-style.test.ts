@@ -178,3 +178,20 @@ describe("resolveBlockHref", () => {
     expect(resolveBlockHref({ linkMode: "url", href: "javascript:alert(1)" }, "href").href).toBe("#");
   });
 });
+
+
+describe("blockFrameStyle canvas vs flow", () => {
+  it("does not absolutize leftover pos on flow", () => {
+    const style = blockFrameStyle({ posX: "24", posY: "400", width: "720" });
+    expect(style.position).toBeUndefined();
+    expect(style.top).toBeUndefined();
+    expect(style.left).toBeUndefined();
+  });
+
+  it("absolutizes only when canvas option is set", () => {
+    const style = blockFrameStyle({ posX: "24", posY: "400" }, { canvas: true });
+    expect(style.position).toBe("absolute");
+    expect(style.left).toBe("24px");
+    expect(style.top).toBe("400px");
+  });
+});

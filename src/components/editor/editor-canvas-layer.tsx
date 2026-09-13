@@ -17,6 +17,7 @@ import {
   handleCursor,
   isInvalidCanvasSize,
   marqueeHitTest,
+  pointerMovedPastThreshold,
   measureBlockRects,
   normalizeMarquee,
   pageUsesCanvas,
@@ -46,6 +47,7 @@ type DragState =
       origins: Record<string, { x: number; y: number; w: number; h: number }>;
       additive: boolean;
       disableSnap: boolean;
+      armed: boolean;
       panOrigin?: { scrollLeft: number; scrollTop: number; el: HTMLElement };
     }
   | {
@@ -63,6 +65,7 @@ type DragState =
       /** Multi-select: scale about group BB center when Alt held at pointer-down. */
       aboutCenter: boolean;
       group: boolean;
+      armed: boolean;
     };
 
 function isInteractiveTarget(el: EventTarget | null): boolean {
@@ -101,6 +104,7 @@ export function EditorCanvasLayer({
   zoom = 1,
   onZoomChange,
   applyVisualZoom = true,
+  allowGeometry = true,
   children,
 }: {
   enabled: boolean;
@@ -117,6 +121,8 @@ export function EditorCanvasLayer({
   onZoomChange?: (z: number) => void;
   /** When false, parent owns transform:scale (artboard sizer pattern). */
   applyVisualZoom?: boolean;
+  /** Flow pages: select only — never write pos/size. */
+  allowGeometry?: boolean;
   children: React.ReactNode;
 }) {
   const [marquee, setMarquee] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
@@ -271,6 +277,7 @@ export function EditorCanvasLayer({
           origins: {},
           additive: false,
           disableSnap,
+          armed: true,
           panOrigin: (() => {
             const scroller = findScrollParent(root) || root;
             return { scrollLeft: scroller.scrollLeft, scrollTop: scroller.scrollTop, el: scroller };
@@ -285,6 +292,7 @@ export function EditorCanvasLayer({
 
       const resizeEl = target.closest("[data-sf-resize-handle]") as HTMLElement | null;
       if (resizeEl) {
+        if (!allowGeometry) return;
         const id = resizeEl.getAttribute("data-block-id");
         const handle = resizeEl.getAttribute("data-sf-resize-handle") as ResizeHandle | null;
         if (!id || !handle) return;
@@ -320,6 +328,7 @@ export function EditorCanvasLayer({
           blockId: id,
           aboutCenter: group ? e.altKey : false,
           group,
+          armed: false,
         };
         (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
         e.preventDefault();
@@ -335,6 +344,16 @@ export function EditorCanvasLayer({
         const block = blocks.find((b) => b.id === id);
         if (!block) return;
         if (isLockedProp(block.props as Record<string, unknown>)) {
+          return;
+        }
+
+        if (!allowGeometry) {
+          if (!selectedIds.includes(id)) {
+            onSelectIds(e.shiftKey ? [...new Set([...selectedIds, id])] : [id], {
+              additive: e.shiftKey,
+              primary: id,
+            });
+          }
           return;
         }
 
@@ -368,6 +387,7 @@ export function EditorCanvasLayer({
           origins,
           additive: e.shiftKey,
           disableSnap,
+          armed: false,
         };
         (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
         e.preventDefault();
@@ -375,6 +395,7 @@ export function EditorCanvasLayer({
       }
 
       if (!blockEl) {
+        if (!allowGeometry) return;
         dragRef.current = {
           mode: "marquee",
           pointerId: e.pointerId,
@@ -385,6 +406,7 @@ export function EditorCanvasLayer({
           origins: {},
           additive: e.shiftKey,
           disableSnap,
+          armed: true,
         };
         setMarquee({ x: local.x, y: local.y, w: 0, h: 0 });
         if (!e.shiftKey) onSelectIds([]);
@@ -392,7 +414,7 @@ export function EditorCanvasLayer({
         e.preventDefault();
       }
     },
-    [blocks, enabled, localPoint, onSelectIds, rectFor, rootRef, selectedIds, spaceDown]
+    [allowGeometry, blocks, enabled, localPoint, onSelectIds, rectFor, rootRef, selectedIds, spaceDown]
   );
 
   const onPointerMove = useCallback(
@@ -418,6 +440,13 @@ export function EditorCanvasLayer({
       d.disableSnap = e.altKey;
       const dx = (e.clientX - d.startX) / z;
       const dy = (e.clientY - d.startY) / z;
+
+      if ((d.mode === "drag" || d.mode === "resize") && !d.armed) {
+        if (!pointerMovedPastThreshold(e.clientX - d.startX, e.clientY - d.startY)) {
+          return;
+        }
+        d.armed = true;
+      }
 
       if (d.mode === "resize") {
         if (d.group) {
@@ -510,6 +539,11 @@ export function EditorCanvasLayer({
       }
 
       if (d.mode === "resize") {
+        if (!d.armed) {
+          setLivePositions({});
+          setGuides([]);
+          return;
+        }
         const patches = d.movingIds
           .map((id) => {
             const p = finalLive[id] || d.origins[id];
@@ -531,6 +565,12 @@ export function EditorCanvasLayer({
         return;
       }
 
+      if (!d.armed) {
+        setLivePositions({});
+        setGuides([]);
+        return;
+      }
+
       const patches = d.movingIds
         .map((id) => {
           const p = finalLive[id] || d.origins[id];
@@ -541,7 +581,7 @@ export function EditorCanvasLayer({
 
       setLivePositions({});
       setGuides([]);
-      if (patches.length) {
+      if (patches.length && allowGeometry) {
         let next = applyPositions(blocks, patches);
         // Single stack member: Alt on release detaches; otherwise reflow siblings on commit.
         if (d.mode === "drag" && d.movingIds.length === 1) {
@@ -559,7 +599,7 @@ export function EditorCanvasLayer({
         onCommitPositions(next);
       }
     },
-    [blocks, livePositions, localPoint, measured, onCommitPositions, onSelectIds, selectedIds, setGuides, setLivePositions]
+    [allowGeometry, blocks, livePositions, localPoint, measured, onCommitPositions, onSelectIds, selectedIds, setGuides, setLivePositions]
   );
 
   if (!enabled) return <>{children}</>;
@@ -598,6 +638,7 @@ export function EditorCanvasLayer({
     <div
       className="relative"
       data-sf-canvas-layer=""
+      data-sf-allow-geometry={allowGeometry ? "true" : "false"}
       style={{
         cursor: spaceDown ? "grab" : undefined,
         transform: applyVisualZoom && zoom !== 1 ? `scale(${zoom})` : undefined,
@@ -643,16 +684,18 @@ export function EditorCanvasLayer({
           }}
           data-sf-selection-outline=""
         >
-          {RESIZE_HANDLES.map((handle) => (
-            <div
-              key={handle}
-              data-sf-resize-handle={handle}
-              data-block-id={handleHostId}
-              data-sf-no-drag=""
-              className="pointer-events-auto absolute h-2.5 w-2.5 rounded-sm border-2 border-[var(--accent)] bg-[var(--card)]"
-              style={handleStyle(handle)}
-            />
-          ))}
+          {allowGeometry
+            ? RESIZE_HANDLES.map((handle) => (
+                <div
+                  key={handle}
+                  data-sf-resize-handle={handle}
+                  data-block-id={handleHostId}
+                  data-sf-no-drag=""
+                  className="pointer-events-auto absolute h-2.5 w-2.5 rounded-sm border-2 border-[var(--accent)] bg-[var(--card)]"
+                  style={handleStyle(handle)}
+                />
+              ))
+            : null}
         </div>
       ) : null}
     </div>

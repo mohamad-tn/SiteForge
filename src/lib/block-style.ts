@@ -211,17 +211,16 @@ export function blockFrameStyle(p: Record<string, unknown>, opts?: { canvas?: bo
     if (!Number.isNaN(z)) style.zIndex = z;
   }
 
-  // Free canvas: absolutize when either axis is set, or when opts.canvas forces it.
-  // Missing axis defaults to 0 so single-axis edits still place the block.
+  // Canvas only: leftover posX/posY on flow pages must never leave document flow.
   const posX = strProp(p, "posX");
   const posY = strProp(p, "posY");
   const forceCanvas = Boolean(opts?.canvas);
-  if (forceCanvas || posX || posY) {
+  if (forceCanvas) {
     style.position = "absolute";
     style.left = px(posX || "0") || "0px";
     style.top = px(posY || "0") || "0px";
     // Prevent collapse to 0-width when width is unset on canvas.
-    if (!width && forceCanvas) {
+    if (!width) {
       style.minWidth = style.minWidth || "120px";
       if (!style.width) style.width = "100%";
     }

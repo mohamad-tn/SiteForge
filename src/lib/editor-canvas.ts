@@ -11,8 +11,13 @@ export const CANVAS_SNAP_THRESHOLD = 6;
 export const CANVAS_ORIGIN_X = 24;
 export const CANVAS_ORIGIN_Y = 0;
 export const CANVAS_GAP_Y = 24;
-export const CANVAS_DEFAULT_WIDTH = 720;
+/** Shared content-column width on canvas (matches defaultTokens.spacing.contentMaxWidth). */
+export const CANVAS_DEFAULT_WIDTH = 1120;
 export const CANVAS_ARTBOARD_PAD = 120;
+/** Pointer must move this many CSS pixels before a drag/resize commits geometry. */
+export const POINTER_DRAG_THRESHOLD = 4;
+/** Legacy auto-place widths left over from the forced-canvas experiment. */
+const LEFTOVER_CANVAS_WIDTHS = new Set(["720", "720px"]);
 
 /** Section types that span the full artboard width when on canvas. */
 export const FULL_BLEED_BLOCK_TYPES: ReadonlySet<BlockType> = new Set([
@@ -76,6 +81,32 @@ export function parsePos(v: unknown, fallback = 0): number {
 export function formatPos(n: number): string {
   const r = Math.round(n * 100) / 100;
   return String(Number.isInteger(r) ? r : r);
+}
+
+/** True when pointer travel exceeds the Figma-like click-vs-drag threshold. */
+export function pointerMovedPastThreshold(
+  dx: number,
+  dy: number,
+  threshold = POINTER_DRAG_THRESHOLD
+): boolean {
+  if (!Number.isFinite(dx) || !Number.isFinite(dy)) return false;
+  return Math.hypot(dx, dy) >= threshold;
+}
+
+/** One shared content column: artboard minus side origin, never mixed 720 vs device. */
+export function canvasColumnWidth(artboardWidth = CANVAS_DEFAULT_WIDTH): number {
+  const board = Number.isFinite(artboardWidth) && artboardWidth > 0 ? artboardWidth : CANVAS_DEFAULT_WIDTH;
+  const inner = board - CANVAS_ORIGIN_X * 2;
+  return Math.max(40, Math.min(CANVAS_DEFAULT_WIDTH, inner));
+}
+
+export function isLeftoverCanvasWidth(v: unknown): boolean {
+  if (v == null) return false;
+  const s = String(v).trim().toLowerCase();
+  if (LEFTOVER_CANVAS_WIDTHS.has(s)) return true;
+  const n = Number(s.replace(/px$/i, ""));
+  if (!Number.isFinite(n)) return false;
+  return n === CANVAS_DEFAULT_WIDTH || n === canvasColumnWidth();
 }
 
 /** Per-type height estimates used when auto-placing / sizing missing dims. */
@@ -182,7 +213,7 @@ export function autoPlaceBlocks(blocks: Block[]): Block[] {
         ...props,
         posX: formatPos(bleed ? 0 : CANVAS_ORIGIN_X),
         posY: formatPos(y),
-        ...(props.width ? {} : { width: bleed ? "100%" : formatPos(est.w) }),
+        ...(props.width ? {} : { width: bleed ? "100%" : formatPos(canvasColumnWidth()) }),
       },
     };
     y += est.h + (bleed ? 0 : CANVAS_GAP_Y);
@@ -196,8 +227,17 @@ export function clearBlockPositions(blocks: Block[]): Block[] {
     const props = { ...(block.props as Record<string, unknown>) };
     delete props.posX;
     delete props.posY;
+    if (isLeftoverCanvasWidth(props.width)) delete props.width;
     return { ...block, props };
   });
+}
+
+/**
+ * Flow pages ignore leftover canvas geometry: no pos, no 720px auto-place widths.
+ * User-set widths (other than the known leftover token) stay intact.
+ */
+export function sanitizeFlowBlocks(blocks: Block[]): Block[] {
+  return clearBlockPositions(blocks);
 }
 
 /**
@@ -228,16 +268,21 @@ export function isInvalidCanvasSize(w: unknown, h: unknown, min = 40): boolean {
 }
 
 /** Default insert spot below the lowest unlocked block (or origin). */
-export function defaultInsertPosition(blocks: Block[]): { posX: string; posY: string; width: string } {
+export function defaultInsertPosition(
+  blocks: Block[],
+  type?: BlockType,
+  artboardWidth = CANVAS_DEFAULT_WIDTH
+): { posX: string; posY: string; width: string } {
   let maxBottom = CANVAS_ORIGIN_Y;
   for (const b of blocks) {
-    const r = readBlockRect(b);
+    const r = readBlockRect(b, 0, artboardWidth);
     maxBottom = Math.max(maxBottom, r.y + r.h);
   }
+  const bleed = type ? FULL_BLEED_BLOCK_TYPES.has(type) : false;
   return {
-    posX: formatPos(CANVAS_ORIGIN_X),
+    posX: formatPos(bleed ? 0 : CANVAS_ORIGIN_X),
     posY: formatPos(maxBottom + CANVAS_GAP_Y),
-    width: formatPos(CANVAS_DEFAULT_WIDTH),
+    width: bleed ? "100%" : formatPos(canvasColumnWidth(artboardWidth)),
   };
 }
 
