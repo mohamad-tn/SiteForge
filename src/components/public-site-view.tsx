@@ -35,7 +35,10 @@ export function PublicSiteView({
   const search = useSearchParams();
   const pageParam = search.get("p") || undefined;
   const collectionParam = search.get("collection") || undefined;
-  const locales = content.locales?.length ? content.locales : [content.defaultLocale || "ar"];
+  const locales = useMemo(
+    () => (content.locales?.length ? content.locales : [content.defaultLocale || "ar"]),
+    [content.locales, content.defaultLocale]
+  );
   const defaultLocale = content.defaultLocale || locales[0];
   const [locale, setLocale] = useState(defaultLocale);
   const [mode, setMode] = useState<"light" | "dark">("light");

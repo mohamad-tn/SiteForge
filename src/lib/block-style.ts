@@ -440,20 +440,6 @@ export const MOTION_LABELS: Record<string, string> = {
   motionTimeline: "الخط الزمني للحركة",
 };
 
-const ENTRANCE_CLASS: Record<string, string> = {
-  none: "",
-  fade: "sf-anim-fade",
-  "slide-up": "sf-anim-slide-up",
-  "slide-down": "sf-anim-slide-down",
-  "slide-left": "sf-anim-slide-left",
-  "slide-right": "sf-anim-slide-right",
-  scale: "sf-anim-scale",
-  float: "sf-anim-float",
-  "blur-in": "sf-anim-blur-in",
-  "bounce-in": "sf-anim-bounce-in",
-  "zoom-fade": "sf-anim-zoom-fade",
-};
-
 /** CSS class + style vars for public renderer motion (respects prefers-reduced-motion via CSS). */
 export function blockMotionAttrs(p: Record<string, unknown>): {
   className: string;

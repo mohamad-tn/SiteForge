@@ -304,7 +304,6 @@ export function InspectorPanel({
   editLocale,
   pages = [],
   siteId,
-  onUpdateTokens,
   onUpdateProp,
   onUpdateLocalizedProp,
   onUpdatePropsObject,

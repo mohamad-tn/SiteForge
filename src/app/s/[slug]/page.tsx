@@ -7,10 +7,8 @@ import { PublicSiteView } from "@/components/public-site-view";
 
 export default async function PublicSitePage({
   params,
-  searchParams,
 }: {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ p?: string; collection?: string }>;
 }) {
   const { slug } = await params;
   const site = await prisma.site.findUnique({ where: { slug } });

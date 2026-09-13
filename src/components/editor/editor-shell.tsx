@@ -373,7 +373,7 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
     if (safe.length === 0) return;
     const created: string[] = [];
     updatePageBlocks((blocks) => {
-      let next = [...blocks];
+      const next = [...blocks];
       for (const id of safe) {
         const src = next.find((b) => b.id === id);
         if (!src) continue;

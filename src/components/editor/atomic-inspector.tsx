@@ -542,7 +542,7 @@ function NavbarAtomic({
           </div>
           {items
             .filter((it) => !linkId || it.id === linkId)
-            .map((it, idx) => {
+            .map((it) => {
               const fullIdx = items.findIndex((x) => x.id === it.id);
               return (
                 <div
