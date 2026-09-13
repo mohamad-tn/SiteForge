@@ -151,7 +151,7 @@ export function CollectionsPanel({
 
   return (
     <div className="sf-scroll space-y-4">
-      <div className="rounded-2xl border border-teal-700/20 bg-teal-50/60 px-3 py-2.5 text-[11px] leading-5 text-stone-700 dark:border-teal-400/25 dark:bg-teal-950/35 dark:text-stone-200">
+      <div className="rounded-2xl border border-teal-700/20 bg-teal-50/60 px-3 py-2.5 text-[11px] leading-5 text-[var(--foreground)] dark:border-teal-400/25 dark:bg-teal-950/35">
         <div className="mb-1 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.12em] text-teal-800 dark:text-teal-300">
           <Library className="h-3.5 w-3.5" aria-hidden />
           {t("openCms")}
@@ -161,13 +161,13 @@ export function CollectionsPanel({
 
       {!active ? (
         <>
-          <div className="space-y-2 rounded-2xl border border-stone-300/80 bg-[var(--card)] p-3 dark:border-stone-700">
-            <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-stone-600 dark:text-stone-400">
+          <div className="space-y-2 rounded-2xl border border-[var(--border)] bg-[var(--card)] p-3">
+            <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--muted)]">
               {t("cmsNewCollection")}
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-1">
-                <Label className="text-[11px] text-stone-600 dark:text-stone-300">{t("cmsName")}</Label>
+                <Label className="text-[11px] text-[var(--muted)]">{t("cmsName")}</Label>
                 <Input
                   value={name}
                   onChange={(e) => setName(e.target.value)}
@@ -175,7 +175,7 @@ export function CollectionsPanel({
                 />
               </div>
               <div className="space-y-1">
-                <Label className="text-[11px] text-stone-600 dark:text-stone-300">{t("cmsSlugLabel")}</Label>
+                <Label className="text-[11px] text-[var(--muted)]">{t("cmsSlugLabel")}</Label>
                 <Input
                   value={slug}
                   onChange={(e) => setSlug(e.target.value)}
@@ -198,10 +198,10 @@ export function CollectionsPanel({
                   setJustCreatedId(null);
                   loadItems(c.id);
                 }}
-                className="w-full rounded-2xl border border-stone-300/70 bg-[var(--card)] px-3 py-2.5 text-start text-sm transition hover:border-teal-600/35 hover:bg-teal-50/40 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--ring)] dark:border-stone-700 dark:hover:bg-teal-950/25"
+                className="w-full rounded-2xl border border-[var(--border)] bg-[var(--card)] px-3 py-2.5 text-start text-sm transition hover:border-teal-600/35 hover:bg-teal-50/40 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--ring)] dark:hover:bg-teal-950/25"
               >
-                <div className="font-semibold text-stone-800 dark:text-stone-100">{c.name}</div>
-                <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] font-mono text-stone-600 dark:text-stone-400" dir="ltr">
+                <div className="font-semibold text-[var(--foreground)]">{c.name}</div>
+                <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] font-mono text-[var(--muted)]" dir="ltr">
                   <span>/{c.slug}</span>
                   <span>·</span>
                   <span>
@@ -214,9 +214,9 @@ export function CollectionsPanel({
               </button>
             ))}
             {collections.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-stone-300 bg-stone-50/70 px-3 py-6 text-center dark:border-stone-700 dark:bg-stone-950/40">
-                <p className="text-xs font-semibold text-stone-700 dark:text-stone-200">{t("cmsEmpty")}</p>
-                <p className="mt-1.5 text-[11px] leading-5 text-stone-600 dark:text-stone-400">{t("cmsEmptyNext")}</p>
+              <div className="rounded-2xl border border-dashed border-[var(--border)] bg-[var(--surface)] px-3 py-6 text-center">
+                <p className="text-xs font-semibold text-[var(--foreground)]">{t("cmsEmpty")}</p>
+                <p className="mt-1.5 text-[11px] leading-5 text-[var(--muted)]">{t("cmsEmptyNext")}</p>
               </div>
             ) : null}
           </div>
@@ -241,7 +241,7 @@ export function CollectionsPanel({
             <p className="mt-1">{t("cmsHowToUse")}</p>
             <button
               type="button"
-              className="mt-2 w-full rounded-xl border border-teal-700/25 bg-white/80 px-2.5 py-2 text-start text-[11px] font-semibold text-teal-950 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] dark:border-teal-400/30 dark:bg-teal-950/50 dark:text-teal-50 dark:hover:bg-teal-950/70"
+              className="mt-2 w-full rounded-xl border border-teal-700/25 bg-[var(--card)] px-2.5 py-2 text-start text-[11px] font-semibold text-teal-950 hover:bg-[var(--card)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] dark:border-teal-400/30 dark:bg-teal-950/50 dark:text-teal-50 dark:hover:bg-teal-950/70"
               onClick={() => setMsg(t("cmsBindButtonHint"))}
             >
               {t("cmsBindButtonHint")}
@@ -292,8 +292,8 @@ export function CollectionsPanel({
             ) : null}
           </div>
 
-          <div className="space-y-3 rounded-2xl border border-stone-300/80 bg-[var(--card)] p-3 dark:border-stone-700">
-            <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-stone-600 dark:text-stone-400">
+          <div className="space-y-3 rounded-2xl border border-[var(--border)] bg-[var(--card)] p-3">
+            <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--muted)]">
               {t("cmsManageItems")} · {active.name}
             </div>
             {fields.map((f) => (
@@ -308,7 +308,7 @@ export function CollectionsPanel({
                   />
                 ) : (
                   <>
-                    <Label className="text-[11px] text-stone-600 dark:text-stone-300">{f.label}</Label>
+                    <Label className="text-[11px] text-[var(--muted)]">{f.label}</Label>
                     {f.type === "richtext" ? (
                       <Textarea
                         value={itemDraft[f.key] || ""}
@@ -333,18 +333,18 @@ export function CollectionsPanel({
 
             <div className="space-y-1.5 pt-2">
               {items.length === 0 ? (
-                <p className="py-3 text-center text-[11px] text-stone-600 dark:text-stone-400">{t("cmsNoItemsYet")}</p>
+                <p className="py-3 text-center text-[11px] text-[var(--muted)]">{t("cmsNoItemsYet")}</p>
               ) : null}
               {items.map((it) => (
                 <div
                   key={it.id}
-                  className="rounded-xl border border-stone-300/70 px-2.5 py-2 text-xs dark:border-stone-700"
+                  className="rounded-xl border border-[var(--border)] px-2.5 py-2 text-xs"
                 >
-                  <div className="font-semibold text-stone-800 dark:text-stone-100">
+                  <div className="font-semibold text-[var(--foreground)]">
                     {String(it.data?.title || "—")}
                   </div>
                   {typeof it.data?.url === "string" && it.data.url ? (
-                    <div className="mt-0.5 truncate font-mono text-[10px] text-stone-600 dark:text-stone-400" dir="ltr">
+                    <div className="mt-0.5 truncate font-mono text-[10px] text-[var(--muted)]" dir="ltr">
                       {it.data.url}
                     </div>
                   ) : null}

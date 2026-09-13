@@ -79,15 +79,15 @@ export function MediaField({
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-2">
-        <Label className="text-[11px] text-stone-500">{label}</Label>
-        <div className="flex rounded-full bg-stone-100 p-0.5 text-[10px] font-bold dark:bg-stone-950" role="tablist">
+        <Label className="text-[11px] text-[var(--muted)]">{label}</Label>
+        <div className="flex rounded-full bg-[var(--surface)] p-0.5 text-[10px] font-bold" role="tablist">
           <button
             type="button"
             role="tab"
             aria-selected={mode === "upload"}
             title={t("uploadMode")}
             onClick={() => setMode("upload")}
-            className={`rounded-full px-2 py-0.5 ${mode === "upload" ? "bg-white shadow-sm dark:bg-stone-800" : "text-stone-500"}`}
+            className={`rounded-full px-2 py-0.5 ${mode === "upload" ? "bg-[var(--card)] shadow-sm" : "text-[var(--muted)]"}`}
           >
             {t("uploadMode")}
           </button>
@@ -97,7 +97,7 @@ export function MediaField({
             aria-selected={mode === "url"}
             title={t("uploadUrlMode")}
             onClick={() => setMode("url")}
-            className={`rounded-full px-2 py-0.5 ${mode === "url" ? "bg-white shadow-sm dark:bg-stone-800" : "text-stone-500"}`}
+            className={`rounded-full px-2 py-0.5 ${mode === "url" ? "bg-[var(--card)] shadow-sm" : "text-[var(--muted)]"}`}
           >
             {t("uploadUrlMode")}
           </button>
@@ -105,7 +105,7 @@ export function MediaField({
       </div>
 
       {mode === "upload" ? (
-        <div className="rounded-2xl border border-dashed border-stone-300/90 bg-stone-50/70 p-3 dark:border-stone-700 dark:bg-stone-950/40">
+        <div className="rounded-2xl border border-dashed border-[var(--border)] bg-[var(--surface)] p-3">
           <input
             ref={inputRef}
             type="file"
@@ -125,18 +125,18 @@ export function MediaField({
             {uploading ? `${t("uploadProgress")} ${progress}%` : t("uploadChoose")}
           </Button>
           {uploading ? (
-            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-stone-200 dark:bg-stone-800">
+            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[var(--border)]">
               <div
                 className="h-full rounded-full bg-teal-700 transition-all duration-200"
                 style={{ width: `${progress}%` }}
               />
             </div>
           ) : null}
-          <p className="mt-2 text-[10px] leading-4 text-stone-400">{t("uploadHint")}</p>
+          <p className="mt-2 text-[10px] leading-4 text-[var(--muted)]">{t("uploadHint")}</p>
         </div>
       ) : (
         <div className="relative">
-          <Link2 className="pointer-events-none absolute start-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-stone-400" />
+          <Link2 className="pointer-events-none absolute start-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[var(--muted)]" />
           <Input
             value={value}
             onChange={(e) => onChange(e.target.value)}
@@ -150,15 +150,15 @@ export function MediaField({
       {error ? <p className="text-[11px] text-rose-600">{error}</p> : null}
 
       {value ? (
-        <div className="overflow-hidden rounded-2xl border border-stone-200/80 bg-white dark:border-stone-800 dark:bg-stone-900">
+        <div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--card)]">
           {isVideo ? (
             <video src={value} className="max-h-36 w-full object-cover" muted playsInline controls />
           ) : (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={value} alt="" className="max-h-36 w-full object-cover" />
           )}
-          <div className="flex items-center justify-between gap-2 border-t border-stone-100 px-2.5 py-1.5 dark:border-stone-800">
-            <span className="truncate font-mono text-[10px] text-stone-400" dir="ltr">
+          <div className="flex items-center justify-between gap-2 border-t border-[var(--border)] px-2.5 py-1.5">
+            <span className="truncate font-mono text-[10px] text-[var(--muted)]" dir="ltr">
               {value}
             </span>
             <button type="button" className="shrink-0 text-[10px] font-bold text-rose-600" onClick={() => onChange("")}>
@@ -167,7 +167,7 @@ export function MediaField({
           </div>
         </div>
       ) : (
-        <div className="flex items-center gap-2 rounded-2xl bg-stone-100/80 px-3 py-2 text-[11px] text-stone-500 dark:bg-stone-900">
+        <div className="flex items-center gap-2 rounded-2xl bg-[var(--surface)] px-3 py-2 text-[11px] text-[var(--muted)]">
           <ImagePlus className="h-3.5 w-3.5" />
           {t("uploadEmpty")}
         </div>

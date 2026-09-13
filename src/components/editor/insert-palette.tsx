@@ -47,7 +47,7 @@ export function InsertPalette({
       {groups.map((g) => (
         <div key={g.key}>
           {mode === "all" ? (
-            <div className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-stone-400">{g.title}</div>
+            <div className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--muted)]">{g.title}</div>
           ) : null}
           <div className="grid grid-cols-2 gap-1.5">
             {g.types.map((type) => (
@@ -55,12 +55,12 @@ export function InsertPalette({
                 key={type}
                 type="button"
                 onClick={() => onInsert(type)}
-                className="group rounded-[var(--radius-lg)] border border-stone-200/80 bg-[var(--card)] px-2.5 py-2.5 text-start shadow-[0_1px_0_rgba(28,25,23,0.04)] transition hover:-translate-y-0.5 hover:border-teal-700/40 hover:bg-teal-50/80 hover:shadow-sm dark:border-stone-700 dark:shadow-none dark:hover:bg-teal-950/40"
+                className="group rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--card)] px-2.5 py-2.5 text-start shadow-[0_1px_0_rgba(28,25,23,0.04)] transition hover:-translate-y-0.5 hover:border-teal-700/40 hover:bg-teal-50/80 hover:shadow-sm dark:shadow-none dark:hover:bg-teal-950/40"
               >
-                <div className="text-[11px] font-semibold text-stone-800 group-hover:text-teal-900 dark:text-stone-100 dark:group-hover:text-teal-100">
+                <div className="text-[11px] font-semibold text-[var(--foreground)] group-hover:text-teal-900 dark:group-hover:text-teal-100">
                   {BLOCK_META[type].label}
                 </div>
-                <div className="mt-0.5 line-clamp-2 text-[10px] leading-snug text-stone-400 group-hover:text-stone-500 dark:group-hover:text-stone-400">
+                <div className="mt-0.5 line-clamp-2 text-[10px] leading-snug text-[var(--muted)] group-hover:text-[var(--foreground)]">
                   {BLOCK_META[type].description}
                 </div>
               </button>
@@ -69,8 +69,8 @@ export function InsertPalette({
         </div>
       ))}
       {groups.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-stone-300/80 bg-stone-50/50 px-3 py-6 text-center dark:border-stone-700 dark:bg-stone-950/40">
-          <p className="text-xs text-stone-500 dark:text-stone-400">{t("paletteEmpty")}</p>
+        <div className="rounded-2xl border border-dashed border-[var(--border)] bg-[var(--surface)] px-3 py-6 text-center">
+          <p className="text-xs text-[var(--muted)]">{t("paletteEmpty")}</p>
         </div>
       ) : null}
     </div>

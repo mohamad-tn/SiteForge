@@ -172,7 +172,7 @@ function KvEditor({
               }}
             />
             {showSecret ? (
-              <label className="flex items-center gap-1 text-[10px] text-stone-500 shrink-0">
+              <label className="flex items-center gap-1 text-[10px] text-[var(--muted)] shrink-0">
                 <input
                   type="checkbox"
                   className="accent-teal-700"
@@ -188,7 +188,7 @@ function KvEditor({
             ) : null}
             <button
               type="button"
-              className="h-8 w-8 rounded-xl text-stone-400 hover:bg-stone-100 hover:text-red-600 dark:hover:bg-stone-800"
+              className="h-8 w-8 rounded-xl text-[var(--muted)] hover:bg-[var(--surface)] hover:text-red-600"
               aria-label="Remove"
               onClick={() => onChange(rows.filter((_, j) => j !== i))}
             >
@@ -197,7 +197,7 @@ function KvEditor({
           </div>
           {showSecret && secretNames && secretNames.length > 0 ? (
             <select
-              className="h-7 w-full rounded-xl border border-stone-200 bg-white px-2 font-mono text-[10px] dark:border-stone-700 dark:bg-stone-950"
+              className="h-7 w-full rounded-xl border border-[var(--border)] bg-[var(--card)] px-2 font-mono text-[10px]"
               dir="ltr"
               defaultValue=""
               onChange={(e) => {
@@ -331,17 +331,17 @@ export function ApiActionEditor({
   return (
     <div className="space-y-3 rounded-2xl border border-teal-700/15 bg-gradient-to-b from-teal-50/60 to-transparent p-3 dark:from-teal-950/30 dark:border-teal-500/15">
       <div>
-        <h3 className="text-sm font-bold text-stone-800 dark:text-stone-100">{c.title}</h3>
-        <p className="mt-0.5 text-[11px] leading-5 text-stone-500 dark:text-stone-400">{c.subtitle}</p>
+        <h3 className="text-sm font-bold text-[var(--foreground)]">{c.title}</h3>
+        <p className="mt-0.5 text-[11px] leading-5 text-[var(--muted)]">{c.subtitle}</p>
       </div>
 
       {isForm ? (
-        <p className="rounded-xl bg-white/70 px-2.5 py-2 text-[10px] leading-5 text-stone-600 dark:bg-stone-950/40 dark:text-stone-300">
+        <p className="rounded-xl bg-[var(--card)] px-2.5 py-2 text-[10px] leading-5 text-[var(--muted)]">
           {c.helpForm}
         </p>
       ) : null}
 
-      <label className="flex items-center gap-2 rounded-2xl border border-stone-200/80 bg-white/80 px-3 py-2.5 text-sm dark:border-stone-800 dark:bg-stone-950/50">
+      <label className="flex items-center gap-2 rounded-2xl border border-[var(--border)] bg-[var(--card)] px-3 py-2.5 text-sm">
         <input
           type="checkbox"
           className="accent-teal-700"
@@ -355,7 +355,7 @@ export function ApiActionEditor({
         <>
           {showClickBehavior ? (
             <div className="space-y-1.5">
-              <Label className="text-[11px] text-stone-500">{c.clickBehavior}</Label>
+              <Label className="text-[11px] text-[var(--muted)]">{c.clickBehavior}</Label>
               <SegmentedControl
                 aria-label={c.clickBehavior}
                 value={behavior}
@@ -370,7 +370,7 @@ export function ApiActionEditor({
           ) : null}
 
           <div className="space-y-1.5">
-            <Label className="text-[11px] text-stone-500">{c.method}</Label>
+            <Label className="text-[11px] text-[var(--muted)]">{c.method}</Label>
             <div className="overflow-x-auto">
               <SegmentedControl
                 aria-label={c.method}
@@ -383,7 +383,7 @@ export function ApiActionEditor({
           </div>
 
           <div className="space-y-1.5">
-            <Label className="text-[11px] text-stone-500">{c.url}</Label>
+            <Label className="text-[11px] text-[var(--muted)]">{c.url}</Label>
             <Input
               dir="ltr"
               className="h-10 rounded-2xl font-mono text-sm"
@@ -391,11 +391,11 @@ export function ApiActionEditor({
               value={action.url}
               onChange={(e) => patchAction({ url: e.target.value })}
             />
-            <p className="text-[10px] leading-4 text-stone-400">{c.urlHint}</p>
+            <p className="text-[10px] leading-4 text-[var(--muted)]">{c.urlHint}</p>
           </div>
 
           <div className="space-y-1.5">
-            <Label className="text-[11px] text-stone-500">{c.runMode}</Label>
+            <Label className="text-[11px] text-[var(--muted)]">{c.runMode}</Label>
             <Select
               value={action.runMode}
               onValueChange={(v) => patchAction({ runMode: v as RunMode })}
@@ -413,7 +413,7 @@ export function ApiActionEditor({
             {c.secretWarn}
           </div>
 
-          <div className="flex gap-0.5 rounded-2xl bg-stone-100/90 p-1 dark:bg-stone-950">
+          <div className="flex gap-0.5 rounded-2xl bg-[var(--surface)] p-1">
             {(Object.keys(c.tabs) as Tab[]).map((k) => (
               <button
                 key={k}
@@ -421,8 +421,8 @@ export function ApiActionEditor({
                 onClick={() => setTab(k)}
                 className={`flex-1 rounded-xl py-1.5 text-[10px] font-semibold transition ${
                   tab === k
-                    ? "bg-white text-stone-900 shadow-sm dark:bg-stone-800 dark:text-stone-50"
-                    : "text-stone-500 hover:text-stone-800 dark:text-stone-400"
+                    ? "bg-[var(--card)] text-[var(--foreground)] shadow-sm"
+                    : "text-[var(--muted)] hover:text-[var(--foreground)]"
                 }`}
               >
                 {c.tabs[k]}
@@ -446,7 +446,7 @@ export function ApiActionEditor({
                 </button>
                 {secretNames.length > 0 ? (
                   <select
-                    className="h-7 max-w-full rounded-xl border border-teal-700/20 bg-white px-2 font-mono text-[10px] dark:bg-stone-950"
+                    className="h-7 max-w-full rounded-xl border border-teal-700/20 bg-[var(--card)] px-2 font-mono text-[10px]"
                     dir="ltr"
                     defaultValue=""
                     onChange={(e) => {
@@ -470,10 +470,10 @@ export function ApiActionEditor({
                     ))}
                   </select>
                 ) : siteId ? (
-                  <span className="text-[10px] text-stone-400">{c.noSecrets}</span>
+                  <span className="text-[10px] text-[var(--muted)]">{c.noSecrets}</span>
                 ) : null}
               </div>
-              <p className="text-[10px] leading-4 text-stone-400">{c.vaultHint}</p>
+              <p className="text-[10px] leading-4 text-[var(--muted)]">{c.vaultHint}</p>
               <KvEditor
                 lang={lang}
                 showSecret
@@ -495,7 +495,7 @@ export function ApiActionEditor({
           {tab === "body" ? (
             <div className="space-y-3">
               <div className="space-y-1.5">
-                <Label className="text-[11px] text-stone-500">{c.bodyMode}</Label>
+                <Label className="text-[11px] text-[var(--muted)]">{c.bodyMode}</Label>
                 <Select
                   value={action.bodyMode}
                   onValueChange={(v) => patchAction({ bodyMode: v as BodyMode })}
@@ -509,19 +509,19 @@ export function ApiActionEditor({
               </div>
               {action.bodyMode === "json" ? (
                 <div className="space-y-1.5">
-                  <Label className="text-[11px] text-stone-500">{c.bodyJson}</Label>
+                  <Label className="text-[11px] text-[var(--muted)]">{c.bodyJson}</Label>
                   <Textarea
                     dir="ltr"
                     className="min-h-[100px] rounded-2xl font-mono text-xs"
                     value={action.bodyJson}
                     onChange={(e) => patchAction({ bodyJson: e.target.value })}
                   />
-                  <p className="text-[10px] text-stone-400">{c.bodyJsonHint}</p>
+                  <p className="text-[10px] text-[var(--muted)]">{c.bodyJsonHint}</p>
                 </div>
               ) : null}
               {action.bodyMode === "raw" ? (
                 <div className="space-y-1.5">
-                  <Label className="text-[11px] text-stone-500">{c.bodyRaw}</Label>
+                  <Label className="text-[11px] text-[var(--muted)]">{c.bodyRaw}</Label>
                   <Textarea
                     dir="ltr"
                     className="min-h-[80px] rounded-2xl font-mono text-xs"
@@ -532,7 +532,7 @@ export function ApiActionEditor({
               ) : null}
               {(action.bodyMode === "json" || action.bodyMode === "form") && (
                 <div className="space-y-1.5">
-                  <Label className="text-[11px] text-stone-500">{c.staticFields}</Label>
+                  <Label className="text-[11px] text-[var(--muted)]">{c.staticFields}</Label>
                   <KvEditor
                     lang={lang}
                     rows={action.formFields}
@@ -545,7 +545,7 @@ export function ApiActionEditor({
 
           <div className="space-y-2">
             <div className="space-y-1.5">
-              <Label className="text-[11px] text-stone-500">{c.successMsg}</Label>
+              <Label className="text-[11px] text-[var(--muted)]">{c.successMsg}</Label>
               <Input
                 className="h-9 rounded-2xl text-sm"
                 value={action.successMessage}
@@ -553,7 +553,7 @@ export function ApiActionEditor({
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-[11px] text-stone-500">{c.errorMsg}</Label>
+              <Label className="text-[11px] text-[var(--muted)]">{c.errorMsg}</Label>
               <Input
                 className="h-9 rounded-2xl text-sm"
                 value={action.errorMessage}
@@ -563,7 +563,7 @@ export function ApiActionEditor({
           </div>
 
           {isForm ? (
-            <label className="flex items-center gap-2 rounded-2xl border border-stone-200/80 px-3 py-2.5 text-sm dark:border-stone-800">
+            <label className="flex items-center gap-2 rounded-2xl border border-[var(--border)] px-3 py-2.5 text-sm">
               <input
                 type="checkbox"
                 className="accent-teal-700"
@@ -574,11 +574,11 @@ export function ApiActionEditor({
             </label>
           ) : null}
 
-          <div className="space-y-2 rounded-2xl border border-stone-200/80 bg-white/80 p-3 dark:border-stone-800 dark:bg-stone-950/40">
+          <div className="space-y-2 rounded-2xl border border-[var(--border)] bg-[var(--card)] p-3">
             <div className="flex items-center justify-between gap-2">
               <div>
-                <div className="text-xs font-bold text-stone-800 dark:text-stone-100">{c.test}</div>
-                <p className="text-[10px] leading-4 text-stone-400">{c.testHint}</p>
+                <div className="text-xs font-bold text-[var(--foreground)]">{c.test}</div>
+                <p className="text-[10px] leading-4 text-[var(--muted)]">{c.testHint}</p>
               </div>
               <button
                 type="button"

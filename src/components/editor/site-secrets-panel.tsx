@@ -109,11 +109,11 @@ export function SiteSecretsPanel({ siteId }: { siteId: string }) {
           {c.refresh}
         </Button>
       </div>
-      <p className="text-[11px] leading-5 text-stone-600 dark:text-stone-400">{c.body}</p>
+      <p className="text-[11px] leading-5 text-[var(--muted)]">{c.body}</p>
 
-      <div className="space-y-2 rounded-2xl border border-stone-200/80 bg-white/70 p-2.5 dark:border-stone-800 dark:bg-stone-950/40">
+      <div className="space-y-2 rounded-2xl border border-[var(--border)] bg-[var(--card)] p-2.5">
         <div className="space-y-1.5">
-          <Label className="text-[11px] text-stone-500">{c.name}</Label>
+          <Label className="text-[11px] text-[var(--muted)]">{c.name}</Label>
           <Input
             dir="ltr"
             className="h-9 rounded-2xl font-mono text-sm"
@@ -121,10 +121,10 @@ export function SiteSecretsPanel({ siteId }: { siteId: string }) {
             value={name}
             onChange={(e) => setName(e.target.value)}
           />
-          <p className="text-[10px] text-stone-400">{c.nameHint}</p>
+          <p className="text-[10px] text-[var(--muted)]">{c.nameHint}</p>
         </div>
         <div className="space-y-1.5">
-          <Label className="text-[11px] text-stone-500">{c.value}</Label>
+          <Label className="text-[11px] text-[var(--muted)]">{c.value}</Label>
           <Input
             dir="ltr"
             type="password"
@@ -146,21 +146,21 @@ export function SiteSecretsPanel({ siteId }: { siteId: string }) {
         {msg ? <p className="text-[10px] text-teal-800 dark:text-teal-300">{msg}</p> : null}
       </div>
 
-      {loading ? <p className="text-xs text-stone-400">…</p> : null}
+      {loading ? <p className="text-xs text-[var(--muted)]">…</p> : null}
       {!loading && rows.length === 0 ? (
-        <p className="py-2 text-center text-[11px] text-stone-400">{c.empty}</p>
+        <p className="py-2 text-center text-[11px] text-[var(--muted)]">{c.empty}</p>
       ) : null}
       <ul className="space-y-1.5">
         {rows.map((r) => (
           <li
             key={r.id}
-            className="flex items-center justify-between gap-2 rounded-xl border border-stone-200/80 px-2.5 py-2 text-xs dark:border-stone-800"
+            className="flex items-center justify-between gap-2 rounded-xl border border-[var(--border)] px-2.5 py-2 text-xs"
           >
             <div className="min-w-0">
-              <div className="truncate font-mono font-semibold text-stone-800 dark:text-stone-100" dir="ltr">
+              <div className="truncate font-mono font-semibold text-[var(--foreground)]" dir="ltr">
                 {r.name}
               </div>
-              <div className="text-[10px] text-stone-400" dir="ltr">
+              <div className="text-[10px] text-[var(--muted)]" dir="ltr">
                 •••••••• · {new Date(r.updatedAt).toLocaleString(lang === "ar" ? "ar" : "en")}
               </div>
             </div>

@@ -43,24 +43,24 @@ export function SubmissionsPanel({ siteId }: { siteId: string }) {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <h3 className="text-[10px] font-bold uppercase tracking-[0.14em] text-stone-400">
+        <h3 className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--muted)]">
           {t("repliesTitle")}
         </h3>
         <Button size="sm" variant="ghost" className="h-7 rounded-full text-[11px]" onClick={load}>
           {t("refresh")}
         </Button>
       </div>
-      {loading ? <p className="text-xs text-stone-400">{t("loading")}</p> : null}
+      {loading ? <p className="text-xs text-[var(--muted)]">{t("loading")}</p> : null}
       {!loading && rows.length === 0 ? (
-        <p className="py-6 text-center text-xs text-stone-400">{t("repliesEmpty")}</p>
+        <p className="py-6 text-center text-xs text-[var(--muted)]">{t("repliesEmpty")}</p>
       ) : null}
       <div className="space-y-2">
         {rows.map((r) => (
           <div
             key={r.id}
-            className="rounded-2xl border border-stone-200/80 p-3 text-xs dark:border-stone-800"
+            className="rounded-2xl border border-[var(--border)] p-3 text-xs"
           >
-            <div className="mb-1.5 flex items-center justify-between gap-2 text-[10px] text-stone-400">
+            <div className="mb-1.5 flex items-center justify-between gap-2 text-[10px] text-[var(--muted)]">
               <span dir="ltr">
                 {new Date(r.createdAt).toLocaleString(lang === "ar" ? "ar" : "en")}
               </span>
@@ -75,8 +75,8 @@ export function SubmissionsPanel({ siteId }: { siteId: string }) {
             <dl className="space-y-1">
               {Object.entries(r.data || {}).map(([k, v]) => (
                 <div key={k} className="flex gap-2">
-                  <dt className="shrink-0 font-semibold text-stone-500">{k}:</dt>
-                  <dd className="break-words text-stone-800 dark:text-stone-200">{String(v)}</dd>
+                  <dt className="shrink-0 font-semibold text-[var(--muted)]">{k}:</dt>
+                  <dd className="break-words text-[var(--foreground)]">{String(v)}</dd>
                 </div>
               ))}
             </dl>
