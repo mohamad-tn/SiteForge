@@ -242,7 +242,7 @@ export function DashboardClient({
               {t.welcome} {userName || userEmail}
             </div>
           </div>
-          <div className="flex min-w-0 max-w-full flex-wrap items-center justify-end gap-1.5 sm:gap-2">
+          <div className="sf-header-actions flex min-w-0 max-w-full flex-wrap items-center justify-end gap-1.5 sm:gap-2">
             <PlatformLangSwitcher size="compact" />
             <span className="hidden text-[11px] text-[var(--muted)] lg:inline">{t.cmd}</span>
             <ThemeToggleButton />
@@ -274,14 +274,14 @@ export function DashboardClient({
             </div>
             <Button
               type="button"
-              className="shrink-0 rounded-full shadow-sm"
+              className="min-h-11 w-full shrink-0 rounded-full shadow-sm sm:w-auto"
               onClick={() => document.getElementById("create")?.scrollIntoView({ behavior: "smooth" })}
             >
               <Plus className="h-4 w-4" aria-hidden />
               {tp("dashCtaCreate")}
             </Button>
           </div>
-          <div className="relative mt-6 grid gap-3 sm:grid-cols-3">
+          <div className="relative mt-6 grid grid-cols-1 gap-3 min-[390px]:grid-cols-3">
             {[
               [tp("dashMetricSites"), String(total)],
               [tp("dashMetricPublished"), String(publishedShown)],

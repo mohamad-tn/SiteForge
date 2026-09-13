@@ -887,3 +887,71 @@ html[data-theme="dark"] .sf-device-screen {
     margin-inline: auto;
   }
 }
+
+
+/* —— WAVE 4: mobile-first editor + dashboard —— */
+.sf-touch-target {
+  min-height: 44px;
+  min-width: 44px;
+}
+@media (max-width: 430px) {
+  .sf-editor-topbar {
+    padding: 0.45rem 0.5rem;
+    column-gap: 0.35rem;
+  }
+  .sf-editor-topbar-start .sf-toolbar-group {
+    max-width: min(52vw, 11rem);
+  }
+  .sf-editor-topbar .sf-touch-target,
+  .sf-editor-topbar button,
+  .sf-editor-topbar a {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  /* Panels become bottom sheets on phone widths */
+  aside.sf-panel.max-xl\:fixed,
+  .sf-mobile-sheet {
+    inset-inline: 0 !important;
+    inset-block-end: 0 !important;
+    inset-block-start: auto !important;
+    width: 100% !important;
+    max-height: min(78vh, 640px) !important;
+    border-radius: 1.25rem 1.25rem 0 0 !important;
+    border-inline: 0 !important;
+    border-bottom: 0 !important;
+    box-shadow: 0 -18px 50px -24px rgba(28, 25, 23, 0.45) !important;
+  }
+  .sf-canvas {
+    overflow-x: hidden;
+  }
+  .sf-app-header .sf-header-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+  .sf-stat {
+    min-width: 0;
+  }
+}
+.sf-editor-mobile-dock {
+  display: none;
+  position: sticky;
+  bottom: 0;
+  z-index: 35;
+  gap: 0.5rem;
+  padding: 0.5rem 0.65rem calc(0.5rem + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid color-mix(in oklab, var(--border) 88%, transparent);
+  background: color-mix(in oklab, var(--background) 88%, transparent);
+  backdrop-filter: blur(12px);
+}
+.sf-editor-mobile-dock > button {
+  flex: 1;
+  min-height: 44px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+}
+@media (max-width: 1279px) {
+  .sf-editor-mobile-dock {
+    display: flex;
+  }
+}

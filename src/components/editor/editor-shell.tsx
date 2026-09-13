@@ -843,19 +843,19 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
             {siteMenuOpen ? (
               <div className="absolute end-0 top-full z-50 mt-1 w-72 max-w-[min(18rem,calc(100vw-1.25rem))] rounded-2xl border border-[var(--border)] bg-[var(--card)] p-2 text-[var(--foreground)] shadow-[var(--shadow-md)]" data-sf-chrome="platform">
                 <div className="px-2.5 py-1.5 text-[9px] font-bold uppercase tracking-[0.12em] text-[var(--muted)]">{t("toolbarSite")}</div>
-                <button type="button" className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-start text-xs font-semibold hover:bg-stone-100 dark:hover:bg-stone-800" onClick={() => { openSiteSection(null); setSiteMenuOpen(false); }}>
+                <button type="button" className="flex min-h-[44px] w-full items-center gap-2 rounded-xl px-3 py-2.5 text-start text-xs font-semibold hover:bg-stone-100 dark:hover:bg-stone-800" onClick={() => { openSiteSection(null); setSiteMenuOpen(false); }}>
                   <Settings2 className="h-3.5 w-3.5" aria-hidden /> {t("openSiteSettings")}
                 </button>
-                <button type="button" className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-start text-xs font-semibold hover:bg-stone-100 dark:hover:bg-stone-800" onClick={() => { openSiteSection("seo"); setSiteMenuOpen(false); }}>
+                <button type="button" className="flex min-h-[44px] w-full items-center gap-2 rounded-xl px-3 py-2.5 text-start text-xs font-semibold hover:bg-stone-100 dark:hover:bg-stone-800" onClick={() => { openSiteSection("seo"); setSiteMenuOpen(false); }}>
                   <Search className="h-3.5 w-3.5" aria-hidden /> {t("openSeo")}
                 </button>
-                <button type="button" className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-start text-xs font-semibold hover:bg-stone-100 dark:hover:bg-stone-800" onClick={() => { openSiteSection("domain"); setSiteMenuOpen(false); }}>
+                <button type="button" className="flex min-h-[44px] w-full items-center gap-2 rounded-xl px-3 py-2.5 text-start text-xs font-semibold hover:bg-stone-100 dark:hover:bg-stone-800" onClick={() => { openSiteSection("domain"); setSiteMenuOpen(false); }}>
                   <Globe className="h-3.5 w-3.5" aria-hidden /> {t("openDomain")}
                 </button>
-                <button type="button" className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-start text-xs font-semibold hover:bg-stone-100 dark:hover:bg-stone-800" onClick={() => { openSiteSection("secrets"); setSiteMenuOpen(false); }}>
+                <button type="button" className="flex min-h-[44px] w-full items-center gap-2 rounded-xl px-3 py-2.5 text-start text-xs font-semibold hover:bg-stone-100 dark:hover:bg-stone-800" onClick={() => { openSiteSection("secrets"); setSiteMenuOpen(false); }}>
                   <KeyRound className="h-3.5 w-3.5" aria-hidden /> {t("openSecrets")}
                 </button>
-                <button type="button" className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-start text-xs font-semibold hover:bg-stone-100 dark:hover:bg-stone-800" onClick={() => { openCmsPanel(); setSiteMenuOpen(false); }}>
+                <button type="button" className="flex min-h-[44px] w-full items-center gap-2 rounded-xl px-3 py-2.5 text-start text-xs font-semibold hover:bg-stone-100 dark:hover:bg-stone-800" onClick={() => { openCmsPanel(); setSiteMenuOpen(false); }}>
                   <Library className="h-3.5 w-3.5" aria-hidden /> {t("openCms")}
                 </button>
                 <div className="my-1 h-px bg-stone-200 dark:bg-stone-700" />
@@ -895,10 +895,10 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
                     </button>
                   ))}
                 </div>
-                <button type="button" className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-start text-xs font-semibold hover:bg-stone-100 xl:hidden dark:hover:bg-stone-800" onClick={() => { undo(); setSiteMenuOpen(false); }} disabled={!canUndo}>
+                <button type="button" className="flex min-h-[44px] w-full items-center gap-2 rounded-xl px-3 py-2.5 text-start text-xs font-semibold hover:bg-stone-100 xl:hidden dark:hover:bg-stone-800" onClick={() => { undo(); setSiteMenuOpen(false); }} disabled={!canUndo}>
                   <Undo2 className="h-3.5 w-3.5" aria-hidden /> {t("undo")}
                 </button>
-                <button type="button" className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-start text-xs font-semibold hover:bg-stone-100 xl:hidden dark:hover:bg-stone-800" onClick={() => { redo(); setSiteMenuOpen(false); }} disabled={!canRedo}>
+                <button type="button" className="flex min-h-[44px] w-full items-center gap-2 rounded-xl px-3 py-2.5 text-start text-xs font-semibold hover:bg-stone-100 xl:hidden dark:hover:bg-stone-800" onClick={() => { redo(); setSiteMenuOpen(false); }} disabled={!canRedo}>
                   <Redo2 className="h-3.5 w-3.5" aria-hidden /> {t("redo")}
                 </button>
               </div>
@@ -992,19 +992,19 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
                   </div>
                   <div className="my-1 h-px bg-stone-200 sm:hidden dark:bg-stone-700" />
                   <div className="px-2.5 py-1.5 text-[9px] font-bold uppercase tracking-[0.12em] text-stone-600 sm:hidden dark:text-[var(--muted)]">{t("toolbarSite")}</div>
-                  <button type="button" className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-start text-xs font-semibold hover:bg-stone-100 sm:hidden dark:hover:bg-stone-800" onClick={() => { openSiteSection(null); setMoreOpen(false); }}>
+                  <button type="button" className="flex min-h-[44px] w-full items-center gap-2 rounded-xl px-3 py-2.5 text-start text-xs font-semibold hover:bg-stone-100 sm:hidden dark:hover:bg-stone-800" onClick={() => { openSiteSection(null); setMoreOpen(false); }}>
                     <Settings2 className="h-3.5 w-3.5" aria-hidden /> {t("openSiteSettings")}
                   </button>
-                  <button type="button" className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-start text-xs font-semibold hover:bg-stone-100 sm:hidden dark:hover:bg-stone-800" onClick={() => { openSiteSection("seo"); setMoreOpen(false); }}>
+                  <button type="button" className="flex min-h-[44px] w-full items-center gap-2 rounded-xl px-3 py-2.5 text-start text-xs font-semibold hover:bg-stone-100 sm:hidden dark:hover:bg-stone-800" onClick={() => { openSiteSection("seo"); setMoreOpen(false); }}>
                     <Search className="h-3.5 w-3.5" aria-hidden /> {t("openSeo")}
                   </button>
-                  <button type="button" className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-start text-xs font-semibold hover:bg-stone-100 sm:hidden dark:hover:bg-stone-800" onClick={() => { openSiteSection("domain"); setMoreOpen(false); }}>
+                  <button type="button" className="flex min-h-[44px] w-full items-center gap-2 rounded-xl px-3 py-2.5 text-start text-xs font-semibold hover:bg-stone-100 sm:hidden dark:hover:bg-stone-800" onClick={() => { openSiteSection("domain"); setMoreOpen(false); }}>
                     <Globe className="h-3.5 w-3.5" aria-hidden /> {t("openDomain")}
                   </button>
-                  <button type="button" className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-start text-xs font-semibold hover:bg-stone-100 sm:hidden dark:hover:bg-stone-800" onClick={() => { openSiteSection("secrets"); setMoreOpen(false); }}>
+                  <button type="button" className="flex min-h-[44px] w-full items-center gap-2 rounded-xl px-3 py-2.5 text-start text-xs font-semibold hover:bg-stone-100 sm:hidden dark:hover:bg-stone-800" onClick={() => { openSiteSection("secrets"); setMoreOpen(false); }}>
                     <KeyRound className="h-3.5 w-3.5" aria-hidden /> {t("openSecrets")}
                   </button>
-                  <button type="button" className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-start text-xs font-semibold hover:bg-stone-100 sm:hidden dark:hover:bg-stone-800" onClick={() => { openCmsPanel(); setMoreOpen(false); }}>
+                  <button type="button" className="flex min-h-[44px] w-full items-center gap-2 rounded-xl px-3 py-2.5 text-start text-xs font-semibold hover:bg-stone-100 sm:hidden dark:hover:bg-stone-800" onClick={() => { openCmsPanel(); setMoreOpen(false); }}>
                     <Library className="h-3.5 w-3.5" aria-hidden /> {t("openCms")}
                   </button>
                   <div className="flex items-center justify-between gap-2 rounded-xl px-3 py-2 sm:hidden">
@@ -1017,7 +1017,7 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
                   </div>
                   <div className="my-1 h-px bg-stone-200 dark:bg-stone-700" />
                   {publishedAt ? (
-                    <Link href={`/s/${site.slug}`} target="_blank" className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold hover:bg-stone-100 md:hidden dark:hover:bg-stone-800" onClick={() => setMoreOpen(false)}>
+                    <Link href={`/s/${site.slug}`} target="_blank" className="flex min-h-[44px] w-full items-center gap-2 rounded-xl px-3 py-2.5 text-xs font-semibold hover:bg-stone-100 md:hidden dark:hover:bg-stone-800" onClick={() => setMoreOpen(false)}>
                       <Eye className="h-3.5 w-3.5" aria-hidden /> {t("view")}
                     </Link>
                   ) : (
@@ -1025,13 +1025,13 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
                       <EyeOff className="h-3.5 w-3.5" aria-hidden /> {t("viewPublicDisabled")}
                     </div>
                   )}
-                  <Link href={`/editor/${site.id}/preview`} target="_blank" className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold hover:bg-stone-100 dark:hover:bg-stone-800" onClick={() => setMoreOpen(false)}>
+                  <Link href={`/editor/${site.id}/preview`} target="_blank" className="flex min-h-[44px] w-full items-center gap-2 rounded-xl px-3 py-2.5 text-xs font-semibold hover:bg-stone-100 dark:hover:bg-stone-800" onClick={() => setMoreOpen(false)}>
                     <Eye className="h-3.5 w-3.5" aria-hidden /> {t("previewDraft")}
                   </Link>
-                  <button type="button" className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-start text-xs font-semibold hover:bg-stone-100 disabled:opacity-40 dark:hover:bg-stone-800" onClick={() => { undo(); setMoreOpen(false); }} disabled={!canUndo}>
+                  <button type="button" className="flex min-h-[44px] w-full items-center gap-2 rounded-xl px-3 py-2.5 text-start text-xs font-semibold hover:bg-stone-100 disabled:opacity-40 dark:hover:bg-stone-800" onClick={() => { undo(); setMoreOpen(false); }} disabled={!canUndo}>
                     <Undo2 className="h-3.5 w-3.5" aria-hidden /> {t("undo")}
                   </button>
-                  <button type="button" className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-start text-xs font-semibold hover:bg-stone-100 disabled:opacity-40 dark:hover:bg-stone-800" onClick={() => { redo(); setMoreOpen(false); }} disabled={!canRedo}>
+                  <button type="button" className="flex min-h-[44px] w-full items-center gap-2 rounded-xl px-3 py-2.5 text-start text-xs font-semibold hover:bg-stone-100 disabled:opacity-40 dark:hover:bg-stone-800" onClick={() => { redo(); setMoreOpen(false); }} disabled={!canRedo}>
                     <Redo2 className="h-3.5 w-3.5" aria-hidden /> {t("redo")}
                   </button>
                 </div>
@@ -1043,22 +1043,22 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
             <button
               type="button"
               onClick={() => setMobilePanel((m) => (m === "left" ? "none" : "left"))}
-              className="sf-panel inline-flex items-center gap-1 rounded-full px-2.5 py-1.5 text-[11px] font-semibold focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--ring)]"
+              className="sf-panel sf-touch-target inline-flex items-center justify-center gap-1 rounded-full px-3 text-[11px] font-semibold focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--ring)]"
               title={t("helpInsert")}
               aria-label={t("mobileLeft")}
               aria-pressed={mobilePanel === "left"}
             >
-              <PanelLeft className="h-3.5 w-3.5" aria-hidden />
+              <PanelLeft className="h-4 w-4" aria-hidden />
             </button>
             <button
               type="button"
               onClick={() => setMobilePanel((m) => (m === "right" ? "none" : "right"))}
-              className="sf-panel inline-flex items-center gap-1 rounded-full px-2.5 py-1.5 text-[11px] font-semibold focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--ring)]"
+              className="sf-panel sf-touch-target inline-flex items-center justify-center gap-1 rounded-full px-3 text-[11px] font-semibold focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--ring)]"
               title={t("helpInspect")}
               aria-label={t("mobileRight")}
               aria-pressed={mobilePanel === "right"}
             >
-              <PanelRight className="h-3.5 w-3.5" aria-hidden />
+              <PanelRight className="h-4 w-4" aria-hidden />
             </button>
           </div>
         </div>
@@ -1089,7 +1089,7 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
           <aside
             className={`sf-panel flex min-h-0 flex-col overflow-hidden rounded-[var(--radius-card)] backdrop-blur-xl
               max-w-[92vw] transition-[opacity] duration-300 ease-out
-              max-xl:fixed max-xl:inset-y-0 max-xl:start-0 max-xl:z-50 max-xl:w-[min(100%,320px)] max-xl:rounded-none max-xl:border-e
+              sf-mobile-sheet max-xl:fixed max-xl:inset-y-0 max-xl:start-0 max-xl:z-50 max-xl:w-[min(100%,320px)] max-xl:rounded-none max-xl:border-e
               ${mobilePanel === "left" ? "max-xl:flex" : "max-xl:hidden"}
               ${leftCollapsed ? "xl:pointer-events-none xl:invisible xl:absolute xl:opacity-0" : "xl:relative xl:flex xl:h-full xl:w-full xl:opacity-100"}`}
             aria-hidden={leftCollapsed || undefined}
@@ -1527,7 +1527,7 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
           <aside
             className={`sf-panel flex min-h-0 flex-col overflow-hidden rounded-[var(--radius-card)] backdrop-blur-xl
               max-w-[92vw] transition-[opacity] duration-300 ease-out
-              max-xl:fixed max-xl:inset-y-0 max-xl:end-0 max-xl:z-50 max-xl:w-[min(100%,340px)] max-xl:rounded-none max-xl:border-s
+              sf-mobile-sheet max-xl:fixed max-xl:inset-y-0 max-xl:end-0 max-xl:z-50 max-xl:w-[min(100%,340px)] max-xl:rounded-none max-xl:border-s
               ${mobilePanel === "right" ? "max-xl:flex" : "max-xl:hidden"}
               ${rightCollapsed ? "xl:pointer-events-none xl:invisible xl:absolute xl:opacity-0" : "xl:relative xl:flex xl:h-full xl:w-full xl:opacity-100"}`}
             aria-hidden={rightCollapsed || undefined}
@@ -1585,6 +1585,33 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
           ) : null}
         </div>
       </div>
+
+      <div className="sf-editor-mobile-dock xl:hidden" role="toolbar" aria-label={t("mobileMenu")}>
+        <button
+          type="button"
+          className="sf-panel sf-touch-target"
+          aria-pressed={mobilePanel === "left"}
+          onClick={() => setMobilePanel((m) => (m === "left" ? "none" : "left"))}
+        >
+          {t("layers")}
+        </button>
+        <button
+          type="button"
+          className="sf-panel sf-touch-target"
+          aria-pressed={mobilePanel === "right"}
+          onClick={() => setMobilePanel((m) => (m === "right" ? "none" : "right"))}
+        >
+          {t("inspect")}
+        </button>
+        <button
+          type="button"
+          className="sf-panel sf-touch-target"
+          onClick={() => setMobilePanel("none")}
+        >
+          {t("close")}
+        </button>
+      </div>
+
     </div>
   );
 }
@@ -1612,7 +1639,7 @@ function IconBtn({
         e.stopPropagation();
         onClick();
       }}
-      className={`h-7 w-7 inline-flex items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--ring)] disabled:opacity-30 ${
+      className={`inline-flex h-11 w-11 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--ring)] disabled:opacity-30 sm:h-7 sm:w-7 ${
         danger
           ? "text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-950/50"
           : "text-stone-600 hover:bg-stone-100 hover:text-stone-900 dark:text-[var(--muted)] dark:hover:bg-stone-800 dark:hover:text-stone-100"
