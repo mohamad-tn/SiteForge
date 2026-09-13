@@ -1512,6 +1512,7 @@ export function SiteRenderer({
   pageSlug,
   pageId,
   selectedBlockId,
+  selectedBlockIds,
   selectedPart = null,
   hoveredBlockId,
   onSelectBlock,
@@ -1526,9 +1527,11 @@ export function SiteRenderer({
   pageSlug?: string;
   pageId?: string;
   selectedBlockId?: string | null;
+  /** Multi-select membership (optional; falls back to selectedBlockId). */
+  selectedBlockIds?: string[];
   selectedPart?: BlockPart | null;
   hoveredBlockId?: string | null;
-  onSelectBlock?: (id: string) => void;
+  onSelectBlock?: (id: string, opts?: { toggle?: boolean }) => void;
   onSelectPart?: (blockId: string, part: BlockPart | null) => void;
   onHoverBlock?: (id: string | null) => void;
   locale?: string;
@@ -1574,16 +1577,24 @@ export function SiteRenderer({
       }}
     >
       {page.blocks.map((block) => {
-        const selected = selectedBlockId === block.id;
+        const propsRec = block.props as Record<string, unknown>;
+        const inMulti =
+          Array.isArray(selectedBlockIds) && selectedBlockIds.length > 0
+            ? selectedBlockIds.includes(block.id)
+            : selectedBlockId === block.id;
+        const selected = inMulti;
+        const primarySelected = selectedBlockId === block.id;
         const hovered = hoveredBlockId === block.id && !selected;
+        const hidden = strProp(propsRec, "hidden") === "true";
+        const locked = strProp(propsRec, "locked") === "true";
         const localized: Block = {
           ...block,
-          props: localizeProps(block.props as Record<string, unknown>, activeLocale, fallbackLocale),
+          props: localizeProps(propsRec, activeLocale, fallbackLocale),
         };
-        if (strProp(block.props as Record<string, unknown>, "hidden") === "true" && !editable) {
+        if (hidden && !editable) {
           return null;
         }
-        const frame = blockFrameStyle(block.props as Record<string, unknown>);
+        const frame = blockFrameStyle(propsRec);
         const selfFramed = SELF_FRAMED.has(block.type);
         const outerFrame = selfFramed
           ? Object.fromEntries(
@@ -1597,21 +1608,23 @@ export function SiteRenderer({
             key={block.id}
             data-block-id={block.id}
             data-sf-site-block=""
-            role={editable ? "button" : undefined}
-            tabIndex={editable ? 0 : undefined}
+            data-sf-locked={locked ? "true" : undefined}
+            data-sf-hidden={hidden ? "true" : undefined}
+            role={editable && !locked ? "button" : undefined}
+            tabIndex={editable && !locked ? 0 : undefined}
             onClick={
               editable
                 ? (e) => {
                     e.stopPropagation();
-                    onSelectBlock?.(block.id);
-                    onSelectPart?.(block.id, null);
+                    onSelectBlock?.(block.id, { toggle: e.shiftKey });
+                    if (!e.shiftKey) onSelectPart?.(block.id, null);
                   }
                 : undefined
             }
-            onMouseEnter={editable ? () => onHoverBlock?.(block.id) : undefined}
-            onMouseLeave={editable ? () => onHoverBlock?.(null) : undefined}
+            onMouseEnter={editable && !locked ? () => onHoverBlock?.(block.id) : undefined}
+            onMouseLeave={editable && !locked ? () => onHoverBlock?.(null) : undefined}
             onKeyDown={
-              editable
+              editable && !locked
                 ? (e) => {
                     if (e.key === "Enter" || e.key === " ") {
                       e.preventDefault();
@@ -1623,20 +1636,37 @@ export function SiteRenderer({
             }
             className={
               editable
-                ? `relative outline-none transition-[box-shadow,border-radius] ${
+                ? `relative outline-none transition-[box-shadow,border-radius,opacity] ${
                     selected
                       ? "ring-2 ring-teal-600/80 ring-offset-0 z-10 rounded-2xl"
                       : hovered
                         ? "ring-2 ring-teal-600/35 z-[5] rounded-2xl"
                         : ""
+                  } ${hidden ? "opacity-40 [background-image:repeating-linear-gradient(135deg,transparent,transparent_6px,rgba(28,25,23,0.06)_6px,rgba(28,25,23,0.06)_12px)]" : ""} ${
+                    locked ? "cursor-not-allowed" : ""
                   }`
                 : undefined
             }
+            style={editable && locked ? { pointerEvents: "none" } : undefined}
           >
-            {editable && selected ? (
-              <div className="absolute top-3 start-3 z-20 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 text-white pointer-events-none rounded-full bg-teal-700/95 shadow-sm">
-                {block.type}
-                {selectedPart ? ` · ${selectedPart}` : ""}
+            {editable && (selected || hidden || locked) ? (
+              <div className="absolute top-3 start-3 z-20 flex flex-wrap gap-1 pointer-events-none">
+                {selected ? (
+                  <div className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 text-white rounded-full bg-teal-700/95 shadow-sm">
+                    {block.type}
+                    {primarySelected && selectedPart ? ` · ${selectedPart}` : ""}
+                  </div>
+                ) : null}
+                {hidden ? (
+                  <div className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 text-white rounded-full bg-stone-700/90 shadow-sm">
+                    hidden
+                  </div>
+                ) : null}
+                {locked ? (
+                  <div className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 text-white rounded-full bg-amber-700/95 shadow-sm">
+                    locked
+                  </div>
+                ) : null}
               </div>
             ) : null}
             {(() => {

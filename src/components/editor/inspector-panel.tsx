@@ -3,7 +3,6 @@
 import { useState } from "react";
 import {
   BLOCK_META,
-  FONT_OPTIONS,
   LOCALIZABLE_PROP_KEYS,
   LOCALE_META,
   isLocaleCode,
@@ -288,26 +287,6 @@ function ContentField({
   );
 }
 
-function Slider({
-  label,
-  min,
-  max,
-  value,
-  onChange,
-}: {
-  label: string;
-  min: number;
-  max: number;
-  value: number;
-  onChange: (v: number) => void;
-}) {
-  return (
-    <div className="space-y-1.5">
-      <Label className="text-[11px] text-stone-600 dark:text-stone-300">{label}</Label>
-      <input type="range" min={min} max={max} value={value} onChange={(e) => onChange(Number(e.target.value))} className="w-full accent-teal-700" />
-    </div>
-  );
-}
 
 export function InspectorPanel({
   content,
@@ -335,9 +314,8 @@ export function InspectorPanel({
   onUpdatePropsObject?: (blockId: string, patch: Record<string, unknown>) => void;
 }) {
   const { t, lang: uiLang } = usePlatformLang();
-  const tokens = content.tokens;
-  const dark = tokens.colorsDark || tokens.colors;
   const localeLabel = isLocaleCode(editLocale) ? LOCALE_META[editLocale].nativeLabel : editLocale;
+  const blockLocked = selected ? String(selected.props.locked ?? "false") === "true" : false;
   const [tab, setTab] = useState<InspTab>("content");
   const [showSides, setShowSides] = useState(false);
 
@@ -348,86 +326,18 @@ export function InspectorPanel({
 
   return (
     <div className="space-y-5">
-      {/* Design tokens — always available */}
-      <details className="group rounded-2xl border border-stone-300/80 open:bg-stone-50/50 dark:border-stone-800 dark:open:bg-stone-950/40">
-        <summary className="cursor-pointer list-none px-3 py-2.5 text-[11px] font-bold text-stone-600 dark:text-stone-300">
-          {t("tokensTitle")}
-        </summary>
-        <div className="space-y-4 border-t border-stone-300/70 p-3 dark:border-stone-800">
-          <p className="rounded-xl bg-amber-50/80 px-2.5 py-2 text-[10px] leading-5 text-amber-950 dark:bg-amber-950/30 dark:text-amber-100/90">
-            {uiLang === "ar"
-              ? "هذه الألوان والخطوط تخص موقعك داخل المعاينة فقط — لا تغيّر شريط أدوات SiteForge."
-              : "These colors and fonts apply to your site preview only — not the SiteForge toolbar."}
-          </p>
-          <SectionTitle>ألوان الوضع الفاتح</SectionTitle>
-          <div className="grid grid-cols-2 gap-2.5">
-            {(
-              [
-                ["colors.primary", "أساسي", tokens.colors.primary],
-                ["colors.secondary", "ثانوي", tokens.colors.secondary],
-                ["colors.background", "خلفية", tokens.colors.background],
-                ["colors.surface", "سطح", tokens.colors.surface],
-                ["colors.text", "نص", tokens.colors.text],
-                ["colors.muted", "خفيف", tokens.colors.muted],
-                ["colors.accent", "تمييز", tokens.colors.accent],
-              ] as const
-            ).map(([path, label, value]) => (
-              <ColorField key={path} label={label} value={value} onChange={(v) => onUpdateTokens(path, v)} />
-            ))}
-          </div>
-          <SectionTitle>ألوان الوضع الداكن</SectionTitle>
-          <div className="grid grid-cols-2 gap-2.5">
-            {(
-              [
-                ["colorsDark.primary", "أساسي", dark.primary],
-                ["colorsDark.secondary", "ثانوي", dark.secondary],
-                ["colorsDark.background", "خلفية", dark.background],
-                ["colorsDark.surface", "سطح", dark.surface],
-                ["colorsDark.text", "نص", dark.text],
-                ["colorsDark.muted", "خفيف", dark.muted],
-                ["colorsDark.accent", "تمييز", dark.accent],
-              ] as const
-            ).map(([path, label, value]) => (
-              <ColorField key={path} label={label} value={value} onChange={(v) => onUpdateTokens(path, v)} />
-            ))}
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-[11px] text-stone-600 dark:text-stone-300">{t("fontHeading")}</Label>
-            <Select
-              value={tokens.fonts.heading}
-              onValueChange={(v) => onUpdateTokens("fonts.heading", v)}
-              options={FONT_OPTIONS.map((f) => ({ value: f, label: f }))}
-              triggerClassName="h-9 rounded-xl text-xs font-semibold"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-[11px] text-stone-600 dark:text-stone-300">{t("fontBody")}</Label>
-            <Select
-              value={tokens.fonts.body}
-              onValueChange={(v) => onUpdateTokens("fonts.body", v)}
-              options={FONT_OPTIONS.map((f) => ({ value: f, label: f }))}
-              triggerClassName="h-9 rounded-xl text-xs font-semibold"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-[11px] text-stone-600 dark:text-stone-300">{uiLang === "ar" ? "سمة الزائر الافتراضية" : "Default visitor theme"}</Label>
-            <Select
-              value={tokens.themeMode || "system"}
-              onValueChange={(v) => onUpdateTokens("themeMode", v)}
-              options={[
-                { value: "system", label: uiLang === "ar" ? "حسب النظام" : "System" },
-                { value: "light", label: uiLang === "ar" ? "فاتح" : "Light" },
-                { value: "dark", label: uiLang === "ar" ? "داكن" : "Dark" },
-              ]}
-              triggerClassName="h-9 rounded-xl text-xs font-semibold"
-            />
-          </div>
-          <Slider label={`مسافة الأقسام (${tokens.spacing.sectionY}px)`} min={24} max={140} value={tokens.spacing.sectionY} onChange={(v) => onUpdateTokens("spacing.sectionY", v)} />
-          <Slider label={`فجوة الكتل (${tokens.spacing.blockGap}px)`} min={8} max={64} value={tokens.spacing.blockGap} onChange={(v) => onUpdateTokens("spacing.blockGap", v)} />
-          <Slider label={`عرض المحتوى (${tokens.spacing.contentMaxWidth}px)`} min={720} max={1280} value={tokens.spacing.contentMaxWidth} onChange={(v) => onUpdateTokens("spacing.contentMaxWidth", v)} />
-          <Slider label={`استدارة الزوايا (${tokens.radius}px)`} min={8} max={40} value={tokens.radius} onChange={(v) => onUpdateTokens("radius", v)} />
+      {selected && String(selected.props.locked ?? "false") === "true" ? (
+        <div className="rounded-2xl border border-amber-400/50 bg-amber-50/90 px-3 py-2.5 text-[11px] leading-5 text-amber-950 dark:border-amber-700/50 dark:bg-amber-950/40 dark:text-amber-100">
+          <p className="font-semibold">{t("lockedHint")}</p>
+          <button
+            type="button"
+            className="mt-2 rounded-full bg-teal-800 px-3 py-1 text-[11px] font-bold text-white hover:bg-teal-700"
+            onClick={() => onUpdateProp(selected.id, "locked", "false")}
+          >
+            {t("unlockBlock")}
+          </button>
         </div>
-      </details>
+      ) : null}
 
       {!selected ? (
         <div className="rounded-2xl border border-dashed border-stone-300/80 bg-stone-50/50 p-6 text-center dark:border-stone-700 dark:bg-stone-950/40">
@@ -440,7 +350,7 @@ export function InspectorPanel({
             {t("editingIn")} <span className="font-semibold text-teal-800 dark:text-teal-300">{localeLabel}</span>
           </p>
         </div>
-      ) : (
+      ) : blockLocked ? null : (
         <div className="space-y-3">
           <div className="flex items-center justify-between gap-2">
             <div className="inline-flex items-center gap-2 rounded-full bg-teal-50 px-3 py-1 text-xs font-semibold text-teal-900 dark:bg-teal-950 dark:text-teal-100">
@@ -592,16 +502,29 @@ export function InspectorPanel({
                   ))}
                 </div>
               ) : null}
-              <div className="space-y-1.5">
-                <Label className="text-[11px] text-stone-600 dark:text-stone-300">{t("hideBlock")}</Label>
-                <Select
-                  value={String(selected.props.hidden ?? "false")}
-                  onValueChange={(v) => onUpdateProp(selected.id, "hidden", v)}
-                  options={[
-                    { value: "false", label: "ظاهر" },
-                    { value: "true", label: "مخفي" },
-                  ]}
-                />
+              <div className="grid grid-cols-2 gap-2.5">
+                <div className="space-y-1.5">
+                  <Label className="text-[11px] text-stone-600 dark:text-stone-300">{t("hideBlock")}</Label>
+                  <Select
+                    value={String(selected.props.hidden ?? "false")}
+                    onValueChange={(v) => onUpdateProp(selected.id, "hidden", v)}
+                    options={[
+                      { value: "false", label: t("showBlock") },
+                      { value: "true", label: t("hideBlock") },
+                    ]}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-[11px] text-stone-600 dark:text-stone-300">{t("lockBlock")}</Label>
+                  <Select
+                    value={String(selected.props.locked ?? "false")}
+                    onValueChange={(v) => onUpdateProp(selected.id, "locked", v)}
+                    options={[
+                      { value: "false", label: t("unlockBlock") },
+                      { value: "true", label: t("lockBlock") },
+                    ]}
+                  />
+                </div>
               </div>
             </div>
           ) : null}

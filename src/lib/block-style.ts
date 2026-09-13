@@ -43,6 +43,9 @@ export const STYLE_KEYS = [
   "zIndex",
   "customCss",
   "hidden",
+  "locked",
+  "posX",
+  "posY",
 ] as const;
 
 export type StyleKey = (typeof STYLE_KEYS)[number];
@@ -50,7 +53,13 @@ export type StyleKey = (typeof STYLE_KEYS)[number];
 export const LINK_KEYS = ["href", "ctaHref", "buttonHref", "secondaryHref"] as const;
 
 export function defaultStyleProps(): Record<string, string> {
-  return Object.fromEntries(STYLE_KEYS.map((k) => [k, k === "hidden" ? "false" : ""])) as Record<string, string>;
+  return Object.fromEntries(
+    STYLE_KEYS.map((k) => [k, k === "hidden" || k === "locked" ? "false" : ""])
+  ) as Record<string, string>;
+}
+
+export function isStyleFlag(p: Record<string, unknown>, key: "hidden" | "locked"): boolean {
+  return strProp(p, key) === "true";
 }
 
 export function withEditableDefaults(props: Record<string, unknown>): Record<string, unknown> {
@@ -187,6 +196,15 @@ export function blockFrameStyle(p: Record<string, unknown>): Record<string, stri
     if (!Number.isNaN(z)) style.zIndex = z;
   }
 
+  // Optional free layout — only when BOTH are set; unset = normal document flow.
+  const posX = strProp(p, "posX");
+  const posY = strProp(p, "posY");
+  if (posX && posY) {
+    style.position = "absolute";
+    style.left = px(posX);
+    style.top = px(posY);
+  }
+
   return style;
 }
 
@@ -270,6 +288,9 @@ export const STYLE_LABELS: Record<string, string> = {
   zIndex: "Z-Index",
   customCss: "CSS متقدم للعنصر",
   hidden: "إخفاء",
+  locked: "قفل",
+  posX: "موضع X",
+  posY: "موضع Y",
   linkMode: "نوع الرابط",
   linkPageSlug: "صفحة داخلية",
   linkCollectionSlug: "مجموعة",

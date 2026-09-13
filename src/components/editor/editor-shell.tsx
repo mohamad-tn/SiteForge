@@ -19,8 +19,19 @@ import {
   type SiteContent,
 } from "@/lib/design";
 import { listBlockParts } from "@/lib/block-parts";
-import { withEditableDefaults } from "@/lib/block-style";
+import { withEditableDefaults, isStyleFlag } from "@/lib/block-style";
+import {
+  clear as clearSelectionIds,
+  primaryOf,
+  replaceSelection,
+  selectAll,
+  toggleSelection,
+  unlockedIds,
+  isLockedProp,
+  isHiddenProp,
+} from "@/lib/editor-selection";
 import { SiteRenderer } from "@/components/site-renderer";
+import { TokensPanel } from "@/components/editor/tokens-panel";
 import { SiteChromeProvider } from "@/components/site-chrome-context";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
@@ -51,6 +62,11 @@ import {
   Copy,
   Eye,
   EyeOff,
+  Lock,
+  Unlock,
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
   MoreHorizontal,
   FilePlus2,
   Languages,
@@ -91,7 +107,7 @@ type SiteMeta = {
   domainStatus?: "none" | "pending" | "active" | "error";
 };
 type LeftTab = "insert" | "layers" | "pages" | "langs" | "cms";
-type RightTab = "inspect" | "site" | "replies";
+type RightTab = "inspect" | "style" | "site" | "replies";
 type Viewport = "mobile" | "tablet" | "laptop";
 
 const VIEWPORT_WIDTH: Record<Viewport, number | string> = {
@@ -105,6 +121,9 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
   const { content, commit, undo, redo, canUndo, canRedo } = useEditorHistory(initialContent);
   const [pageId, setPageId] = useState(initialContent.pages[0]?.id ?? "");
   const [selectedId, setSelectedId] = useState<string | null>(initialContent.pages[0]?.blocks[0]?.id ?? null);
+  const [selectedIds, setSelectedIds] = useState<string[]>(
+    initialContent.pages[0]?.blocks[0]?.id ? [initialContent.pages[0].blocks[0].id] : []
+  );
   const [selectedPart, setSelectedPart] = useState<BlockPart | null>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [leftTab, setLeftTab] = useState<LeftTab>("insert");
@@ -219,12 +238,34 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
 
   const selected = useMemo(() => page?.blocks.find((b) => b.id === selectedId) || null, [page?.blocks, selectedId]);
 
-  const selectBlock = useCallback((id: string | null) => {
-    setSelectedId(id);
+  const applySelection = useCallback((nextIds: string[], primary?: string | null) => {
+    setSelectedIds(nextIds);
+    setSelectedId(primaryOf(nextIds, primary));
     setSelectedPart(null);
   }, []);
 
+  const selectBlock = useCallback((id: string | null, opts?: { toggle?: boolean }) => {
+    if (id === null) {
+      applySelection(clearSelectionIds(), null);
+      return;
+    }
+    if (opts?.toggle) {
+      setSelectedIds((cur) => {
+        const next = toggleSelection({ selectedId: cur[cur.length - 1] ?? null, selectedIds: cur }, id);
+        setSelectedId(next.selectedId);
+        return next.selectedIds;
+      });
+      setSelectedPart(null);
+      return;
+    }
+    const next = replaceSelection(id);
+    setSelectedIds(next.selectedIds);
+    setSelectedId(next.selectedId);
+    setSelectedPart(null);
+  }, [applySelection]);
+
   const selectTarget = useCallback((blockId: string, part: BlockPart | null) => {
+    setSelectedIds([blockId]);
     setSelectedId(blockId);
     setSelectedPart(part);
   }, []);
@@ -257,7 +298,11 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
 
   function updateBlockProps(id: string, key: string, value: string) {
     updatePageBlocks((blocks) =>
-      blocks.map((b) => (b.id === id ? { ...b, props: { ...b.props, [key]: value } } : b))
+      blocks.map((b) => {
+        if (b.id !== id) return b;
+        if (isLockedProp(b.props as Record<string, unknown>) && key !== "locked") return b;
+        return { ...b, props: { ...b.props, [key]: value } };
+      })
     );
   }
 
@@ -265,6 +310,7 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
     updatePageBlocks((blocks) =>
       blocks.map((b) => {
         if (b.id !== id) return b;
+        if (isLockedProp(b.props as Record<string, unknown>)) return b;
         const next = setLocalized(b.props[key], locale, value, locales);
         return { ...b, props: { ...b.props, [key]: next } };
       })
@@ -273,7 +319,30 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
 
   function updateBlockPropsObject(id: string, patch: Record<string, unknown>) {
     updatePageBlocks((blocks) =>
-      blocks.map((b) => (b.id === id ? { ...b, props: { ...b.props, ...patch } } : b))
+      blocks.map((b) => {
+        if (b.id !== id) return b;
+        if (isLockedProp(b.props as Record<string, unknown>)) {
+          const keys = Object.keys(patch);
+          if (keys.length === 0 || keys.some((k) => k !== "locked")) return b;
+        }
+        return { ...b, props: { ...b.props, ...patch } };
+      })
+    );
+  }
+
+  function toggleBlockFlag(id: string, key: "hidden" | "locked") {
+    const b = page?.blocks.find((x) => x.id === id);
+    if (!b) return;
+    const cur = isStyleFlag(b.props as Record<string, unknown>, key);
+    updateBlockProps(id, key, cur ? "false" : "true");
+  }
+
+  function applyAlignToSelection(patch: Record<string, string>) {
+    const ids = unlockedIds(selectedIds, (page?.blocks || []) as { id: string; props: Record<string, unknown> }[]);
+    if (ids.length === 0) return;
+    const idSet = new Set(ids);
+    updatePageBlocks((blocks) =>
+      blocks.map((b) => (idSet.has(b.id) ? { ...b, props: { ...b.props, ...patch } } : b))
     );
   }
 
@@ -287,23 +356,37 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
       next.splice(i + 1, 0, block);
       return next;
     });
+    setSelectedIds([block.id]);
     setSelectedId(block.id);
     setSelectedPart(null);
     setLeftTab("layers");
   }
 
   function duplicateBlock(id: string) {
-    const src = page.blocks.find((b) => b.id === id);
-    if (!src) return;
-    const copy = cloneBlock(src, `b-${nanoid(8)}`);
+    duplicateBlocks([id]);
+  }
+
+  function duplicateBlocks(ids: string[]) {
+    const safe = unlockedIds(ids, page.blocks as { id: string; props: Record<string, unknown> }[]);
+    if (safe.length === 0) return;
+    const created: string[] = [];
     updatePageBlocks((blocks) => {
-      const i = blocks.findIndex((b) => b.id === id);
-      const next = [...blocks];
-      next.splice(i + 1, 0, copy);
+      let next = [...blocks];
+      for (const id of safe) {
+        const src = next.find((b) => b.id === id);
+        if (!src) continue;
+        const copy = cloneBlock(src, `b-${nanoid(8)}`);
+        const i = next.findIndex((b) => b.id === id);
+        next.splice(i + 1, 0, copy);
+        created.push(copy.id);
+      }
       return next;
     });
-    setSelectedId(copy.id);
-    setSelectedPart(null);
+    if (created.length) {
+      setSelectedIds(created);
+      setSelectedId(created[created.length - 1] ?? null);
+      setSelectedPart(null);
+    }
   }
 
   function saveAsComponent(blockId: string) {
@@ -334,7 +417,11 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
       next.splice(i + 1, 0, ...clones);
       return next;
     });
-    if (clones[0]) setSelectedId(clones[0].id);
+    if (clones[0]) {
+      setSelectedIds(clones.map((c) => c.id));
+      setSelectedId(clones[0].id);
+      setSelectedPart(null);
+    }
   }
 
   function removeSavedComponent(componentId: string) {
@@ -357,9 +444,20 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
   }
 
   function removeBlock(id: string) {
-    updatePageBlocks((blocks) => blocks.filter((b) => b.id !== id));
-    if (selectedId === id) setSelectedPart(null);
-    setSelectedId((cur) => (cur === id ? null : cur));
+    removeBlocks([id]);
+  }
+
+  function removeBlocks(ids: string[]) {
+    const safe = unlockedIds(ids, page.blocks as { id: string; props: Record<string, unknown> }[]);
+    if (safe.length === 0) return;
+    const kill = new Set(safe);
+    updatePageBlocks((blocks) => blocks.filter((b) => !kill.has(b.id)));
+    setSelectedIds((cur) => {
+      const next = cur.filter((id) => !kill.has(id));
+      setSelectedId(primaryOf(next, selectedId));
+      return next;
+    });
+    setSelectedPart(null);
   }
 
   function reorderByDrag(targetId: string) {
@@ -395,6 +493,7 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
       ],
     }));
     setPageId(id);
+    setSelectedIds([]);
     setSelectedId(null);
     setLeftTab("pages");
   }
@@ -416,6 +515,7 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
       const next = content.pages.find((p) => p.id !== id);
       if (next) setPageId(next.id);
     }
+    setSelectedIds([]);
     setSelectedId(null);
   }
 
@@ -521,20 +621,33 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
         return;
       }
       if (typing) return;
-      if (mod && e.key.toLowerCase() === "d" && selectedId) {
+      if (e.key === "Escape") {
         e.preventDefault();
-        duplicateBlock(selectedId);
+        selectBlock(null);
         return;
       }
-      if ((e.key === "Delete" || e.key === "Backspace") && selectedId) {
+      if (mod && e.key.toLowerCase() === "a") {
         e.preventDefault();
-        removeBlock(selectedId);
+        const all = selectAll((page?.blocks || []).map((b) => b.id));
+        setSelectedIds(all.selectedIds);
+        setSelectedId(all.selectedId);
+        setSelectedPart(null);
+        return;
+      }
+      if (mod && e.key.toLowerCase() === "d" && selectedIds.length) {
+        e.preventDefault();
+        duplicateBlocks(selectedIds);
+        return;
+      }
+      if ((e.key === "Delete" || e.key === "Backspace") && selectedIds.length) {
+        e.preventDefault();
+        removeBlocks(selectedIds);
       }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedId, undo, redo, page?.blocks]);
+  }, [selectedId, selectedIds, undo, redo, page?.blocks]);
 
   useEffect(() => {
     if (saveState !== "dirty") return;
@@ -1069,25 +1182,46 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
                 ) : null}
                 {page.blocks.map((b, i) => {
                   const parts = listBlockParts(b, editLocale, content.defaultLocale || "ar", uiLang);
-                  const blockSelected = selectedId === b.id;
+                  const blockSelected = selectedIds.includes(b.id);
+                  const primary = selectedId === b.id;
+                  const locked = isLockedProp(b.props as Record<string, unknown>);
+                  const hidden = isHiddenProp(b.props as Record<string, unknown>);
                   return (
                   <div
                     key={b.id}
-                    draggable
-                    onDragStart={() => setDragId(b.id)}
+                    draggable={!locked}
+                    onDragStart={() => { if (!locked) setDragId(b.id); }}
                     onDragOver={(e) => e.preventDefault()}
                     onDrop={() => reorderByDrag(b.id)}
                     className={`rounded-2xl border px-2.5 py-2.5 text-sm cursor-grab active:cursor-grabbing transition ${
-                      blockSelected && !selectedPart
+                      primary && !selectedPart
                         ? "border-teal-600/40 bg-teal-50 shadow-sm dark:bg-teal-950/40"
                         : blockSelected
                           ? "border-teal-600/25 bg-teal-50/50 dark:bg-teal-950/20"
                           : "border-transparent hover:bg-stone-50 dark:hover:bg-stone-800/60"
-                    }`}
+                    } ${hidden ? "opacity-60" : ""}`}
                   >
-                    <button type="button" className="w-full text-start font-medium text-[12px] text-stone-800 dark:text-stone-100" onClick={() => selectBlock(b.id)}>
-                      {BLOCK_META[b.type].label}
-                    </button>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        className="min-w-0 flex-1 text-start font-medium text-[12px] text-stone-800 dark:text-stone-100"
+                        onClick={(e) => selectBlock(b.id, { toggle: e.shiftKey })}
+                      >
+                        {BLOCK_META[b.type].label}
+                      </button>
+                      <IconBtn
+                        title={hidden ? t("showBlock") : t("hideBlock")}
+                        onClick={() => toggleBlockFlag(b.id, "hidden")}
+                      >
+                        {hidden ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                      </IconBtn>
+                      <IconBtn
+                        title={locked ? t("unlockBlock") : t("lockBlock")}
+                        onClick={() => toggleBlockFlag(b.id, "locked")}
+                      >
+                        {locked ? <Lock className="h-3.5 w-3.5" /> : <Unlock className="h-3.5 w-3.5" />}
+                      </IconBtn>
+                    </div>
                     {parts.length > 0 ? (
                       <div className="mt-1.5 ms-2 space-y-0.5 border-s border-stone-300/80 ps-2 dark:border-stone-700">
                         {parts.map((ch) => (
@@ -1096,7 +1230,7 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
                             type="button"
                             onClick={() => selectTarget(b.id, ch.part)}
                             className={`block w-full truncate rounded-lg px-2 py-1 text-start text-[11px] transition ${
-                              blockSelected && selectedPart === ch.part
+                              primary && selectedPart === ch.part
                                 ? "bg-teal-700/90 text-white"
                                 : "text-stone-600 hover:bg-stone-100 hover:text-stone-900 dark:text-[var(--muted)] dark:hover:bg-stone-800 dark:hover:text-stone-100"
                             }`}
@@ -1112,11 +1246,11 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
                       </div>
                     ) : null}
                     <div className="mt-1.5 flex gap-0.5">
-                      <IconBtn onClick={() => moveBlock(b.id, -1)} disabled={i === 0}><ChevronUp className="h-3.5 w-3.5" /></IconBtn>
-                      <IconBtn onClick={() => moveBlock(b.id, 1)} disabled={i === page.blocks.length - 1}><ChevronDown className="h-3.5 w-3.5" /></IconBtn>
-                      <IconBtn onClick={() => duplicateBlock(b.id)}><Copy className="h-3.5 w-3.5" /></IconBtn>
+                      <IconBtn onClick={() => moveBlock(b.id, -1)} disabled={i === 0 || locked}><ChevronUp className="h-3.5 w-3.5" /></IconBtn>
+                      <IconBtn onClick={() => moveBlock(b.id, 1)} disabled={i === page.blocks.length - 1 || locked}><ChevronDown className="h-3.5 w-3.5" /></IconBtn>
+                      <IconBtn onClick={() => duplicateBlock(b.id)} disabled={locked}><Copy className="h-3.5 w-3.5" /></IconBtn>
                       <IconBtn onClick={() => saveAsComponent(b.id)} title={t("saveAsSection")}><BookmarkPlus className="h-3.5 w-3.5" /></IconBtn>
-                      <IconBtn onClick={() => removeBlock(b.id)} danger><Trash2 className="h-3.5 w-3.5" /></IconBtn>
+                      <IconBtn onClick={() => removeBlock(b.id)} danger disabled={locked}><Trash2 className="h-3.5 w-3.5" /></IconBtn>
                     </div>
                   </div>
                   );
@@ -1288,6 +1422,30 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
                 {typeof canvasWidth === "number" ? `${canvasWidth}px · ${viewport}` : "fluid · laptop"}
               </span>
             </div>
+            {selectedIds.length >= 1 ? (
+              <div className="mb-3 flex flex-wrap items-center gap-1 rounded-2xl border border-stone-300/70 bg-white/90 p-1.5 shadow-sm backdrop-blur dark:border-stone-700 dark:bg-stone-950/80">
+                <span className="px-2 text-[10px] font-bold uppercase tracking-[0.12em] text-stone-600 dark:text-[var(--muted)]">
+                  {t("alignBar")}
+                  {selectedIds.length > 1 ? ` · ${selectedIds.length} ${t("multiSelected")}` : ""}
+                </span>
+                <button type="button" title={t("alignStart")} className="rounded-xl p-1.5 hover:bg-stone-100 dark:hover:bg-stone-800" onClick={() => applyAlignToSelection({ textAlign: "start" })}>
+                  <AlignLeft className="h-3.5 w-3.5" />
+                </button>
+                <button type="button" title={t("alignCenter")} className="rounded-xl p-1.5 hover:bg-stone-100 dark:hover:bg-stone-800" onClick={() => applyAlignToSelection({ textAlign: "center" })}>
+                  <AlignCenter className="h-3.5 w-3.5" />
+                </button>
+                <button type="button" title={t("alignEnd")} className="rounded-xl p-1.5 hover:bg-stone-100 dark:hover:bg-stone-800" onClick={() => applyAlignToSelection({ textAlign: "end" })}>
+                  <AlignRight className="h-3.5 w-3.5" />
+                </button>
+                <span className="mx-1 h-4 w-px bg-stone-300 dark:bg-stone-700" aria-hidden />
+                <button type="button" title={t("widthFull")} className="rounded-xl px-2 py-1 text-[10px] font-semibold hover:bg-stone-100 dark:hover:bg-stone-800" onClick={() => applyAlignToSelection({ width: "100%" })}>
+                  {t("widthFull")}
+                </button>
+                <button type="button" title={t("widthAuto")} className="rounded-xl px-2 py-1 text-[10px] font-semibold hover:bg-stone-100 dark:hover:bg-stone-800" onClick={() => applyAlignToSelection({ width: "" })}>
+                  {t("widthAuto")}
+                </button>
+              </div>
+            ) : null}
             {viewport === "laptop" ? (
               <div
                 className="overflow-hidden rounded-[1.75rem] border border-stone-300/40 bg-white shadow-[0_30px_80px_-36px_rgba(28,25,23,0.5)] dark:border-stone-700"
@@ -1301,6 +1459,7 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
                       content={content}
                       pageId={page.id}
                       selectedBlockId={selectedId}
+                      selectedBlockIds={selectedIds}
                       selectedPart={selectedPart}
                       hoveredBlockId={hoveredId}
                       onSelectBlock={selectBlock}
@@ -1326,6 +1485,7 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
                     content={content}
                     pageId={page.id}
                     selectedBlockId={selectedId}
+                    selectedBlockIds={selectedIds}
                     selectedPart={selectedPart}
                     hoveredBlockId={hoveredId}
                     onSelectBlock={selectBlock}
@@ -1377,6 +1537,7 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
             </div>
             <div className="flex gap-1 rounded-2xl bg-stone-100/80 p-1 dark:bg-stone-950">
               <button type="button" title={t("helpInspect")} onClick={() => setRightTab("inspect")} className={`flex-1 rounded-xl py-1.5 text-[10px] font-semibold ${rightTab === "inspect" ? "bg-white text-stone-900 shadow-sm dark:bg-stone-800 dark:text-stone-50" : "text-stone-600 dark:text-[var(--muted)]"}`}>{t("inspect")}</button>
+              <button type="button" title={t("helpStyle")} onClick={() => setRightTab("style")} className={`flex-1 rounded-xl py-1.5 text-[10px] font-semibold ${rightTab === "style" ? "bg-white text-stone-900 shadow-sm dark:bg-stone-800 dark:text-stone-50" : "text-stone-600 dark:text-[var(--muted)]"}`}>{t("styleTab")}</button>
               <button type="button" title={t("helpSite")} onClick={() => { setRightTab("site"); setSiteFocus(null); }} className={`flex-1 rounded-xl py-1.5 text-[10px] font-semibold ${rightTab === "site" ? "bg-white text-stone-900 shadow-sm dark:bg-stone-800 dark:text-stone-50" : "text-stone-600 dark:text-[var(--muted)]"}`}>{t("site")}</button>
               <button type="button" title={t("helpReplies")} onClick={() => setRightTab("replies")} className={`flex-1 rounded-xl py-1.5 text-[10px] font-semibold ${rightTab === "replies" ? "bg-white text-stone-900 shadow-sm dark:bg-stone-800 dark:text-stone-50" : "text-stone-600 dark:text-[var(--muted)]"}`}>{t("replies")}</button>
             </div>
@@ -1396,6 +1557,8 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
                 onUpdateLocalizedProp={updateLocalizedProp}
                 onUpdatePropsObject={updateBlockPropsObject}
               />
+            ) : rightTab === "style" ? (
+              <TokensPanel tokens={content.tokens} onUpdateTokens={updateTokens} />
             ) : rightTab === "replies" ? (
               <SubmissionsPanel siteId={site.id} />
             ) : (
