@@ -147,6 +147,12 @@ const HIDDEN_FROM_CONTENT = new Set([
   "httpAction",
   "clickBehavior",
   "instanceOf",
+  "stackId",
+  "stackAxis",
+  "stackIndex",
+  "stackGap",
+  "stackAlign",
+  "layoutMode",
 ]);
 
 type InspTab = "content" | "layout" | "look" | "colors" | "link" | "api" | "motion";
@@ -315,6 +321,8 @@ export function InspectorPanel({
   onUpdateLocalizedProp,
   onUpdatePropsObject,
   onUpdateOriginal,
+  onDetachStack,
+  onStackMetaChange,
 }: {
   content: SiteContent;
   selected: Block | null;
@@ -329,6 +337,8 @@ export function InspectorPanel({
   onUpdatePropsObject?: (blockId: string, patch: Record<string, unknown>) => void;
   /** Push instance text/style props back onto content.components entry. */
   onUpdateOriginal?: (blockId: string) => void;
+  onDetachStack?: (blockId: string) => void;
+  onStackMetaChange?: (blockId: string, patch: { gap?: number; align?: "start" | "center" | "end" | "stretch" }) => void;
 }) {
   const { t, lang: uiLang } = usePlatformLang();
   const localeLabel = isLocaleCode(editLocale) ? LOCALE_META[editLocale].nativeLabel : editLocale;
@@ -398,6 +408,19 @@ export function InspectorPanel({
                 if (onUpdatePropsObject) onUpdatePropsObject(selected.id, { instanceOf: "" });
                 else onUpdateProp(selected.id, "instanceOf", "");
               }}
+            />
+          ) : null}
+
+          {typeof selected.props.stackId === "string" && selected.props.stackId ? (
+            <StackChip
+              stackId={String(selected.props.stackId)}
+              stackAxis={String(selected.props.stackAxis || "y")}
+              stackGap={String(selected.props.stackGap ?? "16")}
+              stackAlign={String(selected.props.stackAlign || "start")}
+              t={t}
+              onDetach={() => onDetachStack?.(selected.id)}
+              onGapChange={(gap) => onStackMetaChange?.(selected.id, { gap })}
+              onAlignChange={(align) => onStackMetaChange?.(selected.id, { align })}
             />
           ) : null}
 
@@ -757,6 +780,77 @@ export function InspectorPanel({
 
         </div>
       )}
+    </div>
+  );
+}
+
+
+function StackChip({
+  stackId,
+  stackAxis,
+  stackGap,
+  stackAlign,
+  t,
+  onDetach,
+  onGapChange,
+  onAlignChange,
+}: {
+  stackId: string;
+  stackAxis: string;
+  stackGap: string;
+  stackAlign: string;
+  t: (key: string) => string;
+  onDetach: () => void;
+  onGapChange: (gap: number) => void;
+  onAlignChange: (align: "start" | "center" | "end" | "stretch") => void;
+}) {
+  const shortId = stackId.length > 12 ? `${stackId.slice(0, 10)}…` : stackId;
+  const axisLabel = stackAxis === "x" ? "H" : "V";
+  return (
+    <div
+      className="flex flex-wrap items-center gap-2 rounded-2xl border border-[var(--border)] bg-[var(--card)] px-3 py-2"
+      data-sf-no-space-pan=""
+    >
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-teal-50 px-2.5 py-1 text-[10px] font-bold text-teal-900 dark:bg-teal-950 dark:text-teal-100">
+        <span aria-hidden>⧉</span>
+        {t("canvasStackChip")}
+        <span className="font-mono opacity-70">· {axisLabel} · {shortId}</span>
+      </span>
+      <label className="flex items-center gap-1 text-[10px] font-bold text-[var(--muted)]" title={t("canvasStackGap")}>
+        <span>{t("canvasStackGap")}</span>
+        <input
+          type="number"
+          min={0}
+          step={1}
+          value={stackGap}
+          onChange={(e) => {
+            const n = Number(e.target.value);
+            if (Number.isFinite(n)) onGapChange(Math.max(0, n));
+          }}
+          className="h-7 w-14 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-1 text-center font-mono text-[10px] font-bold text-[var(--foreground)]"
+          dir="ltr"
+        />
+      </label>
+      <label className="flex items-center gap-1 text-[10px] font-bold text-[var(--muted)]" title={t("canvasStackAlign")}>
+        <span>{t("canvasStackAlign")}</span>
+        <select
+          value={["start", "center", "end", "stretch"].includes(stackAlign) ? stackAlign : "start"}
+          onChange={(e) => onAlignChange(e.target.value as "start" | "center" | "end" | "stretch")}
+          className="h-7 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-1.5 text-[10px] font-bold text-[var(--foreground)]"
+        >
+          <option value="start">{t("alignStart")}</option>
+          <option value="center">{t("alignCenter")}</option>
+          <option value="end">{t("alignEnd")}</option>
+          <option value="stretch">{t("canvasStackStretch")}</option>
+        </select>
+      </label>
+      <button
+        type="button"
+        className="rounded-full border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-[10px] font-bold text-[var(--foreground)] hover:bg-[var(--card)]"
+        onClick={onDetach}
+      >
+        {t("canvasStackDetach")}
+      </button>
     </div>
   );
 }

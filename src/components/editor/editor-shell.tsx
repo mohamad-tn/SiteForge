@@ -33,16 +33,24 @@ import {
 import {
   alignRects,
   clampZoom,
+  createStackGroup,
+  DEFAULT_STACK_GAP,
   distributeRects,
   defaultInsertPosition,
+  detachStackMember,
   measureBlockRects,
   nudgeRects,
   pageUsesCanvas,
+  parsePos,
   readBlockRect,
+  readStackId,
   applyPositions,
+  updateStackMeta,
   type AlignAxis,
   type GuideLine,
   type LiveCanvasPos,
+  type StackAlign,
+  type StackAxis,
 } from "@/lib/editor-canvas";
 import { EditorCanvasLayer, mergeLivePositions } from "@/components/editor/editor-canvas-layer";
 import { SiteRenderer } from "@/components/site-renderer";
@@ -85,6 +93,8 @@ import {
   AlignRight,
   AlignHorizontalDistributeCenter,
   AlignVerticalDistributeCenter,
+  Rows2,
+  Columns2,
   MoreHorizontal,
   FilePlus2,
   Languages,
@@ -147,6 +157,7 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
   const [canvasLivePos, setCanvasLivePos] = useState<Record<string, LiveCanvasPos>>({});
   const [canvasGuides, setCanvasGuides] = useState<GuideLine[]>([]);
   const [canvasZoom, setCanvasZoom] = useState(1);
+  const [stackGapInput, setStackGapInput] = useState(String(DEFAULT_STACK_GAP));
   const canvasRootRef = useRef<HTMLDivElement | null>(null);
   const [selectedPart, setSelectedPart] = useState<BlockPart | null>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
@@ -404,6 +415,31 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
     if (!patches.length) return;
     updatePageBlocks((blocks) => applyPositions(blocks, patches));
   }
+
+  function applyCanvasStack(axis: StackAxis) {
+    if (!page) return;
+    const rects = canvasRectsForOps();
+    const gap = Math.max(0, parsePos(stackGapInput, DEFAULT_STACK_GAP));
+    const stackId = `stk-${nanoid(8)}`;
+    updatePageBlocks((blocks) =>
+      createStackGroup(blocks, rects, selectedIds, axis, { gap, align: "start", stackId })
+    );
+  }
+
+  function detachSelectedFromStack(blockId?: string) {
+    const id = blockId || selectedId;
+    if (!page || !id) return;
+    updatePageBlocks((blocks) => detachStackMember(blocks, id));
+  }
+
+  function changeStackMeta(blockId: string, patch: { gap?: number; align?: StackAlign }) {
+    if (!page) return;
+    const b = page.blocks.find((x) => x.id === blockId);
+    const sid = b ? readStackId(b.props as Record<string, unknown>) : null;
+    if (!sid) return;
+    updatePageBlocks((blocks) => updateStackMeta(blocks, sid, patch));
+  }
+
 
   function commitCanvasBlocks(nextBlocks: Block[]) {
     updatePageBlocks(() => nextBlocks);
@@ -1711,6 +1747,26 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
                         </button>
                       </>
                     ) : null}
+                    <span className="mx-1 h-4 w-px bg-[var(--border)]" aria-hidden />
+                    <label className="flex items-center gap-1 rounded-xl px-1.5 text-[10px] font-bold text-[var(--muted)]" title={t("canvasStackGap")}>
+                      <span className="sr-only">{t("canvasStackGap")}</span>
+                      <input
+                        type="number"
+                        min={0}
+                        step={1}
+                        value={stackGapInput}
+                        onChange={(e) => setStackGapInput(e.target.value)}
+                        className="h-7 w-12 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-1 text-center font-mono text-[10px] font-bold text-[var(--foreground)]"
+                        dir="ltr"
+                        aria-label={t("canvasStackGap")}
+                      />
+                    </label>
+                    <button type="button" title={t("canvasStackV")} aria-label={t("canvasStackV")} className="rounded-xl p-1.5 hover:bg-[var(--surface)]" onClick={() => applyCanvasStack("y")}>
+                      <Rows2 className="h-3.5 w-3.5" />
+                    </button>
+                    <button type="button" title={t("canvasStackH")} aria-label={t("canvasStackH")} className="rounded-xl p-1.5 hover:bg-[var(--surface)]" onClick={() => applyCanvasStack("x")}>
+                      <Columns2 className="h-3.5 w-3.5" />
+                    </button>
                   </>
                 ) : null}
                 <span className="mx-1 h-4 w-px bg-[var(--border)]" aria-hidden />
@@ -1884,6 +1940,8 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
                 onUpdateLocalizedProp={updateLocalizedProp}
                 onUpdatePropsObject={updateBlockPropsObject}
                 onUpdateOriginal={updateOriginalFromInstance}
+                onDetachStack={detachSelectedFromStack}
+                onStackMetaChange={changeStackMeta}
               />
             ) : rightTab === "style" ? (
               <TokensPanel tokens={content.tokens} onUpdateTokens={updateTokens} />

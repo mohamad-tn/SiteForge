@@ -12,6 +12,7 @@ import {
   applySizePatches,
   applyResizeDelta,
   clientToCanvasLocal,
+  detachStackMember,
   formatPos,
   handleCursor,
   marqueeHitTest,
@@ -19,6 +20,8 @@ import {
   normalizeMarquee,
   pageUsesCanvas,
   readBlockRect,
+  readStackId,
+  reflowStackBlocks,
   RESIZE_HANDLES,
   scaleGroupRects,
   snapRect,
@@ -529,7 +532,21 @@ export function EditorCanvasLayer({
       setLivePositions({});
       setGuides([]);
       if (patches.length) {
-        onCommitPositions(applyPositions(blocks, patches));
+        let next = applyPositions(blocks, patches);
+        // Single stack member: Alt on release detaches; otherwise reflow siblings on commit.
+        if (d.mode === "drag" && d.movingIds.length === 1) {
+          const movedId = d.movingIds[0];
+          const src = blocks.find((b) => b.id === movedId);
+          const stackId = src ? readStackId(src.props as Record<string, unknown>) : null;
+          if (stackId) {
+            if (e.altKey) {
+              next = detachStackMember(next, movedId);
+            } else {
+              next = reflowStackBlocks(next, stackId);
+            }
+          }
+        }
+        onCommitPositions(next);
       }
     },
     [blocks, livePositions, localPoint, measured, onCommitPositions, onSelectIds, selectedIds, setGuides, setLivePositions]

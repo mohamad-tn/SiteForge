@@ -62,6 +62,12 @@ export const PROP_LABELS: Record<string, Bi> = {
   cardBodyField: { ar: "حقل الوصف", en: "Body field" },
   cardImageField: { ar: "حقل الصورة", en: "Image field" },
   cardUrlField: { ar: "حقل الرابط", en: "URL field" },
+  stackId: { ar: "مجموعة تكديس", en: "Stack group" },
+  stackAxis: { ar: "محور التكديس", en: "Stack axis" },
+  stackGap: { ar: "فراغ التكديس", en: "Stack gap" },
+  stackAlign: { ar: "محاذاة التكديس", en: "Stack align" },
+  stackIndex: { ar: "ترتيب التكديس", en: "Stack index" },
+  layoutMode: { ar: "وضع التخطيط", en: "Layout mode" },
 };
 
 export const STYLE_LABELS_I18N: Record<StyleKey | "linkMode" | "linkPageSlug" | "openInNewTab", Bi> = {

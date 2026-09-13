@@ -862,3 +862,209 @@ export function scaleGroupRects(
     return { id: r.id, x: x0, y: y0, w, h };
   });
 }
+
+
+export const DEFAULT_STACK_GAP = 16;
+
+export type StackAxis = "x" | "y";
+export type StackAlign = "start" | "center" | "end" | "stretch";
+
+export type StackLayoutPatch = {
+  id: string;
+  x: number;
+  y: number;
+  w?: number;
+  h?: number;
+};
+
+export function parseStackAlign(v: unknown): StackAlign {
+  const s = String(v ?? "start").toLowerCase();
+  if (s === "center" || s === "end" || s === "stretch") return s;
+  return "start";
+}
+
+export function parseStackAxis(v: unknown): StackAxis {
+  return String(v ?? "y").toLowerCase() === "x" ? "x" : "y";
+}
+
+export function readStackId(props: Record<string, unknown>): string | null {
+  const id = props.stackId;
+  if (typeof id === "string" && id.trim()) return id.trim();
+  return null;
+}
+
+/**
+ * Pack rects into a single-axis stack with a fixed gap.
+ * Origin = min x/y of the (unlocked) selection. Order = current position along the axis.
+ * Cross-axis align: start|center|end; stretch sets width (y-axis) or height (x-axis) to the max member size.
+ */
+export function layoutStack(
+  rects: { id: string; x: number; y: number; w: number; h: number; locked?: boolean }[],
+  axis: StackAxis,
+  gap = DEFAULT_STACK_GAP,
+  align: StackAlign = "start"
+): StackLayoutPatch[] {
+  const selected = rects.filter((r) => !r.locked);
+  if (!selected.length) return [];
+
+  const sorted = [...selected].sort((a, b) => {
+    if (axis === "y") {
+      if (a.y !== b.y) return a.y - b.y;
+      return a.x - b.x;
+    }
+    if (a.x !== b.x) return a.x - b.x;
+    return a.y - b.y;
+  });
+
+  const minX = Math.min(...sorted.map((r) => r.x));
+  const minY = Math.min(...sorted.map((r) => r.y));
+  const maxW = Math.max(...sorted.map((r) => r.w));
+  const maxH = Math.max(...sorted.map((r) => r.h));
+  const g = Number.isFinite(gap) ? Math.max(0, gap) : DEFAULT_STACK_GAP;
+
+  const out: StackLayoutPatch[] = [];
+  let cursor = axis === "y" ? minY : minX;
+
+  for (const r of sorted) {
+    if (axis === "y") {
+      let x = minX;
+      let w: number | undefined;
+      if (align === "center") x = minX + (maxW - r.w) / 2;
+      else if (align === "end") x = minX + maxW - r.w;
+      else if (align === "stretch") {
+        x = minX;
+        w = maxW;
+      }
+      out.push({ id: r.id, x, y: cursor, ...(w != null ? { w } : {}) });
+      cursor += r.h + g;
+    } else {
+      let y = minY;
+      let h: number | undefined;
+      if (align === "center") y = minY + (maxH - r.h) / 2;
+      else if (align === "end") y = minY + maxH - r.h;
+      else if (align === "stretch") {
+        y = minY;
+        h = maxH;
+      }
+      out.push({ id: r.id, x: cursor, y, ...(h != null ? { h } : {}) });
+      cursor += r.w + g;
+    }
+  }
+  return out;
+}
+
+/** Strip stack constraint props; mark layout as free. */
+export function clearStackProps(props: Record<string, unknown>): Record<string, unknown> {
+  const next: Record<string, unknown> = { ...props };
+  delete next.stackId;
+  delete next.stackAxis;
+  delete next.stackIndex;
+  delete next.stackGap;
+  delete next.stackAlign;
+  next.layoutMode = "free";
+  return next;
+}
+
+export function detachStackMember(blocks: Block[], id: string): Block[] {
+  return blocks.map((b) => {
+    if (b.id !== id) return b;
+    if (isLockedProp(b.props as Record<string, unknown>)) return b;
+    return { ...b, props: clearStackProps(b.props as Record<string, unknown>) };
+  });
+}
+
+function applyStackPatchesToBlocks(
+  blocks: Block[],
+  patches: StackLayoutPatch[],
+  meta: {
+    stackId: string;
+    axis: StackAxis;
+    gap: number;
+    align: StackAlign;
+  }
+): Block[] {
+  const order = patches.map((p) => p.id);
+  const map = new Map(patches.map((p) => [p.id, p]));
+  const layoutMode = meta.axis === "x" ? "stack-x" : "stack-y";
+  return blocks.map((b) => {
+    const p = map.get(b.id);
+    if (!p) return b;
+    if (isLockedProp(b.props as Record<string, unknown>)) return b;
+    const next: Record<string, unknown> = {
+      ...(b.props as Record<string, unknown>),
+      posX: formatPos(p.x),
+      posY: formatPos(p.y),
+      stackId: meta.stackId,
+      stackAxis: meta.axis,
+      stackIndex: String(order.indexOf(b.id)),
+      stackGap: formatPos(meta.gap),
+      stackAlign: meta.align,
+      layoutMode,
+    };
+    if (p.w != null) next.width = formatPos(p.w);
+    if (p.h != null) next.height = formatPos(p.h);
+    return { ...b, props: next };
+  });
+}
+
+/**
+ * Pack selected unlocked ids into a shared stack group and write stack* props.
+ */
+export function createStackGroup(
+  blocks: Block[],
+  rects: CanvasRect[],
+  ids: string[],
+  axis: StackAxis,
+  opts: { gap?: number; align?: StackAlign; stackId: string }
+): Block[] {
+  const set = new Set(ids);
+  const selected = rects.filter((r) => set.has(r.id) && !r.locked);
+  if (selected.length < 2) return blocks;
+  const gap = opts.gap ?? DEFAULT_STACK_GAP;
+  const align = opts.align ?? "start";
+  const patches = layoutStack(selected, axis, gap, align);
+  if (!patches.length) return blocks;
+  return applyStackPatchesToBlocks(blocks, patches, {
+    stackId: opts.stackId,
+    axis,
+    gap,
+    align,
+  });
+}
+
+/** Re-pack every unlocked member of stackId from current positions. */
+export function reflowStackBlocks(blocks: Block[], stackId: string): Block[] {
+  if (!stackId) return blocks;
+  const members = blocks.filter((b) => {
+    const props = b.props as Record<string, unknown>;
+    return readStackId(props) === stackId && !isLockedProp(props);
+  });
+  if (members.length === 0) return blocks;
+  if (members.length === 1) return detachStackMember(blocks, members[0].id);
+
+  const head = members[0].props as Record<string, unknown>;
+  const axis = parseStackAxis(head.stackAxis);
+  const gap = parsePos(head.stackGap, DEFAULT_STACK_GAP);
+  const align = parseStackAlign(head.stackAlign);
+  const rects = members.map((b, i) => readBlockRect(b, i));
+  const patches = layoutStack(rects, axis, gap, align);
+  return applyStackPatchesToBlocks(blocks, patches, { stackId, axis, gap, align });
+}
+
+/** Update shared gap/align on all stack members, then reflow. */
+export function updateStackMeta(
+  blocks: Block[],
+  stackId: string,
+  patch: { gap?: number; align?: StackAlign }
+): Block[] {
+  if (!stackId) return blocks;
+  const next = blocks.map((b) => {
+    const props = b.props as Record<string, unknown>;
+    if (readStackId(props) !== stackId) return b;
+    const updated: Record<string, unknown> = { ...props };
+    if (patch.gap != null && Number.isFinite(patch.gap)) updated.stackGap = formatPos(Math.max(0, patch.gap));
+    if (patch.align) updated.stackAlign = patch.align;
+    return { ...b, props: updated };
+  });
+  return reflowStackBlocks(next, stackId);
+}

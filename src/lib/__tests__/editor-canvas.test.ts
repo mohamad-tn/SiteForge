@@ -6,9 +6,12 @@ import {
   clampResizeSize,
   clampZoom,
   clientToCanvasLocal,
+  createStackGroup,
+  detachStackMember,
   distributeRects,
   defaultInsertPosition,
   formatPos,
+  layoutStack,
   marqueeHitTest,
   measureRectToLocal,
   normalizeMarquee,
@@ -16,6 +19,7 @@ import {
   pageUsesCanvas,
   parsePos,
   readBlockRect,
+  reflowStackBlocks,
   resizeAnchor,
   scaleGroupRects,
   snapRect,
@@ -250,5 +254,112 @@ describe("DOM measure / resize / zoom", () => {
     );
     expect(r.x).toBe(100);
     expect(r.guides.some((g) => g.orientation === "v" && g.at === 100)).toBe(true);
+  });
+});
+
+
+describe("layoutStack / stack detach", () => {
+  it("layoutStack packs vertically with gap from min origin", () => {
+    const rects = [
+      { id: "a", x: 40, y: 100, w: 80, h: 20 },
+      { id: "b", x: 10, y: 200, w: 40, h: 30 },
+      { id: "c", x: 20, y: 50, w: 60, h: 10 },
+    ];
+    const out = layoutStack(rects, "y", 16, "start");
+    expect(out.map((p) => p.id)).toEqual(["c", "a", "b"]);
+    expect(out[0]).toMatchObject({ id: "c", x: 10, y: 50 });
+    expect(out[1]).toMatchObject({ id: "a", x: 10, y: 50 + 10 + 16 });
+    expect(out[2]).toMatchObject({ id: "b", x: 10, y: 50 + 10 + 16 + 20 + 16 });
+  });
+
+  it("layoutStack stretch sets cross-axis size", () => {
+    const rects = [
+      { id: "a", x: 0, y: 0, w: 40, h: 20 },
+      { id: "b", x: 0, y: 40, w: 100, h: 20 },
+    ];
+    const out = layoutStack(rects, "y", 8, "stretch");
+    expect(out.every((p) => p.w === 100)).toBe(true);
+    expect(out[0].x).toBe(0);
+    expect(out[1].y).toBe(28);
+  });
+
+  it("layoutStack horizontal + center align", () => {
+    const rects = [
+      { id: "a", x: 0, y: 10, w: 20, h: 20 },
+      { id: "b", x: 50, y: 0, w: 20, h: 40 },
+    ];
+    const out = layoutStack(rects, "x", 10, "center");
+    expect(out[0].id).toBe("a");
+    expect(out[0].x).toBe(0);
+    expect(out[0].y).toBe(10); // minY + (40-20)/2
+    expect(out[1].x).toBe(30);
+    expect(out[1].y).toBe(0);
+  });
+
+  it("createStackGroup writes shared stackId and detach clears it", () => {
+    const blocks = [
+      block("a", "heading", { posX: "0", posY: "0", width: "100", height: "20" }),
+      block("b", "text", { posX: "0", posY: "40", width: "100", height: "20" }),
+      block("c", "button", { posX: "200", posY: "0", width: "80", height: "40" }),
+    ];
+    const rects = blocks.map((b, i) => readBlockRect(b, i));
+    const stacked = createStackGroup(blocks, rects, ["a", "b"], "y", { gap: 12, stackId: "stk-1" });
+    expect(stacked[0].props.stackId).toBe("stk-1");
+    expect(stacked[1].props.stackId).toBe("stk-1");
+    expect(stacked[0].props.layoutMode).toBe("stack-y");
+    expect(stacked[2].props.stackId).toBeUndefined();
+    const gap = Number(stacked[1].props.posY) - (Number(stacked[0].props.posY) + 20);
+    expect(gap).toBe(12);
+
+    const detached = detachStackMember(stacked, "a");
+    expect(detached[0].props.stackId).toBeUndefined();
+    expect(detached[0].props.layoutMode).toBe("free");
+    expect(detached[1].props.stackId).toBe("stk-1");
+  });
+
+  it("reflowStackBlocks packs after one member moves", () => {
+    const blocks = [
+      block("a", "heading", {
+        posX: "10",
+        posY: "10",
+        width: "50",
+        height: "20",
+        stackId: "s1",
+        stackAxis: "y",
+        stackGap: "16",
+        stackAlign: "start",
+        stackIndex: "0",
+        layoutMode: "stack-y",
+      }),
+      block("b", "text", {
+        posX: "10",
+        posY: "200",
+        width: "50",
+        height: "20",
+        stackId: "s1",
+        stackAxis: "y",
+        stackGap: "16",
+        stackAlign: "start",
+        stackIndex: "1",
+        layoutMode: "stack-y",
+      }),
+    ];
+    const next = reflowStackBlocks(blocks, "s1");
+    expect(Number(next[0].props.posY)).toBe(10);
+    expect(Number(next[1].props.posY)).toBe(10 + 20 + 16);
+  });
+
+  it("reflowStackBlocks detaches lone member", () => {
+    const blocks = [
+      block("a", "heading", {
+        posX: "1",
+        posY: "2",
+        stackId: "lonely",
+        stackAxis: "y",
+        layoutMode: "stack-y",
+      }),
+    ];
+    const next = reflowStackBlocks(blocks, "lonely");
+    expect(next[0].props.stackId).toBeUndefined();
   });
 });
