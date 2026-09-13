@@ -8,7 +8,8 @@ import { AppCanvas, AppHeader, SoftCard, Toolbar } from "@/components/ui/surface
 import { SegmentedControl } from "@/components/ui/segmented";
 import { ThemeToggleButton } from "@/components/theme-provider";
 import { PlatformLangSwitcher, usePlatformLang } from "@/components/platform-lang-provider";
-import { Search, Trash2 } from "lucide-react";
+import { Trash2 } from "lucide-react";
+import { SearchField } from "@/components/ui/search-field";
 
 type Overview = {
   metrics: { users: number; sites: number; published: number; views7d: number };
@@ -223,15 +224,13 @@ export default function AdminPage() {
         {tab === "users" ? (
           <SoftCard className="space-y-4 overflow-hidden p-0">
             <Toolbar className="m-3 sm:m-4">
-              <div className="sf-search">
-                <Search />
-                <Input
-                  value={usersQ}
-                  onChange={(e) => setUsersQ(e.target.value)}
-                  placeholder="بحث بالبريد أو الاسم"
-                  aria-label="بحث المستخدمين"
-                />
-              </div>
+              <SearchField
+                grow
+                value={usersQ}
+                onChange={(e) => setUsersQ(e.target.value)}
+                placeholder="بحث بالبريد أو الاسم"
+                aria-label="بحث المستخدمين"
+              />
             </Toolbar>
             <div className="overflow-x-auto px-4 pb-4 sm:px-5">
               <table className="w-full min-w-[32rem] text-sm">
@@ -266,15 +265,13 @@ export default function AdminPage() {
         {tab === "sites" ? (
           <SoftCard className="space-y-4 overflow-hidden p-0">
             <Toolbar className="m-3 sm:m-4">
-              <div className="sf-search">
-                <Search />
-                <Input
-                  value={sitesQ}
-                  onChange={(e) => setSitesQ(e.target.value)}
-                  placeholder="بحث بالاسم أو المالك"
-                  aria-label="بحث المواقع"
-                />
-              </div>
+              <SearchField
+                grow
+                value={sitesQ}
+                onChange={(e) => setSitesQ(e.target.value)}
+                placeholder="بحث بالاسم أو المالك"
+                aria-label="بحث المواقع"
+              />
             </Toolbar>
             <div className="overflow-x-auto px-4 pb-4 sm:px-5">
               <table className="w-full min-w-[32rem] text-sm">
@@ -329,7 +326,7 @@ export default function AdminPage() {
             <div className="border-b border-[var(--border)] px-4 py-3 text-sm font-semibold">النطاقات المخصصة</div>
             <div className="divide-y divide-[var(--border)]">
               {domains.length === 0 ? (
-                <div className="px-4 py-8 text-center text-sm text-[var(--muted)]">لا نطاقات مسجّلة بعد</div>
+                <div className="px-4 py-5 text-center text-sm text-[var(--muted)]">لا نطاقات مسجّلة بعد</div>
               ) : (
                 domains.map((d) => (
                   <div key={String(d.id)} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm">
@@ -355,7 +352,7 @@ export default function AdminPage() {
             <div className="border-b border-[var(--border)] px-4 py-3 text-sm font-semibold">{t("tabTemplates")}</div>
             <div className="divide-y divide-[var(--border)]">
               {templates.length === 0 ? (
-                <div className="px-4 py-8 text-center text-sm text-[var(--muted)]">—</div>
+                <div className="px-4 py-5 text-center text-sm text-[var(--muted)]">—</div>
               ) : (
                 templates.map((tpl) => (
                   <div key={String(tpl.id)} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm">

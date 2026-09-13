@@ -12,6 +12,7 @@ import {
   compileKeyframesCss,
   stepUsesKeyframes,
 } from "@/lib/motion-timeline";
+import { normalizeHref, shouldOpenInNewTab } from "@/lib/href";
 
 /** Shared visual + link props applied to every block */
 
@@ -83,7 +84,6 @@ export function withEditableDefaults(props: Record<string, unknown>): Record<str
     ...defaultMotionProps(),
     linkMode: "url",
     linkPageSlug: "",
-    openInNewTab: "false",
     actionType: "link",
     ...props,
   };
@@ -236,7 +236,6 @@ export function resolveBlockHref(
   siteSlug?: string
 ): { href: string; target?: string; rel?: string } {
   const mode = strProp(p, "linkMode", "url");
-  const openNew = strProp(p, "openInNewTab") === "true";
   let href = strProp(p, hrefKey, "#");
   // Structured modes apply to primary link keys only (not secondaryHref).
   const structured =
@@ -260,6 +259,9 @@ export function resolveBlockHref(
       ? `/s/${siteSlug}?p=${encodeURIComponent(pageSlug)}`
       : `?p=${encodeURIComponent(pageSlug)}`;
   }
+  // URL / collection-item paths: normalize bare hosts so preview never appends them.
+  href = normalizeHref(href);
+  const openNew = shouldOpenInNewTab(p.openInNewTab, href);
   return {
     href: href || "#",
     target: openNew ? "_blank" : undefined,

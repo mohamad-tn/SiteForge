@@ -213,11 +213,27 @@ html[data-theme="dark"] .sf-segment button[data-active="true"] {
   background-image: none;
 }
 
-/* Search field with leading icon — logical inset for RTL/LTR */
+/* Search field with leading icon — logical inset for RTL/LTR.
+   Height hugs the input only. Never flex-grow on the block axis
+   (that stretched .sf-search in InsertPalette's flex-col and floated the icon). */
 .sf-search {
   position: relative;
+  display: block;
   min-width: 0;
+  width: 100%;
+  flex: 0 1 auto;
+  max-width: 100%;
+  align-self: stretch;
+  /* Hug content height even if a parent tries to stretch children */
+  height: fit-content;
+}
+
+/* Horizontal toolbars: grow on the inline axis only */
+.sf-search--grow,
+.sf-toolbar > .sf-search {
   flex: 1 1 12rem;
+  width: auto;
+  min-width: min(12rem, 100%);
 }
 
 .sf-search > svg {
@@ -230,10 +246,12 @@ html[data-theme="dark"] .sf-segment button[data-active="true"] {
   color: var(--muted);
   opacity: 0.75;
   pointer-events: none;
+  z-index: 1;
 }
 
 .sf-search > input {
   padding-inline-start: 2.4rem !important;
+  width: 100%;
 }
 
 /* Shared field chrome used by Input/Select/Textarea */

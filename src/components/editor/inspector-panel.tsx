@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
-  BLOCK_META,
   LOCALIZABLE_PROP_KEYS,
   LOCALE_META,
   isLocaleCode,
@@ -10,6 +9,7 @@ import {
   setLocalized,
   type Block,
   type SiteContent,
+  blockMetaLabel,
 } from "@/lib/design";
 import { STYLE_KEYS, LINK_KEYS, MOTION_KEYS, EFFECT_PRESETS, detectEffectPreset, effectPresetProps, type EffectPresetId } from "@/lib/block-style";
 import {
@@ -384,7 +384,7 @@ export function InspectorPanel({
         <div className="space-y-3">
           <div className="flex items-center justify-between gap-2">
             <div className="inline-flex items-center gap-2 rounded-full bg-teal-50 px-3 py-1 text-xs font-semibold text-teal-900 dark:bg-teal-950 dark:text-teal-100">
-              {BLOCK_META[selected.type].label}
+              {blockMetaLabel(selected.type, uiLang)}
               <span className="font-mono text-[10px] opacity-50">{selected.type}</span>
             </div>
             <span className="rounded-full bg-[var(--surface)] px-2 py-0.5 text-[10px] font-semibold text-[var(--muted)]">

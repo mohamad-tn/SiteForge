@@ -150,4 +150,31 @@ describe("resolveBlockHref", () => {
   it("keeps raw url mode", () => {
     expect(resolveBlockHref({ linkMode: "url", href: "#cta" }, "href", "demo").href).toBe("#cta");
   });
+
+  it("normalizes bare www hosts so preview never appends them", () => {
+    expect(resolveBlockHref({ linkMode: "url", href: "www.google.com" }, "href", "demo").href).toBe(
+      "https://www.google.com"
+    );
+    expect(resolveBlockHref({ linkMode: "url", href: "google.com/x" }, "href").href).toBe(
+      "https://google.com/x"
+    );
+  });
+
+  it("opens external urls in a new tab when openInNewTab is unset", () => {
+    const r = resolveBlockHref({ linkMode: "url", href: "https://example.com" }, "href");
+    expect(r.target).toBe("_blank");
+    expect(r.rel).toBe("noopener noreferrer");
+  });
+
+  it("honors explicit same-tab for external urls", () => {
+    const r = resolveBlockHref(
+      { linkMode: "url", href: "https://example.com", openInNewTab: "false" },
+      "href"
+    );
+    expect(r.target).toBeUndefined();
+  });
+
+  it("blocks javascript: hrefs", () => {
+    expect(resolveBlockHref({ linkMode: "url", href: "javascript:alert(1)" }, "href").href).toBe("#");
+  });
 });

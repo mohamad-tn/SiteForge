@@ -38,6 +38,7 @@ import {
   type BlockPart,
   type NavItem,
 } from "@/lib/design";
+import { normalizeHref } from "@/lib/href";
 import { LinkTargetFields } from "@/components/editor/link-target-fields";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -581,7 +582,7 @@ function NavbarAtomic({
                       linkCollectionSlug: it.linkCollectionSlug || "",
                       linkCollectionItemHref: it.linkCollectionItemHref || "",
                       linkCollectionItemId: it.linkCollectionItemId || "",
-                      openInNewTab: it.openInNewTab || "false",
+                      openInNewTab: it.openInNewTab || "",
                       href: it.href || "",
                     }}
                     hrefKey="href"
@@ -804,6 +805,12 @@ function HeroAtomic({
               dir="ltr"
               value={String(props.secondaryHref ?? "")}
               onChange={(e) => onUpdateProp(blockId, "secondaryHref", e.target.value)}
+              onBlur={(e) => {
+                const next = normalizeHref(e.target.value);
+                if (next !== String(props.secondaryHref ?? "")) {
+                  onUpdateProp(blockId, "secondaryHref", next);
+                }
+              }}
             />
           </Field>
         </>

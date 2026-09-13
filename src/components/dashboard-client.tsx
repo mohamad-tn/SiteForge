@@ -14,7 +14,8 @@ import { SignOutButton } from "@/components/sign-out-button";
 import { CommandPalette, type CommandItem } from "@/components/command-palette";
 import { PlatformLangSwitcher, usePlatformLang } from "@/components/platform-lang-provider";
 import { CATEGORY_LABELS } from "@/lib/platform-i18n";
-import { Copy, Download, Search, Upload, Plus, LayoutTemplate, ArrowRight, Trash2 } from "lucide-react";
+import { Copy, Download, Upload, Plus, LayoutTemplate, ArrowRight, Trash2 } from "lucide-react";
+import { SearchField } from "@/components/ui/search-field";
 
 type Template = {
   id?: string;
@@ -543,19 +544,17 @@ export function DashboardClient({
             </div>
 
             <Toolbar className="m-3 sm:m-4">
-              <div className="sf-search">
-                <Search />
-                <Input
-                  value={q}
-                  onChange={(e) => {
-                    setPage(1);
-                    setQ(e.target.value);
-                  }}
-                  placeholder={t.search}
-                  className="h-10 w-full min-w-0 rounded-2xl"
-                  aria-label={t.search}
-                />
-              </div>
+              <SearchField
+                grow
+                value={q}
+                onChange={(e) => {
+                  setPage(1);
+                  setQ(e.target.value);
+                }}
+                placeholder={t.search}
+                className="h-10 w-full min-w-0 rounded-2xl"
+                aria-label={t.search}
+              />
 
               <SegmentedControl
                 className="shrink-0"

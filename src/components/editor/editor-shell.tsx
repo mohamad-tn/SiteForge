@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  BLOCK_META,
   LOCALE_CODES,
   LOCALE_META,
   cloneBlock,
@@ -17,6 +16,7 @@ import {
   type BlockType,
   type LocaleCode,
   type SiteContent,
+  blockMetaLabel,
 } from "@/lib/design";
 import { listBlockParts } from "@/lib/block-parts";
 import { withEditableDefaults, isStyleFlag } from "@/lib/block-style";
@@ -514,7 +514,7 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
   function saveAsComponent(blockId: string) {
     const src = page.blocks.find((b) => b.id === blockId);
     if (!src) return;
-    const name = window.prompt("اسم القسم المحفوظ", BLOCK_META[src.type].label);
+    const name = window.prompt(uiLang === "en" ? "Saved section name" : "اسم القسم المحفوظ", blockMetaLabel(src.type, uiLang));
     if (!name || !name.trim()) return;
     commit((prev) => ({
       ...prev,
@@ -1417,11 +1417,11 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
             {leftTab === "insert" ? (
               <div className="space-y-4">
                 <div>
-                  <div className="mb-2 text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--muted)]">{t("addSection")}</div>
+                  <div className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--muted)]">{t("addSection")}</div>
                   <InsertPalette mode="sections" onInsert={(t) => addBlock(t, selectedId)} />
                 </div>
                 <div>
-                  <div className="mb-2 text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--muted)]">{t("addElement")}</div>
+                  <div className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--muted)]">{t("addElement")}</div>
                   <InsertPalette mode="elements" onInsert={(t) => addBlock(t, selectedId)} />
                 </div>
                 <div>
@@ -1457,7 +1457,7 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
                   </button>
                 </div>
                 {page.blocks.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-[var(--border)] bg-[var(--surface)] px-4 py-8 text-center">
+                  <div className="rounded-2xl border border-dashed border-[var(--border)] bg-[var(--surface)] px-3 py-4 text-center">
                     <p className="text-xs font-semibold text-[var(--muted)]">{t("layersEmpty")}</p>
                     <p className="mt-1 text-[11px] leading-5 text-[var(--muted)]">{t("layersEmptyHint")}</p>
                     <button
@@ -1496,7 +1496,7 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
                         className="min-w-0 flex-1 text-start font-medium text-[12px] text-[var(--foreground)]"
                         onClick={(e) => selectBlock(b.id, { toggle: e.shiftKey })}
                       >
-                        {BLOCK_META[b.type].label}
+                        {blockMetaLabel(b.type, uiLang)}
                       </button>
                       <IconBtn
                         title={hidden ? t("showBlock") : t("hideBlock")}

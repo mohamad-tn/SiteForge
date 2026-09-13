@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { usePlatformLang } from "@/components/platform-lang-provider";
 import { normalizeActionType, type ButtonActionType } from "@/lib/design";
+import { isExternalHttpHref, normalizeHref } from "@/lib/href";
 
 type CollectionOpt = { id: string; name: string; slug: string; _count?: { items: number } };
 type ItemOpt = { id: string; data: Record<string, unknown>; published: boolean };
@@ -221,7 +222,7 @@ export function LinkTargetFields({
                       const it = items.find((x) => x.id === v);
                       const url = typeof it?.data?.url === "string" ? it.data.url : "";
                       onUpdateProp("linkCollectionItemId", v);
-                      onUpdateProp("linkCollectionItemHref", url || "");
+                      onUpdateProp("linkCollectionItemHref", url ? normalizeHref(url) : "");
                     }}
                     options={[
                       { value: "__none__", label: t("linkCollectionItemNone") },
@@ -245,6 +246,10 @@ export function LinkTargetFields({
               <Input
                 value={String(props[hrefKey] ?? "")}
                 onChange={(e) => onUpdateProp(hrefKey, e.target.value)}
+                onBlur={(e) => {
+                  const next = normalizeHref(e.target.value);
+                  if (next !== String(props[hrefKey] ?? "")) onUpdateProp(hrefKey, next);
+                }}
                 className="h-10 rounded-2xl font-mono text-sm"
                 dir="ltr"
                 placeholder="https://… أو #section"
@@ -256,7 +261,11 @@ export function LinkTargetFields({
             <input
               type="checkbox"
               className="accent-teal-700"
-              checked={String(props.openInNewTab) === "true"}
+              checked={
+                String(props.openInNewTab) === "true" ||
+                (String(props.openInNewTab) !== "false" &&
+                  isExternalHttpHref(normalizeHref(String(props[hrefKey] ?? ""))))
+              }
               onChange={(e) => onUpdateProp("openInNewTab", e.target.checked ? "true" : "false")}
             />
             {t("linkOpenNewTab")}

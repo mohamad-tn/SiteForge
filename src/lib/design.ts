@@ -114,33 +114,187 @@ export function isLocalizedMap(v: unknown): v is LocalizedMap {
   return !!v && typeof v === "object" && !Array.isArray(v);
 }
 
-export const BLOCK_META: Record<
-  BlockType,
-  { label: string; category: BlockCategory; description: string }
-> = {
-  navbar: { label: "شريط التنقل", category: "sections", description: "شعار وروابط علوية" },
-  hero: { label: "قسم المقدمة", category: "sections", description: "عنوان رئيسي مع زر دعوة" },
-  features: { label: "مميزات", category: "sections", description: "شبكة بطاقات مميزات" },
-  gallery: { label: "معرض", category: "sections", description: "شبكة صور/أعمال" },
-  pricing: { label: "أسعار", category: "sections", description: "خطط تسعير" },
-  testimonials: { label: "شهادات", category: "sections", description: "آراء العملاء" },
-  faq: { label: "أسئلة شائعة", category: "sections", description: "سؤال وجواب" },
-  cta: { label: "دعوة للتواصل", category: "sections", description: "شريط تحفيزي مع زر" },
-  contact: { label: "تواصل", category: "sections", description: "بيانات ونموذج" },
-  footer: { label: "تذييل", category: "sections", description: "حقوق وروابط سفلية" },
-  stats: { label: "إحصائيات", category: "sections", description: "أرقام بارزة" },
-  heading: { label: "عنوان", category: "elements", description: "عنوان قابل للتخصيص" },
-  text: { label: "نص", category: "elements", description: "فقرة نصية" },
-  image: { label: "صورة", category: "elements", description: "صورة مع تعليق" },
-  video: { label: "فيديو", category: "elements", description: "فيديو مرفوع أو رابط" },
-  button: { label: "زر", category: "elements", description: "زر إجراء" },
-  spacer: { label: "مسافة", category: "elements", description: "فراغ عمودي" },
-  columns: { label: "عمودان", category: "elements", description: "تخطيط عمودين" },
-  divider: { label: "فاصل", category: "elements", description: "خط فاصل" },
-  list: { label: "قائمة", category: "elements", description: "قائمة نقاط" },
-  form: { label: "نموذج", category: "sections", description: "نموذج تواصل مع ردود" },
-  collectionList: { label: "قائمة مجموعة", category: "sections", description: "عرض عناصر من مجموعات المحتوى" },
+export type BlockMeta = {
+  label: string;
+  labelEn: string;
+  category: BlockCategory;
+  description: string;
+  descriptionEn: string;
 };
+
+export const BLOCK_META: Record<BlockType, BlockMeta> = {
+  navbar: {
+    label: "شريط التنقل",
+    labelEn: "Navbar",
+    category: "sections",
+    description: "شعار وروابط علوية",
+    descriptionEn: "Logo and top links",
+  },
+  hero: {
+    label: "قسم المقدمة",
+    labelEn: "Hero",
+    category: "sections",
+    description: "عنوان رئيسي مع زر دعوة",
+    descriptionEn: "Headline with call-to-action",
+  },
+  features: {
+    label: "مميزات",
+    labelEn: "Features",
+    category: "sections",
+    description: "شبكة بطاقات مميزات",
+    descriptionEn: "Feature card grid",
+  },
+  gallery: {
+    label: "معرض",
+    labelEn: "Gallery",
+    category: "sections",
+    description: "شبكة صور/أعمال",
+    descriptionEn: "Image / work grid",
+  },
+  pricing: {
+    label: "أسعار",
+    labelEn: "Pricing",
+    category: "sections",
+    description: "خطط تسعير",
+    descriptionEn: "Pricing plans",
+  },
+  testimonials: {
+    label: "شهادات",
+    labelEn: "Testimonials",
+    category: "sections",
+    description: "آراء العملاء",
+    descriptionEn: "Customer quotes",
+  },
+  faq: {
+    label: "أسئلة شائعة",
+    labelEn: "FAQ",
+    category: "sections",
+    description: "سؤال وجواب",
+    descriptionEn: "Questions and answers",
+  },
+  cta: {
+    label: "دعوة للتواصل",
+    labelEn: "CTA",
+    category: "sections",
+    description: "شريط تحفيزي مع زر",
+    descriptionEn: "Promotional bar with button",
+  },
+  contact: {
+    label: "تواصل",
+    labelEn: "Contact",
+    category: "sections",
+    description: "بيانات ونموذج",
+    descriptionEn: "Details and form",
+  },
+  footer: {
+    label: "تذييل",
+    labelEn: "Footer",
+    category: "sections",
+    description: "حقوق وروابط سفلية",
+    descriptionEn: "Credits and bottom links",
+  },
+  stats: {
+    label: "إحصائيات",
+    labelEn: "Stats",
+    category: "sections",
+    description: "أرقام بارزة",
+    descriptionEn: "Highlight numbers",
+  },
+  heading: {
+    label: "عنوان",
+    labelEn: "Heading",
+    category: "elements",
+    description: "عنوان قابل للتخصيص",
+    descriptionEn: "Customizable heading",
+  },
+  text: {
+    label: "نص",
+    labelEn: "Text",
+    category: "elements",
+    description: "فقرة نصية",
+    descriptionEn: "Paragraph text",
+  },
+  image: {
+    label: "صورة",
+    labelEn: "Image",
+    category: "elements",
+    description: "صورة مع تعليق",
+    descriptionEn: "Image with caption",
+  },
+  video: {
+    label: "فيديو",
+    labelEn: "Video",
+    category: "elements",
+    description: "فيديو مرفوع أو رابط",
+    descriptionEn: "Uploaded or linked video",
+  },
+  button: {
+    label: "زر",
+    labelEn: "Button",
+    category: "elements",
+    description: "زر إجراء",
+    descriptionEn: "Action button",
+  },
+  spacer: {
+    label: "مسافة",
+    labelEn: "Spacer",
+    category: "elements",
+    description: "فراغ عمودي",
+    descriptionEn: "Vertical space",
+  },
+  columns: {
+    label: "عمودان",
+    labelEn: "Columns",
+    category: "elements",
+    description: "تخطيط عمودين",
+    descriptionEn: "Two-column layout",
+  },
+  divider: {
+    label: "فاصل",
+    labelEn: "Divider",
+    category: "elements",
+    description: "خط فاصل",
+    descriptionEn: "Horizontal rule",
+  },
+  list: {
+    label: "قائمة",
+    labelEn: "List",
+    category: "elements",
+    description: "قائمة نقاط",
+    descriptionEn: "Bullet list",
+  },
+  form: {
+    label: "نموذج",
+    labelEn: "Form",
+    category: "sections",
+    description: "نموذج تواصل مع ردود",
+    descriptionEn: "Contact form with replies",
+  },
+  collectionList: {
+    label: "قائمة مجموعة",
+    labelEn: "Collection list",
+    category: "sections",
+    description: "عرض عناصر من مجموعات المحتوى",
+    descriptionEn: "Render CMS collection items",
+  },
+};
+
+/** Platform-lang aware block label (AR label is canonical in BLOCK_META.label). */
+export function blockMetaLabel(type: BlockType, lang: "ar" | "en" = "ar"): string {
+  const m = BLOCK_META[type];
+  return lang === "en" ? m.labelEn : m.label;
+}
+
+export function blockMetaDescription(type: BlockType, lang: "ar" | "en" = "ar"): string {
+  const m = BLOCK_META[type];
+  return lang === "en" ? m.descriptionEn : m.description;
+}
+
+/** Haystack for palette search — always AR + EN so either UI lang finds blocks. */
+export function blockMetaSearchText(type: BlockType): string {
+  const m = BLOCK_META[type];
+  return `${m.label} ${m.labelEn} ${m.description} ${m.descriptionEn} ${type}`;
+}
 
 export const BLOCK_LABELS: Record<BlockType, string> = Object.fromEntries(
   Object.entries(BLOCK_META).map(([k, v]) => [k, v.label])
@@ -1052,7 +1206,7 @@ function normalizeNavItem(item: unknown, index: number): NavItem | null {
     linkCollectionSlug: typeof o.linkCollectionSlug === "string" ? o.linkCollectionSlug : "",
     linkCollectionItemHref: typeof o.linkCollectionItemHref === "string" ? o.linkCollectionItemHref : "",
     linkCollectionItemId: typeof o.linkCollectionItemId === "string" ? o.linkCollectionItemId : "",
-    openInNewTab: typeof o.openInNewTab === "string" ? o.openInNewTab : "false",
+    openInNewTab: typeof o.openInNewTab === "string" ? o.openInNewTab : "",
     actionType: normalizeActionType(o.actionType),
     ...(actionTarget ? { actionTarget } : {}),
     ...(styles ? { styles } : {}),
@@ -1119,7 +1273,7 @@ export function resolveNavItems(
     linkCollectionSlug: it.linkCollectionSlug || "",
     linkCollectionItemHref: it.linkCollectionItemHref || "",
     linkCollectionItemId: it.linkCollectionItemId || "",
-    openInNewTab: it.openInNewTab || "false",
+    openInNewTab: it.openInNewTab || "",
     actionType: normalizeActionType(it.actionType),
     ...(it.actionTarget ? { actionTarget: sanitizeActionTarget(it.actionTarget) } : {}),
     ...(it.styles ? { styles: it.styles } : {}),
