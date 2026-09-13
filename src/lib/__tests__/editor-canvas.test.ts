@@ -16,9 +16,12 @@ import {
   pageUsesCanvas,
   parsePos,
   readBlockRect,
+  resizeAnchor,
+  scaleGroupRects,
   snapRect,
   snapResizeRect,
   snapToGrid,
+  unionBounds,
 } from "@/lib/editor-canvas";
 import type { Block } from "@/lib/design";
 
@@ -172,6 +175,80 @@ describe("DOM measure / resize / zoom", () => {
       { threshold: 6 }
     );
     expect(r.w).toBe(100);
+    expect(r.guides.some((g) => g.orientation === "v" && g.at === 100)).toBe(true);
+  });
+
+  it("applyResizeDelta anchors opposite edge for w/n/nw", () => {
+    const o = { x: 10, y: 20, w: 100, h: 50 };
+    const w = applyResizeDelta(o, -20, 0, "w");
+    expect(w.w).toBe(120);
+    expect(w.x).toBe(-10);
+    expect(w.y).toBe(20);
+    const n = applyResizeDelta(o, 0, -10, "n");
+    expect(n.h).toBe(60);
+    expect(n.y).toBe(10);
+    const nw = applyResizeDelta(o, -20, -10, "nw");
+    expect(nw.w).toBe(120);
+    expect(nw.h).toBe(60);
+    expect(nw.x + nw.w).toBe(110);
+    expect(nw.y + nw.h).toBe(70);
+  });
+
+  it("resizeAnchor returns opposite corner/edge", () => {
+    const r = { x: 0, y: 0, w: 100, h: 40 };
+    expect(resizeAnchor(r, "se")).toEqual({ x: 0, y: 0 });
+    expect(resizeAnchor(r, "nw")).toEqual({ x: 100, y: 40 });
+    expect(resizeAnchor(r, "e")).toEqual({ x: 0, y: 20 });
+    expect(resizeAnchor(r, "se", true)).toEqual({ x: 50, y: 20 });
+  });
+
+  it("scaleGroupRects scales about opposite BB corner and clamps min", () => {
+    const origins = {
+      a: { x: 0, y: 0, w: 40, h: 40 },
+      b: { x: 60, y: 0, w: 40, h: 40 },
+    };
+    // Grow SE by 100 → bounds 100x40 → 200x40, sx=2
+    const grown = scaleGroupRects(origins, ["a", "b"], "se", 100, 0);
+    expect(grown).toHaveLength(2);
+    const a = grown.find((p) => p.id === "a")!;
+    const b = grown.find((p) => p.id === "b")!;
+    expect(a.w).toBe(80);
+    expect(b.w).toBe(80);
+    expect(a.x).toBe(0);
+    expect(b.x).toBe(120);
+
+    // Shrink hard toward min clamp
+    const tiny = scaleGroupRects(
+      { a: { x: 0, y: 0, w: 80, h: 80 }, b: { x: 100, y: 0, w: 80, h: 80 } },
+      ["a", "b"],
+      "se",
+      -200,
+      -200
+    );
+    expect(tiny.every((p) => p.w >= 40 && p.h >= 40)).toBe(true);
+  });
+
+  it("scaleGroupRects aboutCenter keeps BB center", () => {
+    const origins = {
+      a: { x: 0, y: 0, w: 50, h: 50 },
+      b: { x: 50, y: 0, w: 50, h: 50 },
+    };
+    const bounds0 = unionBounds(Object.values(origins));
+    const cx0 = bounds0.x + bounds0.w / 2;
+    const out = scaleGroupRects(origins, ["a", "b"], "e", 50, 0, { aboutCenter: true });
+    const bounds1 = unionBounds(out);
+    const cx1 = bounds1.x + bounds1.w / 2;
+    expect(Math.abs(cx1 - cx0)).toBeLessThan(0.01);
+  });
+
+  it("snapResizeRect snaps left edge for w handle", () => {
+    const r = snapResizeRect(
+      { x: 102, y: 0, w: 80, h: 40 },
+      [{ id: "p", x: 100, y: 0, w: 20, h: 40 }],
+      "w",
+      { threshold: 6 }
+    );
+    expect(r.x).toBe(100);
     expect(r.guides.some((g) => g.orientation === "v" && g.at === 100)).toBe(true);
   });
 });

@@ -13,13 +13,17 @@ import {
   applyResizeDelta,
   clientToCanvasLocal,
   formatPos,
+  handleCursor,
   marqueeHitTest,
   measureBlockRects,
   normalizeMarquee,
   pageUsesCanvas,
   readBlockRect,
+  RESIZE_HANDLES,
+  scaleGroupRects,
   snapRect,
   snapResizeRect,
+  unionBounds,
   type CanvasRect,
   type GuideLine,
   type LiveCanvasPos,
@@ -52,6 +56,9 @@ type DragState =
       disableSnap: boolean;
       handle: ResizeHandle;
       blockId: string;
+      /** Multi-select: scale about group BB center when Alt held at pointer-down. */
+      aboutCenter: boolean;
+      group: boolean;
     };
 
 function isInteractiveTarget(el: EventTarget | null): boolean {
@@ -138,10 +145,26 @@ export function EditorCanvasLayer({
 
   useEffect(() => {
     if (!enabled) return;
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.code === "Space" && !(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)) {
-        setSpaceDown(true);
+    const spaceBlocked = (target: EventTarget | null) => {
+      if (!(target instanceof Element)) return false;
+      if (
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        target instanceof HTMLSelectElement ||
+        target instanceof HTMLButtonElement
+      ) {
+        return true;
       }
+      return Boolean(
+        target.closest(
+          "[data-sf-inspector], [contenteditable=true], input, textarea, select, button, [role='slider'], [data-sf-no-space-pan]"
+        )
+      );
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.code !== "Space") return;
+      if (spaceBlocked(e.target) || spaceBlocked(document.activeElement)) return;
+      setSpaceDown(true);
     };
     const onKeyUp = (e: KeyboardEvent) => {
       if (e.code === "Space") setSpaceDown(false);
@@ -260,19 +283,36 @@ export function EditorCanvasLayer({
         if (!id || !handle) return;
         const block = blocks.find((b) => b.id === id);
         if (!block || isLockedProp(block.props as Record<string, unknown>)) return;
-        const r = rectFor(id);
+
+        let movingIds = selectedIds.includes(id)
+          ? selectedIds.filter((mid) => {
+              const b = blocks.find((x) => x.id === mid);
+              return Boolean(b && !isLockedProp(b.props as Record<string, unknown>));
+            })
+          : [id];
+        if (!movingIds.includes(id)) movingIds = [id];
+        const group = movingIds.length >= 2;
+
+        const origins: Record<string, { x: number; y: number; w: number; h: number }> = {};
+        for (const mid of movingIds) {
+          const r = rectFor(mid);
+          origins[mid] = { x: r.x, y: r.y, w: r.w, h: r.h };
+        }
+
         dragRef.current = {
           mode: "resize",
           pointerId: e.pointerId,
           startX: e.clientX,
           startY: e.clientY,
           originLocal: local,
-          movingIds: [id],
-          origins: { [id]: { x: r.x, y: r.y, w: r.w, h: r.h } },
+          movingIds,
+          origins,
           additive: false,
-          disableSnap,
+          disableSnap: group ? false : disableSnap,
           handle,
           blockId: id,
+          aboutCenter: group ? e.altKey : false,
+          group,
         };
         (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
         e.preventDefault();
@@ -373,6 +413,18 @@ export function EditorCanvasLayer({
       const dy = (e.clientY - d.startY) / z;
 
       if (d.mode === "resize") {
+        if (d.group) {
+          d.aboutCenter = e.altKey;
+          const patches = scaleGroupRects(d.origins, d.movingIds, d.handle, dx, dy, {
+            aboutCenter: d.aboutCenter,
+          });
+          const next: Record<string, LiveCanvasPos> = {};
+          for (const p of patches) {
+            next[p.id] = { x: p.x, y: p.y, w: p.w, h: p.h };
+          }
+          scheduleLive(next, []);
+          return;
+        }
         const origin = d.origins[d.blockId];
         if (!origin) return;
         const raw = applyResizeDelta(origin, dx, dy, d.handle);
@@ -451,13 +503,17 @@ export function EditorCanvasLayer({
       }
 
       if (d.mode === "resize") {
-        const p = finalLive[d.blockId] || d.origins[d.blockId];
+        const patches = d.movingIds
+          .map((id) => {
+            const p = finalLive[id] || d.origins[id];
+            if (!p) return null;
+            return { id, x: p.x, y: p.y, w: p.w, h: p.h };
+          })
+          .filter(Boolean) as { id: string; x: number; y: number; w?: number; h?: number }[];
         setLivePositions({});
         setGuides([]);
-        if (p) {
-          onCommitPositions(
-            applySizePatches(blocks, [{ id: d.blockId, x: p.x, y: p.y, w: p.w, h: p.h }])
-          );
+        if (patches.length) {
+          onCommitPositions(applySizePatches(blocks, patches));
         }
         return;
       }
@@ -481,14 +537,35 @@ export function EditorCanvasLayer({
 
   if (!enabled) return <>{children}</>;
 
-  const primarySelected = selectedIds[0];
-  const primaryRect =
-    primarySelected && !blocks.find((b) => b.id === primarySelected && isLockedProp(b.props as Record<string, unknown>))
-      ? rectFor(primarySelected)
-      : null;
-  const primaryLocked = primarySelected
-    ? isLockedProp((blocks.find((b) => b.id === primarySelected)?.props || {}) as Record<string, unknown>)
-    : true;
+  const unlockedSelected = selectedIds.filter((id) => {
+    const b = blocks.find((x) => x.id === id);
+    return Boolean(b && !isLockedProp(b.props as Record<string, unknown>));
+  });
+  const handleHostId = unlockedSelected[0] || null;
+  const selectionRects = unlockedSelected.map((id) => rectFor(id));
+  const outlineRect =
+    selectionRects.length >= 2
+      ? unionBounds(selectionRects)
+      : selectionRects.length === 1
+        ? selectionRects[0]
+        : null;
+
+  const handleStyle = (handle: ResizeHandle): React.CSSProperties => {
+    const base: React.CSSProperties = { cursor: handleCursor(handle) };
+    if (handle.includes("n")) base.top = -5;
+    if (handle.includes("s")) base.bottom = -5;
+    if (handle.includes("w")) base.left = -5;
+    if (handle.includes("e")) base.right = -5;
+    if (handle === "n" || handle === "s") {
+      base.left = "50%";
+      base.marginLeft = -5;
+    }
+    if (handle === "e" || handle === "w") {
+      base.top = "50%";
+      base.marginTop = -5;
+    }
+    return base;
+  };
 
   return (
     <div
@@ -527,36 +604,28 @@ export function EditorCanvasLayer({
           />
         )
       )}
-      {/* Selection outline + resize handles (token-colored, visible in light mode) */}
-      {primaryRect && primarySelected && !primaryLocked ? (
+      {/* Selection outline + 8 resize handles (token-colored, visible in light mode) */}
+      {outlineRect && handleHostId && outlineRect.w > 0 && outlineRect.h > 0 ? (
         <div
           className="pointer-events-none absolute z-[45] border-2 border-[var(--accent)] shadow-[0_0_0_1px_color-mix(in_oklab,var(--card)_80%,transparent)]"
           style={{
-            left: primaryRect.x,
-            top: primaryRect.y,
-            width: primaryRect.w,
-            height: primaryRect.h,
+            left: outlineRect.x,
+            top: outlineRect.y,
+            width: outlineRect.w,
+            height: outlineRect.h,
           }}
           data-sf-selection-outline=""
         >
-          {(["e", "s", "se"] as ResizeHandle[]).map((handle) => {
-            const style: React.CSSProperties =
-              handle === "e"
-                ? { right: -5, top: "50%", marginTop: -5, cursor: "ew-resize" }
-                : handle === "s"
-                  ? { bottom: -5, left: "50%", marginLeft: -5, cursor: "ns-resize" }
-                  : { right: -5, bottom: -5, cursor: "nwse-resize" };
-            return (
-              <div
-                key={handle}
-                data-sf-resize-handle={handle}
-                data-block-id={primarySelected}
-                data-sf-no-drag=""
-                className="pointer-events-auto absolute h-2.5 w-2.5 rounded-sm border-2 border-[var(--accent)] bg-[var(--card)]"
-                style={style}
-              />
-            );
-          })}
+          {RESIZE_HANDLES.map((handle) => (
+            <div
+              key={handle}
+              data-sf-resize-handle={handle}
+              data-block-id={handleHostId}
+              data-sf-no-drag=""
+              className="pointer-events-auto absolute h-2.5 w-2.5 rounded-sm border-2 border-[var(--accent)] bg-[var(--card)]"
+              style={handleStyle(handle)}
+            />
+          ))}
         </div>
       ) : null}
     </div>

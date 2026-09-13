@@ -19,6 +19,8 @@ import {
   normalizeKeyframes,
   serializeKeyframes,
   compileKeyframesCss,
+  sampleStepPreview,
+  previewKeyframesForStep,
 } from "@/lib/motion-timeline";
 import { blockMotionAttrs, effectPresetProps } from "@/lib/block-style";
 
@@ -255,5 +257,29 @@ describe("keyframes", () => {
       ],
     });
     expect(step.keyframes).toHaveLength(2);
+  });
+});
+
+describe("editor motion preview sampling", () => {
+  it("sampleStepPreview uses preset defaults when no custom keys", () => {
+    const s = sampleStepPreview({ anim: "slide-up" }, 0);
+    expect(s.opacity).toBe(0);
+    expect(s.y).toBe(24);
+    expect(s.transform).toContain("translate");
+    const end = sampleStepPreview({ anim: "slide-up" }, 1);
+    expect(end.opacity).toBe(1);
+    expect(end.y).toBe(0);
+  });
+
+  it("previewKeyframesForStep prefers custom keyframes", () => {
+    const keys = previewKeyframesForStep({
+      anim: "fade",
+      keyframes: [
+        { t: 0, opacity: 0.2, scale: 0.5 },
+        { t: 1, opacity: 1, scale: 1 },
+      ],
+    });
+    expect(keys[0].opacity).toBe(0.2);
+    expect(keys[0].scale).toBe(0.5);
   });
 });

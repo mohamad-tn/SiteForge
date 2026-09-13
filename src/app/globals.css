@@ -700,6 +700,17 @@ html[data-theme="dark"] .sf-device-screen {
   isolation: isolate;
 }
 
+
+/* Editor-only motion scrub preview (Effects tab) — never shipped in published CSS bundles via this attr. */
+[data-sf-preview="content"] [data-sf-motion-preview="1"] {
+  opacity: var(--sf-preview-opacity, 1) !important;
+  transform: var(--sf-preview-transform, none) !important;
+}
+[data-sf-preview="content"] [data-sf-motion-preview="1"],
+[data-sf-preview="content"] [data-sf-motion-preview="1"] * {
+  animation: none !important;
+}
+
 [data-sf-preview="content"] {
   isolation: isolate;
 }

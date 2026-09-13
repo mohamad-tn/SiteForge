@@ -607,3 +607,22 @@ export function defaultEntranceKeyframes(anim: string): MotionKeyframe[] {
       ];
   }
 }
+
+/**
+ * Resolve keyframes for editor scrub preview: custom keys if 2+, else preset defaults.
+ */
+export function previewKeyframesForStep(step: Pick<MotionTimelineStep, "anim" | "keyframes">): MotionKeyframe[] {
+  const custom = normalizeKeyframes(step.keyframes);
+  if (custom && custom.length >= 2) return custom;
+  return defaultEntranceKeyframes(step.anim || "fade");
+}
+
+/** Sample opacity/transform props at progress 0..1 for editor-only preview. */
+export function sampleStepPreview(
+  step: Pick<MotionTimelineStep, "anim" | "keyframes">,
+  tRaw: number
+): { opacity: number; x: number; y: number; scale: number; rotate: number; transform: string } {
+  const sample = interpolateKeyframes(previewKeyframesForStep(step), tRaw);
+  const transform = `translate(${fmtCssNum(sample.x)}px, ${fmtCssNum(sample.y)}px) scale(${fmtCssNum(sample.scale)}) rotate(${fmtCssNum(sample.rotate)}deg)`;
+  return { ...sample, transform };
+}

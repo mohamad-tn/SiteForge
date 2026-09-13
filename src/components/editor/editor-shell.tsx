@@ -525,6 +525,51 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
     }));
   }
 
+  /** Push instance text + style props back onto the matching saved component (no Prisma). */
+  function updateOriginalFromInstance(blockId: string) {
+    const src = page?.blocks.find((b) => b.id === blockId);
+    if (!src) return;
+    const instanceOf = String((src.props as Record<string, unknown>).instanceOf || "");
+    if (!instanceOf) return;
+    const SKIP = new Set([
+      "instanceOf",
+      "posX",
+      "posY",
+      "locked",
+      "hidden",
+      "motionTimeline",
+      "entranceAnim",
+      "animDelay",
+      "animDuration",
+      "animEase",
+      "scrollReveal",
+      "staggerChildren",
+      "staggerMs",
+      "hoverScale",
+      "hoverShadow",
+    ]);
+    commit((prev) => {
+      const components = (prev.components || []).map((cmp) => {
+        if (cmp.id !== instanceOf) return cmp;
+        if (!cmp.blocks.length) return cmp;
+        const head = cmp.blocks[0];
+        const nextProps: Record<string, unknown> = { ...(head.props as Record<string, unknown>) };
+        for (const [k, v] of Object.entries(src.props as Record<string, unknown>)) {
+          if (SKIP.has(k)) continue;
+          nextProps[k] = structuredClone(v);
+        }
+        // Drop instanceOf if somehow present on the original template block.
+        delete nextProps.instanceOf;
+        return {
+          ...cmp,
+          blocks: [{ ...head, props: nextProps }, ...cmp.blocks.slice(1)],
+        };
+      });
+      return { ...prev, components };
+    });
+    setMessage(uiLang === "en" ? "Original component updated" : "تم تحديث الأصل");
+  }
+
 
   function moveBlock(id: string, dir: -1 | 1) {
     updatePageBlocks((blocks) => {
@@ -1838,6 +1883,7 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
                 onUpdateProp={updateBlockProps}
                 onUpdateLocalizedProp={updateLocalizedProp}
                 onUpdatePropsObject={updateBlockPropsObject}
+                onUpdateOriginal={updateOriginalFromInstance}
               />
             ) : rightTab === "style" ? (
               <TokensPanel tokens={content.tokens} onUpdateTokens={updateTokens} />

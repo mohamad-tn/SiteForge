@@ -15,6 +15,8 @@ export function MotionGraphTimeline({
   onChangeKeyframes,
   onSelectKeyframe,
   selectedKeyframeT,
+  /** Normalized 0–1 scrub within the selected step duration (editor preview). */
+  playheadT = null,
   uiLang = "en",
 }: {
   steps: MotionTimelineStep[];
@@ -24,6 +26,7 @@ export function MotionGraphTimeline({
   onChangeKeyframes?: (id: string, keys: MotionKeyframe[]) => void;
   onSelectKeyframe?: (stepId: string, t: number) => void;
   selectedKeyframeT?: number | null;
+  playheadT?: number | null;
   uiLang?: "ar" | "en";
 }) {
   const maxEnd = useMemo(() => {
@@ -72,6 +75,20 @@ export function MotionGraphTimeline({
               </span>
             ))}
           </div>
+          {(() => {
+            const sel = steps.find((s) => s.id === selectedStepId) || steps[0];
+            if (!sel || playheadT == null || !Number.isFinite(playheadT)) return null;
+            const delay = liveDelay[sel.id] ?? sel.delayMs;
+            const left = (delay + Math.min(1, Math.max(0, playheadT)) * sel.durationMs) * PX_PER_MS;
+            return (
+              <div
+                className="pointer-events-none absolute top-0 bottom-0 z-20 w-0.5 bg-[var(--accent)]"
+                style={{ left }}
+                data-sf-playhead=""
+                title={`${Math.round(Math.min(1, Math.max(0, playheadT)) * 100)}%`}
+              />
+            );
+          })()}
           {steps.map((step, i) => {
             const delay = liveDelay[step.id] ?? step.delayMs;
             const left = delay * PX_PER_MS;

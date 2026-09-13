@@ -426,7 +426,7 @@ export const CANVAS_ZOOM_MIN = 0.25;
 export const CANVAS_ZOOM_MAX = 2;
 export const CANVAS_ZOOM_STEP = 0.25;
 
-export type ResizeHandle = "e" | "s" | "se";
+export type ResizeHandle = "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw";
 
 export type LiveCanvasPos = { x: number; y: number; w?: number; h?: number };
 
@@ -525,7 +525,7 @@ export function measureBlockRects(
   });
 }
 
-/** Apply resize delta from an origin rect for e / s / se handles. */
+/** Apply resize delta from an origin rect; opposite edge/corner stays anchored. */
 export function applyResizeDelta(
   origin: { x: number; y: number; w: number; h: number },
   dx: number,
@@ -533,23 +533,54 @@ export function applyResizeDelta(
   handle: ResizeHandle,
   min = CANVAS_MIN_SIZE
 ): { x: number; y: number; w: number; h: number } {
-  const x = origin.x;
-  const y = origin.y;
+  const right = origin.x + origin.w;
+  const bottom = origin.y + origin.h;
+  let x = origin.x;
+  let y = origin.y;
   let w = origin.w;
   let h = origin.h;
-  if (handle === "e" || handle === "se") {
+
+  if (handle === "e" || handle === "ne" || handle === "se") {
     w = origin.w + dx;
   }
-  if (handle === "s" || handle === "se") {
+  if (handle === "w" || handle === "nw" || handle === "sw") {
+    w = origin.w - dx;
+  }
+  if (handle === "s" || handle === "se" || handle === "sw") {
     h = origin.h + dy;
   }
+  if (handle === "n" || handle === "ne" || handle === "nw") {
+    h = origin.h - dy;
+  }
+
   const clamped = clampResizeSize(w, h, min);
-  // Keep top-left fixed for e/s/se (no west/north handles yet).
-  return { x, y, w: clamped.w, h: clamped.h };
+  w = clamped.w;
+  h = clamped.h;
+
+  // Re-anchor opposite edge/corner after clamp.
+  if (handle === "w" || handle === "nw" || handle === "sw") {
+    x = right - w;
+  } else {
+    x = origin.x;
+  }
+  if (handle === "n" || handle === "ne" || handle === "nw") {
+    y = bottom - h;
+  } else {
+    y = origin.y;
+  }
+  // Pure e/s keep top-left; corners already handled.
+  if (handle === "e" || handle === "se" || handle === "ne") {
+    x = origin.x;
+  }
+  if (handle === "s" || handle === "se" || handle === "sw") {
+    y = origin.y;
+  }
+
+  return { x, y, w, h };
 }
 
 /**
- * Snap a resizing rect's right/bottom (and centers) to peers + grid.
+ * Snap a resizing rect's moving edges to peers + grid.
  * Returns updated x/y/w/h and guides.
  */
 export function snapResizeRect(
@@ -563,11 +594,19 @@ export function snapResizeRect(
   const min = opts?.min ?? CANVAS_MIN_SIZE;
   if (opts?.disableSnap) {
     const c = clampResizeSize(moving.w, moving.h, min);
-    return { ...moving, w: c.w, h: c.h, guides: [] };
+    const right = moving.x + moving.w;
+    const bottom = moving.y + moving.h;
+    let x = moving.x;
+    let y = moving.y;
+    const w = c.w;
+    const h = c.h;
+    if (handle === "w" || handle === "nw" || handle === "sw") x = right - w;
+    if (handle === "n" || handle === "ne" || handle === "nw") y = bottom - h;
+    return { x, y, w, h, guides: [] };
   }
 
-  const x = moving.x;
-  const y = moving.y;
+  let x = moving.x;
+  let y = moving.y;
   let w = moving.w;
   let h = moving.h;
   const guides: GuideLine[] = [];
@@ -576,11 +615,16 @@ export function snapResizeRect(
   let guideV: number | null = null;
   let guideH: number | null = null;
 
+  const moveRight = handle === "e" || handle === "ne" || handle === "se";
+  const moveLeft = handle === "w" || handle === "nw" || handle === "sw";
+  const moveBottom = handle === "s" || handle === "se" || handle === "sw";
+  const moveTop = handle === "n" || handle === "ne" || handle === "nw";
+
   const right = x + w;
   const bottom = y + h;
 
   for (const peer of peers) {
-    if (handle === "e" || handle === "se") {
+    if (moveRight) {
       const targets = [peer.x, peer.x + peer.w / 2, peer.x + peer.w];
       for (const t of targets) {
         const d = Math.abs(right - t);
@@ -591,7 +635,20 @@ export function snapResizeRect(
         }
       }
     }
-    if (handle === "s" || handle === "se") {
+    if (moveLeft) {
+      const targets = [peer.x, peer.x + peer.w / 2, peer.x + peer.w];
+      for (const t of targets) {
+        const d = Math.abs(x - t);
+        if (d <= threshold && d < bestDw) {
+          bestDw = d;
+          const newW = right - t;
+          w = newW;
+          x = t;
+          guideV = t;
+        }
+      }
+    }
+    if (moveBottom) {
       const targets = [peer.y, peer.y + peer.h / 2, peer.y + peer.h];
       for (const t of targets) {
         const d = Math.abs(bottom - t);
@@ -602,26 +659,60 @@ export function snapResizeRect(
         }
       }
     }
+    if (moveTop) {
+      const targets = [peer.y, peer.y + peer.h / 2, peer.y + peer.h];
+      for (const t of targets) {
+        const d = Math.abs(y - t);
+        if (d <= threshold && d < bestDh) {
+          bestDh = d;
+          const newH = bottom - t;
+          h = newH;
+          y = t;
+          guideH = t;
+        }
+      }
+    }
   }
 
-  if ((handle === "e" || handle === "se") && guideV == null) {
+  if (moveRight && guideV == null) {
     const gr = snapToGrid(right, grid);
     if (Math.abs(gr - right) <= threshold) {
       w = gr - x;
       guideV = gr;
     }
   }
-  if ((handle === "s" || handle === "se") && guideH == null) {
+  if (moveLeft && guideV == null) {
+    const gl = snapToGrid(x, grid);
+    if (Math.abs(gl - x) <= threshold) {
+      w = right - gl;
+      x = gl;
+      guideV = gl;
+    }
+  }
+  if (moveBottom && guideH == null) {
     const gb = snapToGrid(bottom, grid);
     if (Math.abs(gb - bottom) <= threshold) {
       h = gb - y;
       guideH = gb;
     }
   }
+  if (moveTop && guideH == null) {
+    const gt = snapToGrid(y, grid);
+    if (Math.abs(gt - y) <= threshold) {
+      h = bottom - gt;
+      y = gt;
+      guideH = gt;
+    }
+  }
 
   const c = clampResizeSize(w, h, min);
+  // Re-anchor after clamp
+  const fixedRight = moveLeft ? right : x + w;
+  const fixedBottom = moveTop ? bottom : y + h;
   w = c.w;
   h = c.h;
+  if (moveLeft) x = fixedRight - w;
+  if (moveTop) y = fixedBottom - h;
   if (guideV != null) guides.push({ orientation: "v", at: guideV });
   if (guideH != null) guides.push({ orientation: "h", at: guideH });
   return { x, y, w, h, guides };
@@ -643,5 +734,131 @@ export function applySizePatches(
     if (p.w != null) next.width = formatPos(p.w);
     if (p.h != null) next.height = formatPos(p.h);
     return { ...b, props: next };
+  });
+}
+
+/** All eight resize handles (opposite edge/corner stays anchored). */
+export const RESIZE_HANDLES: ResizeHandle[] = ["n", "s", "e", "w", "ne", "nw", "se", "sw"];
+
+export function handleCursor(handle: ResizeHandle): string {
+  switch (handle) {
+    case "n":
+    case "s":
+      return "ns-resize";
+    case "e":
+    case "w":
+      return "ew-resize";
+    case "ne":
+    case "sw":
+      return "nesw-resize";
+    case "nw":
+    case "se":
+    default:
+      return "nwse-resize";
+  }
+}
+
+/** Opposite anchor point for a handle on a rect (stays fixed while resizing). */
+export function resizeAnchor(
+  rect: { x: number; y: number; w: number; h: number },
+  handle: ResizeHandle,
+  aboutCenter = false
+): { x: number; y: number } {
+  if (aboutCenter) {
+    return { x: rect.x + rect.w / 2, y: rect.y + rect.h / 2 };
+  }
+  const right = rect.x + rect.w;
+  const bottom = rect.y + rect.h;
+  const cx = rect.x + rect.w / 2;
+  const cy = rect.y + rect.h / 2;
+  switch (handle) {
+    case "e":
+      return { x: rect.x, y: cy };
+    case "w":
+      return { x: right, y: cy };
+    case "s":
+      return { x: cx, y: rect.y };
+    case "n":
+      return { x: cx, y: bottom };
+    case "se":
+      return { x: rect.x, y: rect.y };
+    case "sw":
+      return { x: right, y: rect.y };
+    case "ne":
+      return { x: rect.x, y: bottom };
+    case "nw":
+      return { x: right, y: bottom };
+    default:
+      return { x: rect.x, y: rect.y };
+  }
+}
+
+/** Union bounding box of rects (empty → 0 box). */
+export function unionBounds(
+  rects: { x: number; y: number; w: number; h: number }[]
+): { x: number; y: number; w: number; h: number } {
+  if (!rects.length) return { x: 0, y: 0, w: 0, h: 0 };
+  const minX = Math.min(...rects.map((r) => r.x));
+  const minY = Math.min(...rects.map((r) => r.y));
+  const maxR = Math.max(...rects.map((r) => r.x + r.w));
+  const maxB = Math.max(...rects.map((r) => r.y + r.h));
+  return { x: minX, y: minY, w: maxR - minX, h: maxB - minY };
+}
+
+/**
+ * Scale a set of origin rects about the opposite BB corner (or center).
+ * Clamps so every member stays ≥ min×min by reducing sx/sy uniformly per axis.
+ */
+export function scaleGroupRects(
+  origins: Record<string, { x: number; y: number; w: number; h: number }>,
+  ids: string[],
+  handle: ResizeHandle,
+  dx: number,
+  dy: number,
+  opts?: { aboutCenter?: boolean; min?: number }
+): { id: string; x: number; y: number; w: number; h: number }[] {
+  const min = opts?.min ?? CANVAS_MIN_SIZE;
+  const aboutCenter = Boolean(opts?.aboutCenter);
+  const list = ids
+    .map((id) => {
+      const o = origins[id];
+      return o ? { id, ...o } : null;
+    })
+    .filter(Boolean) as { id: string; x: number; y: number; w: number; h: number }[];
+  if (!list.length) return [];
+
+  const bounds = unionBounds(list);
+  if (bounds.w < 1 || bounds.h < 1) {
+    return list.map((r) => ({ id: r.id, x: r.x, y: r.y, w: r.w, h: r.h }));
+  }
+
+  // When aboutCenter, mirror the drag so both sides grow/shrink equally.
+  const adjDx = aboutCenter ? dx * 2 : dx;
+  const adjDy = aboutCenter ? dy * 2 : dy;
+  const raw = applyResizeDelta(bounds, adjDx, adjDy, handle, 1);
+  let sx = raw.w / bounds.w;
+  let sy = raw.h / bounds.h;
+  // Edge handles: only scale on that axis.
+  if (handle === "e" || handle === "w") sy = 1;
+  if (handle === "n" || handle === "s") sx = 1;
+
+  // Clamp scales so no member drops below min.
+  for (const r of list) {
+    if (sx > 0 && r.w * sx < min) sx = min / r.w;
+    if (sy > 0 && r.h * sy < min) sy = min / r.h;
+  }
+  sx = Math.max(0.01, sx);
+  sy = Math.max(0.01, sy);
+
+  const anchor = resizeAnchor(bounds, handle, aboutCenter);
+
+  return list.map((r) => {
+    const w = Math.max(min, r.w * sx);
+    const h = Math.max(min, r.h * sy);
+    // Map corners relative to anchor, then rebuild top-left from scaled size.
+    const x0 = anchor.x + (r.x - anchor.x) * sx;
+    const y0 = anchor.y + (r.y - anchor.y) * sy;
+    // When clamping size up from tiny, keep the same top-left from scale map.
+    return { id: r.id, x: x0, y: y0, w, h };
   });
 }

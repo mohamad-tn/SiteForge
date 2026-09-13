@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   BLOCK_META,
   LOCALIZABLE_PROP_KEYS,
@@ -18,6 +18,7 @@ import {
   createTimelineStep,
   defaultEntranceKeyframes,
   normalizeKeyframes,
+  sampleStepPreview,
   type MotionKeyframe,
   type MotionTimelineStep,
   type MotionTrigger,
@@ -145,6 +146,7 @@ const HIDDEN_FROM_CONTENT = new Set([
   "partStyles",
   "httpAction",
   "clickBehavior",
+  "instanceOf",
 ]);
 
 type InspTab = "content" | "layout" | "look" | "colors" | "link" | "api" | "motion";
@@ -312,6 +314,7 @@ export function InspectorPanel({
   onUpdateProp,
   onUpdateLocalizedProp,
   onUpdatePropsObject,
+  onUpdateOriginal,
 }: {
   content: SiteContent;
   selected: Block | null;
@@ -324,6 +327,8 @@ export function InspectorPanel({
   onUpdateProp: (blockId: string, key: string, value: string) => void;
   onUpdateLocalizedProp: (blockId: string, key: string, locale: string, value: string) => void;
   onUpdatePropsObject?: (blockId: string, patch: Record<string, unknown>) => void;
+  /** Push instance text/style props back onto content.components entry. */
+  onUpdateOriginal?: (blockId: string) => void;
 }) {
   const { t, lang: uiLang } = usePlatformLang();
   const localeLabel = isLocaleCode(editLocale) ? LOCALE_META[editLocale].nativeLabel : editLocale;
@@ -337,7 +342,7 @@ export function InspectorPanel({
       (selected.type === "button" ? "href" : selected.type === "cta" ? "buttonHref" : selected.type === "hero" ? "ctaHref" : "href"));
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5" data-sf-inspector="">
       {selected && String(selected.props.locked ?? "false") === "true" ? (
         <div className="rounded-2xl border border-amber-400/50 bg-amber-50/90 px-3 py-2.5 text-[11px] leading-5 text-amber-950 dark:border-amber-700/50 dark:bg-amber-950/40 dark:text-amber-100">
           <p className="font-semibold">{t("lockedHint")}</p>
@@ -379,6 +384,20 @@ export function InspectorPanel({
               part={selectedPart}
               lang={uiLang}
               onClear={() => onSelectPart?.(null)}
+            />
+          ) : null}
+
+          {typeof selected.props.instanceOf === "string" && selected.props.instanceOf ? (
+            <InstanceChip
+              instanceOf={String(selected.props.instanceOf)}
+              content={content}
+              uiLang={uiLang}
+              t={t}
+              onUpdateOriginal={() => onUpdateOriginal?.(selected.id)}
+              onDetach={() => {
+                if (onUpdatePropsObject) onUpdatePropsObject(selected.id, { instanceOf: "" });
+                else onUpdateProp(selected.id, "instanceOf", "");
+              }}
             />
           ) : null}
 
@@ -690,6 +709,7 @@ export function InspectorPanel({
               </div>
 
               <MotionTimelineEditor
+                blockId={selected.id}
                 props={selected.props as Record<string, unknown>}
                 uiLang={uiLang}
                 t={t}
@@ -741,12 +761,82 @@ export function InspectorPanel({
   );
 }
 
+function InstanceChip({
+  instanceOf,
+  content,
+  uiLang,
+  t,
+  onUpdateOriginal,
+  onDetach,
+}: {
+  instanceOf: string;
+  content: SiteContent;
+  uiLang: "ar" | "en";
+  t: (key: string) => string;
+  onUpdateOriginal?: () => void;
+  onDetach: () => void;
+}) {
+  const cmp = (content.components || []).find((c) => c.id === instanceOf);
+  const name = cmp?.name || instanceOf;
+  return (
+    <div
+      className="flex flex-wrap items-center gap-2 rounded-2xl border border-[var(--border)] bg-[var(--card)] px-3 py-2"
+      data-sf-no-space-pan=""
+    >
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-teal-50 px-2.5 py-1 text-[10px] font-bold text-teal-900 dark:bg-teal-950 dark:text-teal-100">
+        <span aria-hidden>◇</span>
+        {t("instanceOfLabel")}
+        <span className="font-semibold opacity-80">· {name}</span>
+      </span>
+      <button
+        type="button"
+        className="rounded-full bg-teal-800 px-2.5 py-1 text-[10px] font-bold text-white hover:bg-teal-700 disabled:opacity-40"
+        disabled={!cmp || !onUpdateOriginal}
+        title={uiLang === "ar" ? "نسخ النص والأنماط إلى الأصل المحفوظ" : "Copy text/style props back to the saved original"}
+        onClick={() => onUpdateOriginal?.()}
+      >
+        {t("updateOriginal")}
+      </button>
+      <button
+        type="button"
+        className="rounded-full border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-[10px] font-bold text-[var(--foreground)] hover:bg-[var(--card)]"
+        onClick={onDetach}
+      >
+        {t("detachInstance")}
+      </button>
+    </div>
+  );
+}
+
+function applyMotionPreviewToDom(blockId: string, sample: ReturnType<typeof sampleStepPreview> | null) {
+  if (typeof document === "undefined") return;
+  const root = document.querySelector('[data-sf-preview="content"]');
+  if (!root) return;
+  const el = root.querySelector(`[data-block-id="${CSS.escape(blockId)}"]`) as HTMLElement | null;
+  if (!el) return;
+  if (!sample) {
+    el.removeAttribute("data-sf-motion-preview");
+    el.style.removeProperty("--sf-preview-opacity");
+    el.style.removeProperty("--sf-preview-transform");
+    el.style.removeProperty("opacity");
+    el.style.removeProperty("transform");
+    return;
+  }
+  el.setAttribute("data-sf-motion-preview", "1");
+  el.style.setProperty("--sf-preview-opacity", String(sample.opacity));
+  el.style.setProperty("--sf-preview-transform", sample.transform);
+  el.style.opacity = String(sample.opacity);
+  el.style.transform = sample.transform;
+}
+
 function MotionTimelineEditor({
+  blockId,
   props,
   uiLang,
   t,
   onChange,
 }: {
+  blockId: string;
   props: Record<string, unknown>;
   uiLang: "ar" | "en";
   t: (key: string) => string;
@@ -755,10 +845,62 @@ function MotionTimelineEditor({
   const steps = normalizeTimeline(props);
   const [selectedStepId, setSelectedStepId] = useState<string | null>(null);
   const [selectedKeyframeT, setSelectedKeyframeT] = useState<number | null>(null);
+  const [previewT, setPreviewT] = useState(0);
+  const [playing, setPlaying] = useState(false);
+  const playRaf = useRef(0);
+  const playStarted = useRef(0);
   const activeStepId =
     (selectedStepId && steps.some((s) => s.id === selectedStepId) ? selectedStepId : null) ||
     steps[0]?.id ||
     null;
+  const activeStep = steps.find((s) => s.id === activeStepId) || null;
+  const activeDurationMs = activeStep?.durationMs ?? 600;
+  const activeAnim = activeStep?.anim ?? "fade";
+  const activeKeysJson = JSON.stringify(activeStep?.keyframes ?? null);
+
+  const previewTRef = useRef(previewT);
+  previewTRef.current = previewT;
+
+  useEffect(() => {
+    if (!activeStepId) {
+      applyMotionPreviewToDom(blockId, null);
+      return;
+    }
+    const step = steps.find((s) => s.id === activeStepId);
+    if (!step) {
+      applyMotionPreviewToDom(blockId, null);
+      return;
+    }
+    applyMotionPreviewToDom(blockId, sampleStepPreview(step, previewT));
+  }, [activeStepId, previewT, blockId, activeAnim, activeKeysJson, steps]);
+
+  useEffect(() => {
+    return () => {
+      applyMotionPreviewToDom(blockId, null);
+      if (playRaf.current) cancelAnimationFrame(playRaf.current);
+    };
+  }, [blockId]);
+
+  useEffect(() => {
+    if (!playing || !activeStepId) return;
+    const duration = Math.max(100, activeDurationMs || 600);
+    playStarted.current = performance.now() - previewTRef.current * duration;
+    const tick = (now: number) => {
+      const u = Math.min(1, Math.max(0, (now - playStarted.current) / duration));
+      setPreviewT(u);
+      if (u >= 1) {
+        setPlaying(false);
+        playRaf.current = 0;
+        return;
+      }
+      playRaf.current = requestAnimationFrame(tick);
+    };
+    playRaf.current = requestAnimationFrame(tick);
+    return () => {
+      if (playRaf.current) cancelAnimationFrame(playRaf.current);
+    };
+  }, [playing, activeStepId, activeDurationMs]);
+
   const animOptions = MOTION_ANIM_IDS.map((id) => ({
     value: id,
     label:
@@ -853,6 +995,62 @@ function MotionTimelineEditor({
       </div>
 
       {steps.length > 0 ? (
+        <div className="space-y-2 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-2.5" data-sf-no-space-pan="">
+          <div className="flex items-center justify-between gap-2">
+            <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--muted)]">
+              {t("timelinePreview")}
+            </div>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                className="rounded-full bg-teal-800 px-2.5 py-1 text-[10px] font-bold text-white hover:bg-teal-700"
+                onClick={() => {
+                  if (playing) {
+                    setPlaying(false);
+                  } else {
+                    if (previewT >= 0.999) setPreviewT(0);
+                    setPlaying(true);
+                  }
+                }}
+              >
+                {playing ? t("timelinePause") : t("timelinePlay")}
+              </button>
+              <button
+                type="button"
+                className="rounded-full border border-[var(--border)] bg-[var(--card)] px-2 py-1 text-[10px] font-bold text-[var(--muted)]"
+                onClick={() => {
+                  setPlaying(false);
+                  setPreviewT(0);
+                  applyMotionPreviewToDom(blockId, null);
+                }}
+              >
+                {t("timelineReset")}
+              </button>
+            </div>
+          </div>
+          <label className="flex items-center gap-2 text-[10px] text-[var(--muted)]">
+            <span className="shrink-0 font-mono tabular-nums" dir="ltr">
+              {previewT.toFixed(2)}
+            </span>
+            <input
+              type="range"
+              min={0}
+              max={1}
+              step={0.01}
+              value={previewT}
+              data-sf-no-space-pan=""
+              onChange={(e) => {
+                setPlaying(false);
+                setPreviewT(Number(e.target.value) || 0);
+              }}
+              className="h-2 w-full accent-[var(--accent)]"
+            />
+          </label>
+          <p className="text-[10px] leading-4 text-[var(--muted)]">{t("timelinePreviewHelp")}</p>
+        </div>
+      ) : null}
+
+      {steps.length > 0 ? (
         <MotionGraphTimeline
           steps={steps}
           selectedStepId={activeStepId}
@@ -863,8 +1061,9 @@ function MotionTimelineEditor({
           onChangeKeyframes={(id, keys) => {
             onChange(steps.map((s) => (s.id === id ? { ...s, keyframes: keys } : s)));
           }}
-          onSelectKeyframe={(_id, t) => setSelectedKeyframeT(t)}
+          onSelectKeyframe={(_id, kt) => setSelectedKeyframeT(kt)}
           selectedKeyframeT={selectedKeyframeT}
+          playheadT={previewT}
           uiLang={uiLang}
         />
       ) : null}
