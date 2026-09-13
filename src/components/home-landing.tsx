@@ -103,7 +103,7 @@ export function HomeLanding() {
             className="pointer-events-none absolute -bottom-24 -start-10 h-56 w-56 rounded-full bg-amber-400/10 blur-3xl"
           />
           <div className="relative max-w-3xl min-w-0">
-            <p className="mb-5 inline-flex max-w-full items-center gap-2 rounded-full border border-teal-800/12 bg-white/80 px-3.5 py-1.5 text-xs font-semibold text-teal-800 shadow-[var(--shadow-xs)] dark:border-teal-400/25 dark:bg-stone-950/60 dark:text-teal-300">
+            <p className="mb-5 inline-flex max-w-full items-center gap-2 rounded-full border border-teal-800/12 bg-[var(--card)] px-3.5 py-1.5 text-xs font-semibold text-teal-800 shadow-[var(--shadow-xs)] dark:border-teal-400/25 dark:text-teal-300">
               <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-teal-600 dark:bg-teal-400" aria-hidden />
               <span className="min-w-0 break-words">{t("homeBadge")}</span>
             </p>
@@ -118,17 +118,14 @@ export function HomeLanding() {
                   <ArrowRight className="h-4 w-4 rtl:rotate-180" aria-hidden />
                 </Link>
               </Button>
-              <Button asChild size="lg" variant="outline" className="rounded-full bg-white/60 dark:bg-stone-950/40">
+              <Button asChild size="lg" variant="outline" className="rounded-full bg-[var(--card)]">
                 <Link href="/s/demo-studio">{t("previewDemo")}</Link>
               </Button>
             </div>
           </div>
           <div className="relative mt-12 grid gap-3 sm:grid-cols-3">
             {metrics.map((label) => (
-              <div
-                key={label}
-                className="rounded-2xl border border-stone-200/70 bg-white/70 px-4 py-3.5 text-sm font-semibold tracking-tight text-[var(--foreground)] shadow-[var(--shadow-xs)] dark:border-stone-800 dark:bg-stone-950/50"
-              >
+              <div key={label} className="sf-stat text-sm font-semibold tracking-tight">
                 {label}
               </div>
             ))}
@@ -139,7 +136,7 @@ export function HomeLanding() {
           {features.map(([title, desc, Icon]) => (
             <SoftCard
               key={title}
-              className="border-stone-200/60 bg-[var(--card)]/90 p-6 shadow-[var(--shadow-xs)] transition hover:-translate-y-0.5 hover:shadow-[var(--shadow-md)] dark:border-stone-800"
+              className="border-[var(--border)] bg-[var(--card)] p-6 shadow-[var(--shadow-xs)] transition hover:-translate-y-0.5 hover:shadow-[var(--shadow-md)]"
             >
               <div className="mb-4 inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-teal-50 text-teal-800 dark:bg-teal-950/50 dark:text-teal-300">
                 <Icon className="h-4 w-4" aria-hidden />

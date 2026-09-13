@@ -40,7 +40,7 @@ export function CommandPalette({ items }: { items: CommandItem[] }) {
   return (
     <div className="fixed inset-0 z-[100] flex items-start justify-center bg-stone-950/40 p-4 pt-[12vh] backdrop-blur-sm" onClick={() => setOpen(false)}>
       <div
-        className="w-full max-w-lg overflow-hidden rounded-[1.5rem] border border-white/50 bg-white/95 shadow-[0_30px_80px_-20px_rgba(0,0,0,0.45)] dark:border-stone-700 dark:bg-stone-900/95"
+        className="w-full max-w-lg overflow-hidden rounded-[1.5rem] border border-[var(--border)] bg-[var(--card)] shadow-[var(--shadow-md)]"
         onClick={(e) => e.stopPropagation()}
         dir={dir}
       >
@@ -63,10 +63,10 @@ export function CommandPalette({ items }: { items: CommandItem[] }) {
               }}
             >
               <span className="font-medium">{item.label}</span>
-              {item.hint ? <span className="text-[11px] text-stone-400">{item.hint}</span> : null}
+              {item.hint ? <span className="text-[11px] text-[var(--muted)]">{item.hint}</span> : null}
             </button>
           ))}
-          {filtered.length === 0 ? <p className="p-4 text-center text-xs text-stone-400">{t("noResults")}</p> : null}
+          {filtered.length === 0 ? <p className="p-4 text-center text-xs text-[var(--muted)]">{t("noResults")}</p> : null}
         </div>
       </div>
     </div>

@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
-import { AppCanvas, AppHeader, SoftCard, Toolbar } from "@/components/ui/surface";
+import { AppCanvas, AppHeader, SoftCard, StatCard, Toolbar } from "@/components/ui/surface";
 import { SegmentedControl } from "@/components/ui/segmented";
 import { ThemeToggleButton } from "@/components/theme-provider";
 import { SignOutButton } from "@/components/sign-out-button";
@@ -262,7 +262,7 @@ export function DashboardClient({
       </AppHeader>
 
       <main className="mx-auto max-w-6xl space-y-7 px-4 py-7 sm:px-6 sm:py-9">
-        <section className="relative overflow-hidden rounded-[1.75rem] border border-stone-200/70 bg-[var(--card)]/85 px-5 py-7 shadow-[var(--shadow-xs)] sm:px-8 sm:py-8 dark:border-stone-800">
+        <section className="relative overflow-hidden rounded-[1.75rem] border border-[var(--border)] bg-[var(--card)] px-5 py-7 shadow-[var(--shadow-xs)] sm:px-8 sm:py-8">
           <div aria-hidden className="pointer-events-none absolute -end-10 -top-12 h-40 w-40 rounded-full bg-teal-500/10 blur-3xl" />
           <div className="relative flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
             <div className="min-w-0 max-w-2xl">
@@ -287,21 +287,13 @@ export function DashboardClient({
               [tp("dashMetricPublished"), String(publishedShown)],
               [tp("dashMetricDrafts"), String(draftShown)],
             ].map(([label, value]) => (
-              <div
-                key={label}
-                className="rounded-2xl border border-stone-200/60 bg-white/70 px-4 py-3.5 dark:border-stone-800 dark:bg-stone-950/45"
-              >
-                <div className="text-[11px] font-medium text-[var(--muted)]">{label}</div>
-                <div className="mt-1 text-2xl font-bold tabular-nums tracking-tight text-stone-900 dark:text-stone-50">
-                  {loading ? "…" : value}
-                </div>
-              </div>
+              <StatCard key={label} label={label} value={loading ? "…" : value} />
             ))}
           </div>
         </section>
 
         {total === 0 && !loading ? (
-          <SoftCard className="border-dashed border-stone-300/80 bg-stone-50/50 p-6 dark:border-stone-700 dark:bg-stone-950/30">
+          <SoftCard className="border-dashed border-[var(--border)] bg-[var(--card)] p-6">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div className="min-w-0">
                 <div className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-teal-50 text-teal-800 dark:bg-teal-950/50 dark:text-teal-300">
@@ -313,11 +305,11 @@ export function DashboardClient({
                   {checklist.map((c) => (
                     <li
                       key={c.label}
-                      className="flex items-start gap-2.5 text-sm text-stone-600 dark:text-stone-300"
+                      className="flex items-start gap-2.5 text-sm text-[var(--muted)]"
                     >
                       <span
                         className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] ${
-                          c.done ? "bg-teal-700 text-white" : "bg-stone-200 text-stone-500 dark:bg-stone-800"
+                          c.done ? "bg-teal-700 text-white" : "bg-[var(--surface)] text-[var(--muted)] border border-[var(--border)]"
                         }`}
                       >
                         {c.done ? "✓" : ""}
@@ -346,7 +338,7 @@ export function DashboardClient({
               <h2 className="text-lg font-semibold tracking-tight">{t.marketTitle}</h2>
               <p className="mt-1 text-sm text-[var(--muted)]">{t.marketSub}</p>
             </div>
-            <label className="inline-flex shrink-0 cursor-pointer items-center gap-2 rounded-full border border-stone-200/90 bg-white px-3.5 py-2 text-xs font-medium shadow-[0_1px_2px_rgba(28,25,23,0.04)] transition hover:bg-stone-50 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-50 dark:hover:bg-stone-800">
+            <label className="inline-flex shrink-0 cursor-pointer items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--card)] px-3.5 py-2 text-xs font-medium text-[var(--foreground)] shadow-[var(--shadow-xs)] transition hover:bg-[var(--surface)]">
               <Upload className="h-3.5 w-3.5 shrink-0" />
               <span>{importing ? t.importing : t.importJson}</span>
               <input
@@ -397,10 +389,10 @@ export function DashboardClient({
                   className={`rounded-[1.35rem] border p-3.5 text-start transition ${
                     templateSlug === tpl.slug
                       ? "border-teal-700/40 bg-teal-50 ring-2 ring-teal-700/15 dark:bg-teal-950/40"
-                      : "border-stone-200/80 bg-white/70 hover:border-stone-300 dark:border-stone-700 dark:bg-stone-900/50 dark:hover:border-stone-600"
+                      : "border-[var(--border)] bg-[var(--card)] hover:border-[var(--border-strong)]"
                   }`}
                 >
-                  <div className="mb-2.5 aspect-[16/10] w-full overflow-hidden rounded-2xl bg-stone-100 dark:bg-stone-800">
+                  <div className="mb-2.5 aspect-[16/10] w-full overflow-hidden rounded-2xl bg-[var(--surface)]">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={tpl.thumbnail || `/templates/${tpl.slug}.svg`}
@@ -411,7 +403,7 @@ export function DashboardClient({
                   <div className="text-[10px] font-bold uppercase tracking-wider text-teal-800/70 dark:text-teal-300/80">
                     {CATEGORY_LABELS[tpl.category]?.[uiLang] || tpl.category}
                   </div>
-                  <div className="mt-1 truncate font-medium text-stone-900 dark:text-stone-50">
+                  <div className="mt-1 truncate font-medium text-[var(--foreground)]">
                     {tpl.nameAr}
                   </div>
                   <div className="mt-1 line-clamp-2 text-xs leading-5 text-[var(--muted)]">
@@ -445,7 +437,7 @@ export function DashboardClient({
                   >
                     {t.prev}
                   </Button>
-                  <span className="min-w-[3.5rem] text-center text-xs tabular-nums text-stone-500">
+                  <span className="min-w-[3.5rem] text-center text-xs tabular-nums text-[var(--muted)]">
                     {page} / {pageCount}
                   </span>
                   <Button
@@ -510,7 +502,7 @@ export function DashboardClient({
               {t.loading}
             </SoftCard>
           ) : sites.length === 0 ? (
-            <SoftCard className="border-dashed border-stone-300/80 bg-stone-50/40 p-8 text-center dark:border-stone-700 dark:bg-stone-950/30">
+            <SoftCard className="border-dashed border-[var(--border)] bg-[var(--card)] p-8 text-center">
               <h3 className="font-semibold tracking-tight">{t.emptyTitle}</h3>
               <p className="mx-auto mt-1 max-w-md text-sm text-[var(--muted)]">{t.emptyBody}</p>
               <Button
@@ -534,7 +526,7 @@ export function DashboardClient({
                         className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
                           site.publishedAt
                             ? "bg-teal-50 text-teal-800 dark:bg-teal-950/50 dark:text-teal-300"
-                            : "bg-stone-100 text-stone-500 dark:bg-stone-800 dark:text-stone-400"
+                            : "bg-[var(--surface)] text-[var(--muted)]"
                         }`}
                       >
                         {site.publishedAt ? t.published : t.draft}

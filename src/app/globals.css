@@ -15,6 +15,8 @@
   --accent-fg: #ffffff;
   --card: #ffffff;
   --muted: #44403c;
+  --stat-bg: var(--card);
+  --stat-fg: var(--foreground);
   --scrollbar-thumb: #a8a29e;
   --scrollbar-thumb-hover: #78716c;
   --scrollbar-track: transparent;
@@ -43,6 +45,8 @@ html[data-theme="dark"] {
   --accent-fg: #042f2e;
   --card: #171412;
   --muted: #a8a29e;
+  --stat-bg: var(--card);
+  --stat-fg: var(--foreground);
   --ring: color-mix(in oklab, var(--accent) 35%, transparent);
   --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.35);
   --shadow-sm: 0 8px 24px -16px rgba(0, 0, 0, 0.55);
@@ -119,6 +123,32 @@ html[data-theme="dark"] .sf-soft-card {
   background: color-mix(in oklab, var(--card) 94%, transparent);
   border-color: color-mix(in oklab, var(--border) 95%, transparent);
 }
+
+/* Metric / stat pill — card surface only, never gray fills in light mode */
+.sf-stat {
+  border-radius: var(--radius-2xl);
+  border: 1px solid color-mix(in oklab, var(--border) 88%, transparent);
+  background: var(--stat-bg);
+  color: var(--stat-fg);
+  box-shadow: var(--shadow-xs);
+  padding: 0.875rem 1rem;
+}
+.sf-stat-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--muted);
+  line-height: 1.3;
+}
+.sf-stat-value {
+  margin-top: 0.25rem;
+  font-size: 1.5rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  color: var(--stat-fg);
+  line-height: 1.2;
+}
+
 
 /* Framed toolbar row */
 .sf-toolbar {

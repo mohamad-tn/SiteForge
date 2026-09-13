@@ -102,7 +102,7 @@ ${css}
         <h3 className="text-[10px] font-bold uppercase tracking-[0.14em] text-teal-800 dark:text-teal-200">
           {t("seoSiteTitle")}
         </h3>
-        <p className="mt-1 text-[11px] leading-5 text-stone-600 dark:text-stone-400">
+        <p className="mt-1 text-[11px] leading-5 text-stone-600 dark:text-[var(--muted)]">
           {t("seoSiteBody")}
         </p>
       </div>
@@ -156,7 +156,7 @@ ${css}
         className="scroll-mt-4 space-y-3 rounded-2xl border border-stone-200/80 p-3 transition-[box-shadow] duration-300 dark:border-stone-800"
       >
         <div className="flex items-center justify-between gap-2">
-          <h3 className="text-[10px] font-bold uppercase tracking-[0.14em] text-stone-600 dark:text-stone-400">
+          <h3 className="text-[10px] font-bold uppercase tracking-[0.14em] text-stone-600 dark:text-[var(--muted)]">
             {t("customDomainTitle")}
           </h3>
           <span
@@ -199,7 +199,7 @@ ${css}
             className="rounded-xl bg-stone-50 p-2.5 text-[11px] leading-5 dark:bg-stone-950/50"
             dir="ltr"
           >
-            <div className="mb-1 font-mono text-[10px] text-stone-600 dark:text-stone-400">DNS</div>
+            <div className="mb-1 font-mono text-[10px] text-stone-600 dark:text-[var(--muted)]">DNS</div>
             <div>
               CNAME <strong>{settings.customDomain}</strong> → <strong>siteforge.host</strong>
             </div>
@@ -231,7 +231,7 @@ ${css}
             srcDoc={srcDoc}
             className="h-36 w-full rounded-2xl border border-stone-200/80 bg-white dark:border-stone-800"
           />
-          <p className="text-[10px] leading-relaxed text-stone-600 dark:text-stone-400">{t("cssPreviewHint")}</p>
+          <p className="text-[10px] leading-relaxed text-stone-600 dark:text-[var(--muted)]">{t("cssPreviewHint")}</p>
         </div>
       </div>
     </div>

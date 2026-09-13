@@ -138,7 +138,7 @@ const HIDDEN_FROM_CONTENT = new Set([
 type InspTab = "content" | "layout" | "look" | "colors" | "link" | "api" | "motion";
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
-  return <h3 className="text-[10px] font-bold uppercase tracking-[0.14em] text-stone-600 dark:text-stone-400">{children}</h3>;
+  return <h3 className="text-[10px] font-bold uppercase tracking-[0.14em] text-stone-600 dark:text-[var(--muted)]">{children}</h3>;
 }
 
 function ColorField({
@@ -194,7 +194,7 @@ function NumField({
     <div className="space-y-1.5">
       <div className="flex items-center justify-between gap-2">
         <Label className="text-[11px] text-stone-600 dark:text-stone-300">{label}</Label>
-        {hint ? <span className="text-[10px] text-stone-600 dark:text-stone-400">{hint}</span> : null}
+        {hint ? <span className="text-[10px] text-stone-600 dark:text-[var(--muted)]">{hint}</span> : null}
       </div>
       <div className="flex items-center gap-2">
         {min != null && max != null ? (
@@ -435,8 +435,8 @@ export function InspectorPanel({
             <span className="text-lg font-bold" aria-hidden>◇</span>
           </div>
           <p className="text-sm font-medium text-stone-600 dark:text-stone-300">{t("noSelection")}</p>
-          <p className="mt-1 text-xs text-stone-600 dark:text-stone-400">{t("noSelectionHint")}</p>
-          <p className="mt-2 text-[11px] text-stone-600 dark:text-stone-400">
+          <p className="mt-1 text-xs text-stone-600 dark:text-[var(--muted)]">{t("noSelectionHint")}</p>
+          <p className="mt-2 text-[11px] text-stone-600 dark:text-[var(--muted)]">
             {t("editingIn")} <span className="font-semibold text-teal-800 dark:text-teal-300">{localeLabel}</span>
           </p>
         </div>
@@ -483,7 +483,7 @@ export function InspectorPanel({
                   className={`shrink-0 rounded-xl px-2.5 py-1.5 text-[10px] font-semibold transition sm:text-[11px] ${
                     tab === k
                       ? "bg-white text-stone-900 shadow-sm dark:bg-stone-800 dark:text-stone-50"
-                      : "text-stone-600 hover:text-stone-900 dark:text-stone-400 dark:hover:text-stone-100"
+                      : "text-stone-600 hover:text-stone-900 dark:text-[var(--muted)] dark:hover:text-stone-100"
                   }`}
                 >
                   {label}
@@ -534,7 +534,7 @@ export function InspectorPanel({
                   })
               )}
               {tab === "content" && selected.type === "navbar" ? (
-                <p className="text-[10px] leading-5 text-stone-600 dark:text-stone-400">
+                <p className="text-[10px] leading-5 text-stone-600 dark:text-[var(--muted)]">
                   {uiLang === "ar"
                     ? "نصيحة: انقر الشعار أو رابطاً أو زر CTA داخل المعاينة لتحديده مباشرة."
                     : "Tip: click brand, a link, or CTA inside the preview to focus that part."}
@@ -738,7 +738,7 @@ export function InspectorPanel({
                   }))}
                   triggerClassName="h-9 rounded-xl text-xs font-semibold"
                 />
-                <p className="text-[10px] leading-4 text-stone-600 dark:text-stone-400">{t("tipMotion")}</p>
+                <p className="text-[10px] leading-4 text-stone-600 dark:text-[var(--muted)]">{t("tipMotion")}</p>
               </div>
               <div className="space-y-1.5">
                 <Label className="text-[11px] text-stone-600 dark:text-stone-300">{motionLabel("entranceAnim", uiLang)}</Label>
@@ -772,7 +772,7 @@ export function InspectorPanel({
                   }))}
                   triggerClassName="h-9 rounded-xl text-xs font-semibold"
                 />
-                <p className="text-[10px] leading-4 text-stone-600 dark:text-stone-400">{t("easeHelp")}</p>
+                <p className="text-[10px] leading-4 text-stone-600 dark:text-[var(--muted)]">{t("easeHelp")}</p>
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div className="space-y-1.5">
@@ -813,7 +813,7 @@ export function InspectorPanel({
                   ]}
                   triggerClassName="h-9 rounded-xl text-xs font-semibold"
                 />
-                <p className="text-[10px] leading-4 text-stone-600 dark:text-stone-400">{t("scrollRevealHelp")}</p>
+                <p className="text-[10px] leading-4 text-stone-600 dark:text-[var(--muted)]">{t("scrollRevealHelp")}</p>
               </div>
               <NumField
                 label={motionLabel("animDuration", uiLang)}
@@ -844,7 +844,7 @@ export function InspectorPanel({
                   ]}
                   triggerClassName="h-9 rounded-xl text-xs font-semibold"
                 />
-                <p className="text-[10px] leading-4 text-stone-600 dark:text-stone-400">{t("staggerHelp")}</p>
+                <p className="text-[10px] leading-4 text-stone-600 dark:text-[var(--muted)]">{t("staggerHelp")}</p>
                 {String(selected.props.staggerChildren) === "true" ? (
                   <NumField
                     label={motionLabel("staggerMs", uiLang)}

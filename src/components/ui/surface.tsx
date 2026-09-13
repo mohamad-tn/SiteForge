@@ -1,4 +1,4 @@
-import type { HTMLAttributes } from "react";
+import type { HTMLAttributes, ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
 /** Soft member-surface card — prefer this over ad-hoc borders. */
@@ -32,5 +32,23 @@ export function AppCanvas({
       lang={lang}
       {...props}
     />
+  );
+}
+
+type StatCardProps = HTMLAttributes<HTMLDivElement> & {
+  label: ReactNode;
+  value: ReactNode;
+};
+
+/**
+ * Dashboard / landing metric pill.
+ * Uses ONLY --stat-bg / --stat-fg / --muted / --border (no gray fills in light mode).
+ */
+export function StatCard({ label, value, className, ...props }: StatCardProps) {
+  return (
+    <div className={cn("sf-stat", className)} {...props}>
+      <div className="sf-stat-label">{label}</div>
+      <div className="sf-stat-value">{value}</div>
+    </div>
   );
 }

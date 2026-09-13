@@ -131,12 +131,12 @@ export default function AdminPage() {
                     >
                       <span className="min-w-0">
                         <span className="font-medium">{e.site.name}</span>
-                        <span className="text-stone-400">
+                        <span className="text-[var(--muted)]">
                           {" "}
                           · {e.type} · {e.path}
                         </span>
                       </span>
-                      <span className="shrink-0 whitespace-nowrap text-[11px] text-stone-400">
+                      <span className="shrink-0 whitespace-nowrap text-[11px] text-[var(--muted)]">
                         {new Date(e.createdAt).toLocaleString(lang === "ar" ? "ar" : "en")}
                       </span>
                     </li>
@@ -157,7 +157,7 @@ export default function AdminPage() {
                           {u.role}
                         </span>
                       </span>
-                      <span className="shrink-0 text-[11px] text-stone-400">
+                      <span className="shrink-0 text-[11px] text-[var(--muted)]">
                         {u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleString(lang === "ar" ? "ar" : "en") : "—"}
                       </span>
                     </li>
@@ -184,7 +184,7 @@ export default function AdminPage() {
             <div className="overflow-x-auto px-4 pb-4 sm:px-5">
               <table className="w-full min-w-[32rem] text-sm">
                 <thead>
-                  <tr className="text-start text-xs text-stone-400">
+                  <tr className="text-start text-xs text-[var(--muted)]">
                     <th className="py-2 font-medium">المستخدم</th>
                     <th className="font-medium">الدور</th>
                     <th className="font-medium">مواقع</th>
@@ -196,7 +196,7 @@ export default function AdminPage() {
                     <tr key={String(u.id)} className="border-t border-stone-100 dark:border-stone-800">
                       <td className="max-w-[16rem] py-2.5">
                         <div className="truncate font-medium">{String(u.email)}</div>
-                        <div className="truncate text-xs text-stone-400">{String(u.name || "")}</div>
+                        <div className="truncate text-xs text-[var(--muted)]">{String(u.name || "")}</div>
                       </td>
                       <td>{String(u.role)}</td>
                       <td>{String((u._count as { sites: number } | undefined)?.sites ?? 0)}</td>
@@ -227,7 +227,7 @@ export default function AdminPage() {
             <div className="overflow-x-auto px-4 pb-4 sm:px-5">
               <table className="w-full min-w-[32rem] text-sm">
                 <thead>
-                  <tr className="text-start text-xs text-stone-400">
+                  <tr className="text-start text-xs text-[var(--muted)]">
                     <th className="py-2 font-medium">الموقع</th>
                     <th className="font-medium">المالك</th>
                     <th className="font-medium">الحالة</th>
@@ -239,7 +239,7 @@ export default function AdminPage() {
                     <tr key={String(s.id)} className="border-t border-stone-100 dark:border-stone-800">
                       <td className="max-w-[14rem] py-2.5">
                         <div className="truncate font-medium">{String(s.name)}</div>
-                        <div className="truncate font-mono text-xs text-stone-400" dir="ltr">
+                        <div className="truncate font-mono text-xs text-[var(--muted)]" dir="ltr">
                           /s/{String(s.slug)}
                         </div>
                       </td>

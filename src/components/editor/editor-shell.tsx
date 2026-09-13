@@ -601,7 +601,7 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
             <div className="sf-toolbar-divider hidden sm:block" aria-hidden />
             <div className="min-w-0 pe-1.5">
               <div className="max-w-[6.5rem] truncate text-sm font-semibold tracking-tight sm:max-w-[10rem]">{site.name}</div>
-              <div className="hidden truncate font-mono text-[10px] text-stone-600 sm:block dark:text-stone-400" dir="ltr">/s/{site.slug}</div>
+              <div className="hidden truncate font-mono text-[10px] text-stone-600 sm:block dark:text-[var(--muted)]" dir="ltr">/s/{site.slug}</div>
             </div>
           </div>
         </div>
@@ -620,7 +620,7 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
                   setSelectedPart(null);
                 }}
                 aria-label={t("pageSelect")}
-                triggerClassName="h-8 w-auto min-w-[5rem] max-w-[8.5rem] rounded-full border-0 bg-white/90 px-2.5 text-[11px] font-bold text-stone-800 shadow-none dark:bg-stone-950/50 dark:text-stone-100"
+                triggerClassName="h-8 w-auto min-w-[5rem] max-w-[8.5rem] rounded-full border-0 bg-[var(--card)] px-2.5 text-[11px] font-bold text-stone-800 shadow-none dark:bg-stone-950/50 dark:text-stone-100"
                 wrapperClassName="w-auto min-w-0"
                 options={content.pages.map((p) => ({ value: p.id, label: p.title }))}
               />
@@ -642,7 +642,7 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
             </label>
             <div className="sf-toolbar-divider sf-hide-until-xl" aria-hidden />
             <div
-              className="sf-hide-until-xl inline-flex items-center gap-0.5 rounded-full bg-white/70 p-0.5 dark:bg-stone-950/40"
+              className="sf-hide-until-xl inline-flex items-center gap-0.5 rounded-full bg-[var(--card)] p-0.5 dark:bg-stone-950/40"
               role="group"
               aria-label={t("helpViewport")}
               title={t("toolbarDevice")}
@@ -664,7 +664,7 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
                   className={`inline-flex items-center justify-center rounded-full p-2 text-xs transition focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--ring)] ${
                     viewport === key
                       ? "bg-stone-900 text-white shadow-sm dark:bg-stone-100 dark:text-stone-900"
-                      : "text-stone-600 hover:text-stone-900 dark:text-stone-400 dark:hover:text-stone-100"
+                      : "text-stone-600 hover:text-stone-900 dark:text-[var(--muted)] dark:hover:text-stone-100"
                   }`}
                 >
                   <Icon className="h-3.5 w-3.5" aria-hidden />
@@ -754,7 +754,7 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
                   <PlatformLangSwitcher size="compact" />
                 </div>
                 <div className="my-1 h-px bg-stone-200 dark:bg-stone-700 xl:hidden" />
-                <div className="px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.12em] text-stone-600 xl:hidden dark:text-stone-400">{t("toolbarDevice")}</div>
+                <div className="px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.12em] text-stone-600 xl:hidden dark:text-[var(--muted)]">{t("toolbarDevice")}</div>
                 <div className="flex gap-1 px-2 pb-1 xl:hidden" role="group" aria-label={t("helpViewport")}>
                   {(
                     [
@@ -852,7 +852,7 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
               </Button>
               {moreOpen ? (
                 <div className="absolute end-0 top-full z-50 mt-1 w-64 max-w-[min(16rem,calc(100vw-1.25rem))] rounded-2xl border border-[var(--border)] bg-[var(--card)] p-2 text-[var(--foreground)] shadow-[var(--shadow-md)]" data-sf-chrome="platform">
-                  <div className="px-2.5 py-1.5 text-[9px] font-bold uppercase tracking-[0.12em] text-stone-600 sm:hidden dark:text-stone-400">{t("toolbarContent")}</div>
+                  <div className="px-2.5 py-1.5 text-[9px] font-bold uppercase tracking-[0.12em] text-stone-600 sm:hidden dark:text-[var(--muted)]">{t("toolbarContent")}</div>
                   <div className="space-y-0.5 sm:hidden">
                     <div className="px-2 py-1">
                       <Select
@@ -877,7 +877,7 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
                     </div>
                   </div>
                   <div className="my-1 h-px bg-stone-200 sm:hidden dark:bg-stone-700" />
-                  <div className="px-2.5 py-1.5 text-[9px] font-bold uppercase tracking-[0.12em] text-stone-600 sm:hidden dark:text-stone-400">{t("toolbarSite")}</div>
+                  <div className="px-2.5 py-1.5 text-[9px] font-bold uppercase tracking-[0.12em] text-stone-600 sm:hidden dark:text-[var(--muted)]">{t("toolbarSite")}</div>
                   <button type="button" className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-start text-xs font-semibold hover:bg-stone-100 sm:hidden dark:hover:bg-stone-800" onClick={() => { openSiteSection(null); setMoreOpen(false); }}>
                     <Settings2 className="h-3.5 w-3.5" aria-hidden /> {t("openSiteSettings")}
                   </button>
@@ -907,7 +907,7 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
                       <Eye className="h-3.5 w-3.5" aria-hidden /> {t("view")}
                     </Link>
                   ) : (
-                    <div className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-stone-600 md:hidden dark:text-stone-400" title={t("viewPublicDisabled")}>
+                    <div className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-stone-600 md:hidden dark:text-[var(--muted)]" title={t("viewPublicDisabled")}>
                       <EyeOff className="h-3.5 w-3.5" aria-hidden /> {t("viewPublicDisabled")}
                     </div>
                   )}
@@ -1002,7 +1002,7 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
                 className={`flex-1 flex flex-col items-center justify-center gap-0.5 rounded-2xl py-2 text-[10px] font-semibold transition ${
                   leftTab === key
                     ? "bg-stone-900 text-white shadow-sm dark:bg-stone-100 dark:text-stone-900"
-                    : "text-stone-600 hover:bg-stone-100/80 dark:text-stone-400 dark:hover:bg-stone-800"
+                    : "text-stone-600 hover:bg-stone-100/80 dark:text-[var(--muted)] dark:hover:bg-stone-800"
                 }`}
               >
                 <Icon className="h-3.5 w-3.5" />
@@ -1015,17 +1015,17 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
             {leftTab === "insert" ? (
               <div className="space-y-4">
                 <div>
-                  <div className="mb-2 text-[10px] font-bold uppercase tracking-[0.14em] text-stone-600 dark:text-stone-400">{t("addSection")}</div>
+                  <div className="mb-2 text-[10px] font-bold uppercase tracking-[0.14em] text-stone-600 dark:text-[var(--muted)]">{t("addSection")}</div>
                   <InsertPalette mode="sections" onInsert={(t) => addBlock(t, selectedId)} />
                 </div>
                 <div>
-                  <div className="mb-2 text-[10px] font-bold uppercase tracking-[0.14em] text-stone-600 dark:text-stone-400">{t("addElement")}</div>
+                  <div className="mb-2 text-[10px] font-bold uppercase tracking-[0.14em] text-stone-600 dark:text-[var(--muted)]">{t("addElement")}</div>
                   <InsertPalette mode="elements" onInsert={(t) => addBlock(t, selectedId)} />
                 </div>
                 <div>
-                  <div className="mb-2 text-[10px] font-bold uppercase tracking-[0.14em] text-stone-600 dark:text-stone-400">{t("savedSections")}</div>
+                  <div className="mb-2 text-[10px] font-bold uppercase tracking-[0.14em] text-stone-600 dark:text-[var(--muted)]">{t("savedSections")}</div>
                   {(content.components || []).length === 0 ? (
-                    <p className="text-[11px] text-stone-600 leading-5 dark:text-stone-400">{t("savedSectionsEmpty")}</p>
+                    <p className="text-[11px] text-stone-600 leading-5 dark:text-[var(--muted)]">{t("savedSectionsEmpty")}</p>
                   ) : (
                     <div className="space-y-1">
                       {(content.components || []).map((c) => (
@@ -1049,7 +1049,7 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
             {leftTab === "layers" ? (
               <div className="space-y-1">
                 <div className="flex items-center justify-between px-1 mb-2">
-                  <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-stone-600 dark:text-stone-400">{page.title}</span>
+                  <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-stone-600 dark:text-[var(--muted)]">{page.title}</span>
                   <button type="button" className="text-[10px] font-semibold text-teal-800" onClick={() => setLeftTab("insert")}>
                     + {t("add")}
                   </button>
@@ -1057,7 +1057,7 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
                 {page.blocks.length === 0 ? (
                   <div className="rounded-2xl border border-dashed border-stone-300/80 bg-stone-50/60 px-4 py-8 text-center dark:border-stone-700 dark:bg-stone-950/40">
                     <p className="text-xs font-semibold text-stone-600 dark:text-stone-300">{t("layersEmpty")}</p>
-                    <p className="mt-1 text-[11px] leading-5 text-stone-600 dark:text-stone-400">{t("layersEmptyHint")}</p>
+                    <p className="mt-1 text-[11px] leading-5 text-stone-600 dark:text-[var(--muted)]">{t("layersEmptyHint")}</p>
                     <button
                       type="button"
                       className="mt-3 inline-flex items-center gap-1 rounded-full bg-teal-800 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-teal-700"
@@ -1098,7 +1098,7 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
                             className={`block w-full truncate rounded-lg px-2 py-1 text-start text-[11px] transition ${
                               blockSelected && selectedPart === ch.part
                                 ? "bg-teal-700/90 text-white"
-                                : "text-stone-600 hover:bg-stone-100 hover:text-stone-900 dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-stone-100"
+                                : "text-stone-600 hover:bg-stone-100 hover:text-stone-900 dark:text-[var(--muted)] dark:hover:bg-stone-800 dark:hover:text-stone-100"
                             }`}
                           >
                                                         <span
@@ -1147,7 +1147,7 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
                       }}
                     >
                       <div className="text-sm font-semibold">{p.title}</div>
-                      <div className="text-[10px] text-stone-600 font-mono dark:text-stone-400" dir="ltr">
+                      <div className="text-[10px] text-stone-600 font-mono dark:text-[var(--muted)]" dir="ltr">
                         /{p.slug} · {p.blocks.length}
                       </div>
                     </button>
@@ -1164,7 +1164,7 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
                         />
                         
                         <div className="space-y-1.5 rounded-2xl border border-stone-300/80 p-2.5 dark:border-stone-800">
-                          <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-stone-600 dark:text-stone-400">{t("pageSeo")}</div>
+                          <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-stone-600 dark:text-[var(--muted)]">{t("pageSeo")}</div>
                           <Input
                             value={p.seoTitle || ""}
                             onChange={(e) => updatePageSeo(p.id, { seoTitle: e.target.value })}
@@ -1184,7 +1184,7 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
                             kind="image"
                             accept="image/*"
                           />
-                          <p className="text-[9px] leading-4 text-stone-600 dark:text-stone-400">{t("seoFallbackHint")}</p>
+                          <p className="text-[9px] leading-4 text-stone-600 dark:text-[var(--muted)]">{t("seoFallbackHint")}</p>
                         </div>
 <div className="flex gap-0.5">
                           <IconBtn onClick={() => movePage(p.id, -1)} disabled={i === 0}><ChevronUp className="h-3.5 w-3.5" /></IconBtn>
@@ -1214,7 +1214,7 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
                       >
                         <div>
                           <div className="text-sm font-semibold">{LOCALE_META[code].nativeLabel}</div>
-                          <div className="text-[10px] text-stone-600 dark:text-stone-400">
+                          <div className="text-[10px] text-stone-600 dark:text-[var(--muted)]">
                             {LOCALE_META[code].label} · {LOCALE_META[code].dir.toUpperCase()}
                           </div>
                         </div>
@@ -1276,11 +1276,11 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="mb-3 flex items-center justify-between px-1 text-[10px] text-stone-600 dark:text-stone-400">
+            <div className="mb-3 flex items-center justify-between px-1 text-[10px] text-stone-600 dark:text-[var(--muted)]">
               <span>
                 {page.title}
                 <span className="font-mono ms-2" dir="ltr">/{page.slug}</span>
-                <span className="ms-2 rounded-full bg-white/70 px-2 py-0.5 text-stone-700 dark:bg-stone-900 dark:text-stone-200">
+                <span className="ms-2 rounded-full bg-[var(--card)] px-2 py-0.5 text-stone-700 dark:bg-stone-900 dark:text-stone-200">
                   {isLocaleCode(editLocale) ? LOCALE_META[editLocale].nativeLabel : editLocale}
                 </span>
               </span>
@@ -1373,12 +1373,12 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
           </div>
           <div className="border-b border-stone-300/70 p-3 dark:border-stone-800">
             <div className="mb-2 hidden xl:block">
-              <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-stone-600 dark:text-stone-400">{t("inspector")}</span>
+              <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-stone-600 dark:text-[var(--muted)]">{t("inspector")}</span>
             </div>
             <div className="flex gap-1 rounded-2xl bg-stone-100/80 p-1 dark:bg-stone-950">
-              <button type="button" title={t("helpInspect")} onClick={() => setRightTab("inspect")} className={`flex-1 rounded-xl py-1.5 text-[10px] font-semibold ${rightTab === "inspect" ? "bg-white text-stone-900 shadow-sm dark:bg-stone-800 dark:text-stone-50" : "text-stone-600 dark:text-stone-400"}`}>{t("inspect")}</button>
-              <button type="button" title={t("helpSite")} onClick={() => { setRightTab("site"); setSiteFocus(null); }} className={`flex-1 rounded-xl py-1.5 text-[10px] font-semibold ${rightTab === "site" ? "bg-white text-stone-900 shadow-sm dark:bg-stone-800 dark:text-stone-50" : "text-stone-600 dark:text-stone-400"}`}>{t("site")}</button>
-              <button type="button" title={t("helpReplies")} onClick={() => setRightTab("replies")} className={`flex-1 rounded-xl py-1.5 text-[10px] font-semibold ${rightTab === "replies" ? "bg-white text-stone-900 shadow-sm dark:bg-stone-800 dark:text-stone-50" : "text-stone-600 dark:text-stone-400"}`}>{t("replies")}</button>
+              <button type="button" title={t("helpInspect")} onClick={() => setRightTab("inspect")} className={`flex-1 rounded-xl py-1.5 text-[10px] font-semibold ${rightTab === "inspect" ? "bg-white text-stone-900 shadow-sm dark:bg-stone-800 dark:text-stone-50" : "text-stone-600 dark:text-[var(--muted)]"}`}>{t("inspect")}</button>
+              <button type="button" title={t("helpSite")} onClick={() => { setRightTab("site"); setSiteFocus(null); }} className={`flex-1 rounded-xl py-1.5 text-[10px] font-semibold ${rightTab === "site" ? "bg-white text-stone-900 shadow-sm dark:bg-stone-800 dark:text-stone-50" : "text-stone-600 dark:text-[var(--muted)]"}`}>{t("site")}</button>
+              <button type="button" title={t("helpReplies")} onClick={() => setRightTab("replies")} className={`flex-1 rounded-xl py-1.5 text-[10px] font-semibold ${rightTab === "replies" ? "bg-white text-stone-900 shadow-sm dark:bg-stone-800 dark:text-stone-50" : "text-stone-600 dark:text-[var(--muted)]"}`}>{t("replies")}</button>
             </div>
           </div>
           <div className="flex-1 sf-scroll overflow-y-auto p-4">
@@ -1447,7 +1447,7 @@ function IconBtn({
       className={`h-7 w-7 inline-flex items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--ring)] disabled:opacity-30 ${
         danger
           ? "text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-950/50"
-          : "text-stone-600 hover:bg-stone-100 hover:text-stone-900 dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-stone-100"
+          : "text-stone-600 hover:bg-stone-100 hover:text-stone-900 dark:text-[var(--muted)] dark:hover:bg-stone-800 dark:hover:text-stone-100"
       }`}
     >
       {children}

@@ -315,6 +315,34 @@ export function ensureReadableText(
   return bgL > 0.45 ? darkFallback : lightFallback;
 }
 
+
+/**
+ * Section chrome (footer / stats / etc.) against the ACTUAL background.
+ * Never assumes a dark footer — derives text/muted/border from luminance of
+ * userBg || surface/background via ensureReadableText.
+ */
+export function contrastForSectionBg(
+  userBg: string | undefined,
+  userText: string | undefined,
+  colors: ColorPalette,
+  fallbackBg: "surface" | "background" = "surface"
+): { background: string; color: string; muted: string; borderColor: string } {
+  const background = (userBg && userBg.trim()) || colors[fallbackBg] || colors.background || "#ffffff";
+  const color = ensureReadableText(userText && userText.trim() ? userText : colors.text, background, {
+    minRatio: 4.5,
+    darkFallback: "#1c1917",
+    lightFallback: "#fafaf9",
+  });
+  const muted = ensureReadableText(colors.muted, background, {
+    minRatio: 3.5,
+    darkFallback: "#44403c",
+    lightFallback: "#a8a29e",
+  });
+  const bgL = relativeLuminance(background);
+  const borderColor = bgL != null && bgL > 0.45 ? "#d6d3d1" : "#334155";
+  return { background, color, muted, borderColor };
+}
+
 export function contrastCorrectPalette(colors: ColorPalette, mode: "light" | "dark"): ColorPalette {
   const bg = colors.background || (mode === "light" ? "#ffffff" : "#0c0a09");
   if (mode === "light") {

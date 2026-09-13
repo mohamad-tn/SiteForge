@@ -11,6 +11,7 @@ import {
   resolveNavItems,
   resolveLocalized,
   normalizeActionType,
+  contrastForSectionBg,
   type BlockPart,
 } from "@/lib/design";
 import {
@@ -151,7 +152,8 @@ function BlockView({
       const sticky = str(source, "sticky") === "true";
       const userBg = str(source, "bgColor");
       const userText = str(source, "textColor");
-      const linkColor = userText || tokens.colors.text;
+      const navChrome = contrastForSectionBg(userBg || undefined, userText || undefined, tokens.colors, "surface");
+      const linkColor = navChrome.color;
       const selectPart = (part: BlockPart) => (e: ReactMouseEvent) => {
         if (!editable || !onSelectPart) return;
         e.preventDefault();
@@ -159,14 +161,14 @@ function BlockView({
         onSelectPart(part);
       };
       const navStyle: CSSProperties = {
-        background: userBg || surface,
-        borderColor: `${secondary}12`,
+        background: navChrome.background,
+        borderColor: navChrome.borderColor,
         color: linkColor,
         ...(frameStyle as CSSProperties),
       };
-      // frameStyle may set background/color — prefer explicit user tokens already merged in frameStyle
-      if (!userBg && !(frameStyle && "background" in frameStyle)) navStyle.background = surface;
-      if (userText) navStyle.color = userText;
+      // frameStyle may set background/color — keep surface + readable text (never assume dark chrome)
+      if (!userBg && !(frameStyle && "background" in frameStyle)) navStyle.background = tokens.colors.surface;
+      if (!(frameStyle && "color" in frameStyle)) navStyle.color = linkColor;
 
       return (
         <nav
@@ -771,6 +773,14 @@ function BlockView({
 
     case "cta": {
       const userBg = str(source, "bgColor");
+      const userText = str(source, "textColor");
+      // Solid user bg → contrast against it; default gradient stays on primary (readable light text)
+      const ctaSampleBg = userBg || primary;
+      const ctaChrome = contrastForSectionBg(ctaSampleBg, userText || undefined, tokens.colors, "surface");
+      const ctaFg = ctaChrome.color;
+      const ctaMuted = ctaChrome.muted;
+      const ctaBtnBg = ctaFg;
+      const ctaBtnFg = contrastForSectionBg(ctaFg, primary, tokens.colors, "surface").color;
       const pick = (part: BlockPart) => (e: ReactMouseEvent) => {
         if (!editable || !onSelectPart) return;
         e.preventDefault();
@@ -789,10 +799,11 @@ function BlockView({
         >
           <div className="mx-auto w-full" style={{ maxWidth: tokens.spacing.contentMaxWidth }}>
             <div
-              className="p-8 md:p-12 text-center text-white relative overflow-hidden"
+              className="p-8 md:p-12 text-center relative overflow-hidden"
               style={{
                 background: userBg || `linear-gradient(125deg, ${primary}, ${secondary})`,
                 borderRadius: radius * 1.2,
+                color: ctaFg,
               }}
             >
               <div
@@ -803,14 +814,15 @@ function BlockView({
                 role={editable ? "button" : undefined}
                 onClick={pick("title")}
                 className={`text-3xl font-bold mb-3 relative ${editable ? `cursor-pointer ${partRing(selectedPart === "title")}` : ""}`}
-                style={{ fontFamily: tokens.fonts.heading }}
+                style={{ fontFamily: tokens.fonts.heading, color: ctaFg }}
               >
                 {str(p, "title")}
               </h2>
               <p
                 role={editable ? "button" : undefined}
                 onClick={pick("body")}
-                className={`mb-7 opacity-90 relative max-w-xl mx-auto ${editable ? `cursor-pointer ${partRing(selectedPart === "body")}` : ""}`}
+                className={`mb-7 relative max-w-xl mx-auto ${editable ? `cursor-pointer ${partRing(selectedPart === "body")}` : ""}`}
+                style={{ color: ctaMuted }}
               >
                 {str(p, "body")}
               </p>
@@ -819,7 +831,7 @@ function BlockView({
                   type="button"
                   onClick={pick("button")}
                   className={`inline-flex px-6 py-3 font-semibold relative ${partRing(selectedPart === "button")}`}
-                  style={{ background: "#fff", color: primary, borderRadius: radius }}
+                  style={{ background: ctaBtnBg, color: ctaBtnFg, borderRadius: radius }}
                 >
                   {str(p, "buttonLabel")}
                 </button>
@@ -830,7 +842,7 @@ function BlockView({
                   props={source}
                   hrefKey="buttonHref"
                   className="inline-flex px-6 py-3 font-semibold relative"
-                  style={{ background: "#fff", color: primary, borderRadius: radius }}
+                  style={{ background: ctaBtnBg, color: ctaBtnFg, borderRadius: radius }}
                 >
                   {str(p, "buttonLabel")}
                 </ActionableControl>
@@ -954,36 +966,39 @@ function BlockView({
         e.stopPropagation();
         onSelectPart(part);
       };
+      // Contrast against ACTUAL bg (userBg || surface/background) — never assume dark footer / white text
+      const foot = contrastForSectionBg(userBg || undefined, userText || undefined, tokens.colors, "surface");
       const footStyle: CSSProperties = {
-        background: userBg || secondary,
-        color: userText || "#cbd5e1",
-        borderColor: "#1e293b",
+        background: foot.background,
+        color: foot.color,
+        borderColor: foot.borderColor,
         ...(frameStyle as CSSProperties),
       };
-      if (userBg) footStyle.background = userBg;
-      if (userText) footStyle.color = userText;
+      if (userBg) footStyle.background = foot.background;
+      footStyle.color = foot.color;
       return (
         <footer
           className="px-5 md:px-8 py-10 border-t"
           style={footStyle}
           data-sf-block="footer"
         >
-          <div className="mx-auto" style={{ maxWidth: tokens.spacing.contentMaxWidth }}>
+          <div className="mx-auto" style={{ maxWidth: tokens.spacing.contentMaxWidth, color: foot.color }}>
             {columns.length > 0 ? (
               <div className="grid sm:grid-cols-2 md:grid-cols-4 gap-8 mb-10">
                 <div>
                   <div
                     role={editable ? "button" : undefined}
                     onClick={pick("brand")}
-                    className={`text-white font-bold text-lg mb-2 ${editable ? `cursor-pointer ${partRing(selectedPart === "brand")}` : ""}`}
-                    style={{ fontFamily: tokens.fonts.heading, color: userText || "#fff" }}
+                    className={`font-bold text-lg mb-2 ${editable ? `cursor-pointer ${partRing(selectedPart === "brand")}` : ""}`}
+                    style={{ fontFamily: tokens.fonts.heading, color: foot.color }}
                   >
                     {str(p, "brand", "Brand")}
                   </div>
                   <p
                     role={editable ? "button" : undefined}
                     onClick={pick("text")}
-                    className={`text-sm opacity-70 leading-6 ${editable ? `cursor-pointer ${partRing(selectedPart === "text")}` : ""}`}
+                    className={`text-sm leading-6 ${editable ? `cursor-pointer ${partRing(selectedPart === "text")}` : ""}`}
+                    style={{ color: foot.muted }}
                   >
                     {str(p, "text")}
                   </p>
@@ -997,10 +1012,10 @@ function BlockView({
                       onClick={pick(part)}
                       className={editable ? `cursor-pointer ${partRing(selectedPart === part)}` : undefined}
                     >
-                      <div className="text-white font-semibold text-sm mb-3" style={{ color: userText || "#fff" }}>
+                      <div className="font-semibold text-sm mb-3" style={{ color: foot.color }}>
                         {col.title}
                       </div>
-                      <ul className="space-y-2 text-sm opacity-75">
+                      <ul className="space-y-2 text-sm" style={{ color: foot.muted }}>
                         {col.links.map((l) => (
                           <li key={l}>{l}</li>
                         ))}
@@ -1010,7 +1025,7 @@ function BlockView({
                 })}
               </div>
             ) : null}
-            <div className="flex flex-col md:flex-row items-center justify-between gap-4 text-sm border-t pt-6" style={{ borderColor: "#334155" }}>
+            <div className="flex flex-col md:flex-row items-center justify-between gap-4 text-sm border-t pt-6" style={{ borderColor: foot.borderColor, color: foot.muted }}>
               <div
                 role={editable ? "button" : undefined}
                 onClick={pick("text")}
@@ -1018,9 +1033,9 @@ function BlockView({
               >
                 {str(p, "text")}
               </div>
-              <div className="flex gap-4 opacity-80">
+              <div className="flex gap-4">
                 {links.map((l) => (
-                  <span key={l}>{l}</span>
+                  <span key={l} style={{ color: foot.muted }}>{l}</span>
                 ))}
               </div>
             </div>
@@ -1041,14 +1056,15 @@ function BlockView({
           : parsePipeItems(p.items).map((it, i) => ({ id: `csv-${i}`, ...it }));
       const userBg = str(source, "bgColor");
       const userText = str(source, "textColor");
+      const statsChrome = contrastForSectionBg(userBg || undefined, userText || undefined, tokens.colors, "surface");
       return (
         <section
           className="px-5 md:px-8"
           style={{
             paddingTop: tokens.spacing.sectionY,
             paddingBottom: tokens.spacing.sectionY,
-            background: userBg || secondary,
-            color: userText || "#fff",
+            background: statsChrome.background,
+            color: statsChrome.color,
             ...(frameStyle as CSSProperties),
           }}
           data-sf-block="stats"
@@ -1077,7 +1093,7 @@ function BlockView({
                     <div className="text-3xl md:text-4xl font-bold" style={{ color: accent }}>
                       {it.title}
                     </div>
-                    <div className="text-sm opacity-75 mt-1">{it.body}</div>
+                    <div className="text-sm mt-1" style={{ color: statsChrome.muted }}>{it.body}</div>
                   </div>
                 );
               })}

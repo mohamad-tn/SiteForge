@@ -66,7 +66,7 @@ export function ThemeToggleButton({ className = "" }: { className?: string }) {
       type="button"
       onClick={toggle}
       className={cn(
-        "inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-stone-300 bg-[var(--card)] px-3 text-xs font-medium text-stone-800 shadow-[var(--shadow-xs)] transition hover:bg-[var(--surface)] dark:border-stone-600 dark:text-stone-100",
+        "inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-[var(--border)] bg-[var(--card)] px-3 text-xs font-medium text-[var(--foreground)] shadow-[var(--shadow-xs)] transition hover:bg-[var(--surface)]",
         className
       )}
       title={theme === "light" ? darkLabel : lightLabel}

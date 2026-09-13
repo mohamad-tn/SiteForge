@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { SiteContent } from "@/lib/design";
-import { LOCALE_META, isLocaleCode, localeDir } from "@/lib/design";
+import { LOCALE_META, isLocaleCode, localeDir, tokensForRender } from "@/lib/design";
 import { SiteRenderer } from "@/components/site-renderer";
 import { useSearchParams } from "next/navigation";
 import { sanitizeCustomCss } from "@/lib/sanitize-css";
@@ -130,6 +130,15 @@ export function PublicSiteView({
 
   const siteDir = localeDir(locale);
 
+  // Locale/theme bar follows SITE mode (tokensForRender), not platform html.dark — no inverted pill.
+  const siteTokens = useMemo(() => tokensForRender(content.tokens, mode, locale), [content.tokens, mode, locale]);
+  const barBg = siteTokens.colors.surface;
+  const barFg = siteTokens.colors.text;
+  const barMuted = siteTokens.colors.muted;
+  const barBorder = mode === "light" ? "#d6d3d1" : "#3f3a36";
+  const barActiveBg = barFg;
+  const barActiveFg = barBg;
+
   return (
     <div className="relative min-h-screen overflow-x-hidden" lang={locale} dir={siteDir} data-sf-tenant="public">
       {(() => {
@@ -138,8 +147,14 @@ export function PublicSiteView({
       })()}
       <div className="pointer-events-none fixed inset-x-0 top-0 z-50 flex justify-center p-3 md:justify-end md:p-4">
         <div
-          className="pointer-events-auto flex max-w-[calc(100vw-1.5rem)] flex-wrap items-center gap-1.5 rounded-2xl border border-[var(--border)] bg-[var(--card)] p-1.5 text-[var(--foreground)] shadow-[var(--shadow-md)] backdrop-blur-xl"
-          data-sf-chrome="platform"
+          className="pointer-events-auto flex max-w-[calc(100vw-1.5rem)] flex-wrap items-center gap-1.5 rounded-2xl border p-1.5 shadow-[var(--shadow-md)] backdrop-blur-xl"
+          style={{
+            background: barBg,
+            color: barFg,
+            borderColor: barBorder,
+          }}
+          data-sf-site-chrome="locale-bar"
+          data-sf-mode={mode}
         >
           <div className="flex flex-wrap items-center gap-0.5 px-0.5" role="group" aria-label="Language">
             {localeOptions.map((opt) => (
@@ -147,21 +162,23 @@ export function PublicSiteView({
                 key={opt.code}
                 type="button"
                 onClick={() => setLocale(opt.code)}
-                className={`rounded-full px-2.5 py-1 text-[11px] font-semibold transition ${
+                className="rounded-full px-2.5 py-1 text-[11px] font-semibold transition"
+                style={
                   locale === opt.code
-                    ? "bg-[var(--foreground)] text-[var(--card)]"
-                    : "text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--foreground)]"
-                }`}
+                    ? { background: barActiveBg, color: barActiveFg }
+                    : { color: barMuted, background: "transparent" }
+                }
               >
                 {opt.label}
               </button>
             ))}
           </div>
-          <div className="h-4 w-px shrink-0 bg-[var(--border)]" aria-hidden />
+          <div className="h-4 w-px shrink-0" style={{ background: barBorder }} aria-hidden />
           <button
             type="button"
             onClick={toggleTheme}
-            className="rounded-full px-2.5 py-1 text-[11px] font-semibold text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--foreground)]"
+            className="rounded-full px-2.5 py-1 text-[11px] font-semibold transition"
+            style={{ color: barMuted }}
             aria-label={mode === "light" ? "Dark" : "Light"}
             title={mode === "light" ? "Dark" : "Light"}
           >
