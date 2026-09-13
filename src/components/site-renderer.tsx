@@ -1766,6 +1766,7 @@ export function SiteRenderer({
           radius={tokens.radius}
           blockGap={tokens.spacing.blockGap}
           fontsHeading={tokens.fonts.heading}
+          locale={activeLocale}
         />
       ) : null}
       {page.blocks.length === 0 && !autoCollection ? (

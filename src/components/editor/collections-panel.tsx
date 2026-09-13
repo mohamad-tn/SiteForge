@@ -274,6 +274,7 @@ export function CollectionsPanel({
                   >
                     {publicPath}
                   </a>
+                  <p className="mt-1.5 text-[10px] leading-4 text-[var(--muted)]">{t("cmsItemLinkHint")}</p>
                 </div>
               </div>
             ) : null}
