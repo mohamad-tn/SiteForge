@@ -90,12 +90,52 @@ export function LinkTargetFields({
             { value: "link", label: t("actionTypeLink") },
             { value: "toggleTheme", label: t("actionTypeToggleTheme") },
             { value: "cycleLocale", label: t("actionTypeCycleLocale") },
+            { value: "openModal", label: t("actionTypeOpenModal") },
+            { value: "scrollTo", label: t("actionTypeScrollTo") },
           ]}
         />
         <p className="text-[10px] leading-4 text-[var(--muted)]">{t("actionTypeHint")}</p>
       </div>
 
-      {!isLinkAction ? (
+      {actionType === "openModal" || actionType === "scrollTo" ? (
+        <div className="space-y-2 rounded-xl border border-teal-700/15 bg-teal-50/50 px-2.5 py-2 dark:border-teal-400/20 dark:bg-teal-950/30">
+          <p className="text-[10px] leading-4 text-[var(--foreground)]">
+            {actionType === "openModal" ? t("actionTypeOpenModalHelp") : t("actionTypeScrollToHelp")}
+          </p>
+          <div className="space-y-1.5">
+            <Label className="text-[11px] text-[var(--muted)]">{t("actionTargetLabel")}</Label>
+            <Input
+              className="h-9 rounded-xl font-mono text-xs"
+              dir="ltr"
+              placeholder={actionType === "scrollTo" ? "block-id-or-section" : "hidden-block-id"}
+              value={String(props.actionTarget || "")}
+              onChange={(e) => onUpdateProp("actionTarget", e.target.value)}
+            />
+          </div>
+          {actionType === "openModal" ? (
+            <>
+              <div className="space-y-1.5">
+                <Label className="text-[11px] text-[var(--muted)]">{t("modalTitleLabel")}</Label>
+                <Input
+                  className="h-9 rounded-xl text-xs"
+                  value={String(props.modalTitle || "")}
+                  onChange={(e) => onUpdateProp("modalTitle", e.target.value)}
+                  placeholder={t("modalTitlePh")}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-[11px] text-[var(--muted)]">{t("modalBodyLabel")}</Label>
+                <Input
+                  className="h-9 rounded-xl text-xs"
+                  value={String(props.modalBody || "")}
+                  onChange={(e) => onUpdateProp("modalBody", e.target.value)}
+                  placeholder={t("modalBodyPh")}
+                />
+              </div>
+            </>
+          ) : null}
+        </div>
+      ) : !isLinkAction ? (
         <p className="rounded-xl border border-teal-700/15 bg-teal-50/50 px-2.5 py-2 text-[10px] leading-4 text-[var(--foreground)] dark:border-teal-400/20 dark:bg-teal-950/30">
           {actionType === "toggleTheme" ? t("actionTypeToggleThemeHelp") : t("actionTypeCycleLocaleHelp")}
         </p>

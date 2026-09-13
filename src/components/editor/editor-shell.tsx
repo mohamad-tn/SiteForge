@@ -33,6 +33,7 @@ import {
 import { SiteRenderer } from "@/components/site-renderer";
 import { TokensPanel } from "@/components/editor/tokens-panel";
 import { SiteChromeProvider } from "@/components/site-chrome-context";
+import { SiteModalHost } from "@/components/site-modal-host";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
@@ -1454,6 +1455,33 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
                 data-sf-preview="content"
               >
                 <SiteChromeProvider value={siteChrome}>
+                    <SiteRenderer
+                      content={content}
+                      pageId={page.id}
+                      selectedBlockId={selectedId}
+                      selectedBlockIds={selectedIds}
+                      selectedPart={selectedPart}
+                      hoveredBlockId={hoveredId}
+                      onSelectBlock={selectBlock}
+                      onSelectPart={selectTarget}
+                      onHoverBlock={setHoveredId}
+                      locale={editLocale}
+                      colorMode={previewMode}
+                      siteSlug={site.slug}
+                    />
+                    <SiteModalHost uiLang={uiLang === "ar" ? "ar" : "en"} />
+                </SiteChromeProvider>
+              </div>
+            ) : (
+              <div className="sf-device-chrome" data-device={viewport} aria-label={t("deviceFrame")}>
+                {viewport === "mobile" ? <div className="sf-device-notch" aria-hidden /> : null}
+                <div
+                  className="sf-device-screen"
+                  lang={editLocale}
+                  dir={localeDir(editLocale)}
+                  data-sf-preview="content"
+                  style={{ width: typeof canvasWidth === "number" ? canvasWidth : "100%", maxWidth: "100%", marginInline: "auto" }}
+                >
                   <SiteChromeProvider value={siteChrome}>
                     <SiteRenderer
                       content={content}
@@ -1467,33 +1495,10 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
                       onHoverBlock={setHoveredId}
                       locale={editLocale}
                       colorMode={previewMode}
+                      siteSlug={site.slug}
                     />
+                    <SiteModalHost uiLang={uiLang === "ar" ? "ar" : "en"} />
                   </SiteChromeProvider>
-                </SiteChromeProvider>
-              </div>
-            ) : (
-              <div className="sf-device-chrome" data-device={viewport} aria-label={t("deviceFrame")}>
-                {viewport === "mobile" ? <div className="sf-device-notch" aria-hidden /> : null}
-                <div
-                  className="sf-device-screen"
-                  lang={editLocale}
-                  dir={localeDir(editLocale)}
-                  data-sf-preview="content"
-                  style={{ width: typeof canvasWidth === "number" ? canvasWidth : "100%", maxWidth: "100%", marginInline: "auto" }}
-                >
-                  <SiteRenderer
-                    content={content}
-                    pageId={page.id}
-                    selectedBlockId={selectedId}
-                    selectedBlockIds={selectedIds}
-                    selectedPart={selectedPart}
-                    hoveredBlockId={hoveredId}
-                    onSelectBlock={selectBlock}
-                    onSelectPart={selectTarget}
-                    onHoverBlock={setHoveredId}
-                    locale={editLocale}
-                    colorMode={previewMode}
-                  />
                 </div>
                 {viewport === "mobile" ? <div className="sf-device-home" aria-hidden /> : null}
               </div>

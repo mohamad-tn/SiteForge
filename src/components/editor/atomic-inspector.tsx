@@ -60,7 +60,7 @@ function Field({
   );
 }
 
-/** Minimal per-part textColor / fontSize — applied when styles visually wire in the renderer. */
+/** Per-part text / hover / focus styles persisted in partStyles (or nav item.styles). */
 function PartStyleFields({
   props,
   partKey,
@@ -76,12 +76,39 @@ function PartStyleFields({
   uiLang: "ar" | "en";
   onUpdatePropsObject: (blockId: string, patch: Record<string, unknown>) => void;
   /** When set, write styles onto the nav item instead of partStyles map. */
-  onNavItemStyles?: (textColor: string, fontSize: string) => void;
-  value?: { textColor?: string; fontSize?: string };
+  onNavItemStyles?: (patch: {
+    textColor?: string;
+    fontSize?: string;
+    hoverBg?: string;
+    hoverText?: string;
+    focusRing?: string;
+  }) => void;
+  value?: {
+    textColor?: string;
+    fontSize?: string;
+    hoverBg?: string;
+    hoverText?: string;
+    focusRing?: string;
+  };
 }) {
   const ps = value || getPartStyles(props, partKey);
   const color = ps.textColor || "";
   const size = ps.fontSize || "";
+  const hoverBg = ps.hoverBg || "";
+  const hoverText = ps.hoverText || "";
+  const focusRing = ps.focusRing || "";
+
+  function patch(next: {
+    textColor?: string;
+    fontSize?: string;
+    hoverBg?: string;
+    hoverText?: string;
+    focusRing?: string;
+  }) {
+    if (onNavItemStyles) onNavItemStyles({ textColor: color, fontSize: size, hoverBg, hoverText, focusRing, ...next });
+    else onUpdatePropsObject(blockId, setPartStyles(props, partKey, next));
+  }
+
   return (
     <div className="space-y-2 rounded-2xl border border-dashed border-stone-200/90 p-2.5 dark:border-stone-700">
       <div className="text-[9px] font-bold uppercase tracking-[0.12em] text-stone-600 dark:text-stone-400">
@@ -93,20 +120,14 @@ function PartStyleFields({
             type="color"
             className="h-10 w-12 rounded-xl p-1"
             value={color && color.startsWith("#") ? color : "#1c1917"}
-            onChange={(e) => {
-              if (onNavItemStyles) onNavItemStyles(e.target.value, size);
-              else onUpdatePropsObject(blockId, setPartStyles(props, partKey, { textColor: e.target.value }));
-            }}
+            onChange={(e) => patch({ textColor: e.target.value })}
           />
           <Input
             className="h-10 flex-1 rounded-2xl font-mono text-xs"
             dir="ltr"
             placeholder="#1c1917"
             value={color}
-            onChange={(e) => {
-              if (onNavItemStyles) onNavItemStyles(e.target.value, size);
-              else onUpdatePropsObject(blockId, setPartStyles(props, partKey, { textColor: e.target.value }));
-            }}
+            onChange={(e) => patch({ textColor: e.target.value })}
           />
         </div>
       </Field>
@@ -116,10 +137,34 @@ function PartStyleFields({
           dir="ltr"
           placeholder="16"
           value={size}
-          onChange={(e) => {
-            if (onNavItemStyles) onNavItemStyles(color, e.target.value);
-            else onUpdatePropsObject(blockId, setPartStyles(props, partKey, { fontSize: e.target.value }));
-          }}
+          onChange={(e) => patch({ fontSize: e.target.value })}
+        />
+      </Field>
+      <Field label={uiLang === "ar" ? "خلفية عند المرور" : "Hover background"}>
+        <Input
+          className="h-10 rounded-2xl font-mono text-xs"
+          dir="ltr"
+          placeholder="#f5f5f4"
+          value={hoverBg}
+          onChange={(e) => patch({ hoverBg: e.target.value })}
+        />
+      </Field>
+      <Field label={uiLang === "ar" ? "نص عند المرور" : "Hover text"}>
+        <Input
+          className="h-10 rounded-2xl font-mono text-xs"
+          dir="ltr"
+          placeholder="#0f766e"
+          value={hoverText}
+          onChange={(e) => patch({ hoverText: e.target.value })}
+        />
+      </Field>
+      <Field label={uiLang === "ar" ? "حلقة التركيز" : "Focus ring"}>
+        <Input
+          className="h-10 rounded-2xl font-mono text-xs"
+          dir="ltr"
+          placeholder="#0f766e"
+          value={focusRing}
+          onChange={(e) => patch({ focusRing: e.target.value })}
         />
       </Field>
     </div>
@@ -556,19 +601,19 @@ function NavbarAtomic({
                       uiLang={uiLang}
                       onUpdatePropsObject={onUpdatePropsObject}
                       value={it.styles}
-                      onNavItemStyles={(textColor, fontSize) => {
+                      onNavItemStyles={(patch) => {
                         commitItems(
-                          items.map((x) =>
-                            x.id === it.id
-                              ? {
-                                  ...x,
-                                  styles: {
-                                    ...(textColor ? { textColor } : {}),
-                                    ...(fontSize ? { fontSize } : {}),
-                                  },
-                                }
-                              : x
-                          )
+                          items.map((x) => {
+                            if (x.id !== it.id) return x;
+                            const styles = { ...(x.styles || {}), ...patch };
+                            for (const k of Object.keys(styles) as (keyof typeof styles)[]) {
+                              if (!styles[k]) delete styles[k];
+                            }
+                            return {
+                              ...x,
+                              styles: Object.keys(styles).length ? styles : undefined,
+                            };
+                          })
                         );
                       }}
                     />

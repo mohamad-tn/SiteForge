@@ -87,11 +87,16 @@ function pickPart(editable: boolean | undefined, onSelectPart: ((part: BlockPart
   };
 }
 
-function partStyleCSS(ps: { textColor?: string; fontSize?: string } | undefined): CSSProperties {
+function partStyleCSS(
+  ps: { textColor?: string; fontSize?: string; hoverBg?: string; hoverText?: string; focusRing?: string } | undefined
+): CSSProperties {
   if (!ps) return {};
-  const s: CSSProperties = {};
+  const s: CSSProperties & Record<string, string> = {};
   if (ps.textColor) s.color = ps.textColor;
   if (ps.fontSize) s.fontSize = /px|rem|em|%/.test(ps.fontSize) ? ps.fontSize : `${ps.fontSize}px`;
+  if (ps.hoverBg) s["--sf-part-hover-bg"] = ps.hoverBg;
+  if (ps.hoverText) s["--sf-part-hover-text"] = ps.hoverText;
+  if (ps.focusRing) s["--sf-part-focus-ring"] = ps.focusRing;
   return s;
 }
 
@@ -146,7 +151,14 @@ function BlockView({
               linkCollectionItemId: "",
               openInNewTab: "false",
               actionType: "link" as const,
-              styles: undefined as undefined | { textColor?: string; fontSize?: string },
+              actionTarget: undefined as string | undefined,
+              styles: undefined as undefined | {
+                textColor?: string;
+                fontSize?: string;
+                hoverBg?: string;
+                hoverText?: string;
+                focusRing?: string;
+              },
             }));
       const ctaLabel = str(p, "ctaLabel");
       const sticky = str(source, "sticky") === "true";
@@ -181,6 +193,7 @@ function BlockView({
           <div
             role={editable ? "button" : undefined}
             tabIndex={editable ? 0 : undefined}
+            data-sf-part="brand"
             className={`text-lg font-bold tracking-tight text-start ${editable ? `cursor-pointer ${partRing(selectedPart === "brand")}` : ""}`}
             style={{
               color: getPartStyles(source, "brand").textColor || userText || primary,
@@ -225,30 +238,44 @@ function BlockView({
                     type="button"
                     className={linkClass}
                     style={linkStyle}
+                    data-sf-part={part}
                     onClick={selectPart(part)}
                   >
                     {item.label}
                   </button>
                 );
               }
-              if (itemAction === "toggleTheme" || itemAction === "cycleLocale") {
+              if (
+                itemAction === "toggleTheme" ||
+                itemAction === "cycleLocale" ||
+                itemAction === "openModal" ||
+                itemAction === "scrollTo"
+              ) {
                 return (
                   <ActionableControl
                     key={item.id}
                     siteSlug={siteSlug}
                     blockId={block.id}
-                    props={{ ...source, actionType: itemAction, href: "#" }}
+                    props={{
+                      ...source,
+                      actionType: itemAction,
+                      href: "#",
+                      actionTarget: item.actionTarget || source.actionTarget,
+                      modalTitle: source.modalTitle,
+                      modalBody: source.modalBody,
+                    }}
                     hrefKey="href"
                     className={linkClass}
                     style={linkStyle}
                     as="button"
+                    data-sf-part={part}
                   >
                     {item.label}
                   </ActionableControl>
                 );
               }
               return (
-                <a key={item.id} className={linkClass} style={linkStyle} {...hrefProps}>
+                <a key={item.id} className={linkClass} style={linkStyle} data-sf-part={part} {...hrefProps}>
                   {item.label}
                 </a>
               );
@@ -330,6 +357,7 @@ function BlockView({
             <h1
               role={editable ? "button" : undefined}
               tabIndex={editable ? 0 : undefined}
+              data-sf-part="headline"
               onClick={pick("headline")}
               className={`text-4xl md:text-5xl lg:text-[3.25rem] font-bold leading-[1.15] mb-5 tracking-tight ${mx} max-w-3xl ${editable ? `cursor-pointer ${partRing(selectedPart === "headline")}` : ""}`}
               style={{

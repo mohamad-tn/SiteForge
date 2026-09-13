@@ -117,6 +117,22 @@ describe("partStyles map", () => {
     props = setPartStyles(props, "headline", { textColor: "", fontSize: "" });
     expect(getPartStyles(props, "headline")).toEqual({});
   });
+
+  it("persists hoverBg/hoverText/focusRing", () => {
+    let props: Record<string, unknown> = {};
+    props = setPartStyles(props, "cta", {
+      hoverBg: "#ecfdf5",
+      hoverText: "#0f766e",
+      focusRing: "#14b8a6",
+    });
+    expect(getPartStyles(props, "cta")).toEqual({
+      hoverBg: "#ecfdf5",
+      hoverText: "#0f766e",
+      focusRing: "#14b8a6",
+    });
+    props = setPartStyles(props, "cta", { hoverBg: "", hoverText: "", focusRing: "" });
+    expect(getPartStyles(props, "cta")).toEqual({});
+  });
 });
 
 describe("listBlockParts", () => {

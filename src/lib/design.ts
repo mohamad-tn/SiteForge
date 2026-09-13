@@ -770,13 +770,28 @@ export function parseCsv(raw: unknown): string[] {
 }
 
 /** Structured navbar link item (preferred over CSV `links`). */
-export type ButtonActionType = "link" | "toggleTheme" | "cycleLocale";
+export type ButtonActionType = "link" | "toggleTheme" | "cycleLocale" | "openModal" | "scrollTo";
 
-export const BUTTON_ACTION_TYPES: ButtonActionType[] = ["link", "toggleTheme", "cycleLocale"];
+export const BUTTON_ACTION_TYPES: ButtonActionType[] = [
+  "link",
+  "toggleTheme",
+  "cycleLocale",
+  "openModal",
+  "scrollTo",
+];
+
+/** Sanitize allowlisted action targets (block id or element id). No URLs/JS. */
+export function sanitizeActionTarget(v: unknown): string {
+  const s = typeof v === "string" ? v.trim() : "";
+  if (!s) return "";
+  const bare = s.startsWith("#") ? s.slice(1) : s;
+  if (!/^[a-zA-Z][a-zA-Z0-9_-]{0,63}$/.test(bare)) return "";
+  return bare;
+}
 
 export function normalizeActionType(v: unknown): ButtonActionType {
   const s = typeof v === "string" ? v : "";
-  if (s === "toggleTheme" || s === "cycleLocale") return s;
+  if (s === "toggleTheme" || s === "cycleLocale" || s === "openModal" || s === "scrollTo") return s;
   return "link";
 }
 
@@ -792,8 +807,10 @@ export type NavItem = {
   openInNewTab?: string;
   /** Safe allowlisted click action — never user JS. */
   actionType?: ButtonActionType;
+  /** Target for scrollTo / openModal (block id or element id). */
+  actionTarget?: string;
   /** Optional per-link style overrides (textColor / fontSize). */
-  styles?: { textColor?: string; fontSize?: string };
+  styles?: { textColor?: string; fontSize?: string; hoverBg?: string; hoverText?: string; focusRing?: string };
 };
 
 export type ResolvedNavItem = {
@@ -807,7 +824,8 @@ export type ResolvedNavItem = {
   linkCollectionItemId?: string;
   openInNewTab?: string;
   actionType?: ButtonActionType;
-  styles?: { textColor?: string; fontSize?: string };
+  actionTarget?: string;
+  styles?: { textColor?: string; fontSize?: string; hoverBg?: string; hoverText?: string; focusRing?: string };
 };
 
 /** Atomic edit target inside a composite block (navbar/hero/features/…). */
@@ -864,8 +882,12 @@ function normalizeNavItem(item: unknown, index: number): NavItem | null {
     styles = {
       textColor: typeof s.textColor === "string" ? s.textColor : undefined,
       fontSize: typeof s.fontSize === "string" ? s.fontSize : undefined,
+      hoverBg: typeof s.hoverBg === "string" ? s.hoverBg : undefined,
+      hoverText: typeof s.hoverText === "string" ? s.hoverText : undefined,
+      focusRing: typeof s.focusRing === "string" ? s.focusRing : undefined,
     };
   }
+  const actionTarget = typeof o.actionTarget === "string" ? sanitizeActionTarget(o.actionTarget) : "";
   return {
     id: typeof o.id === "string" && o.id ? o.id : `nav-${index}`,
     label,
@@ -877,6 +899,7 @@ function normalizeNavItem(item: unknown, index: number): NavItem | null {
     linkCollectionItemId: typeof o.linkCollectionItemId === "string" ? o.linkCollectionItemId : "",
     openInNewTab: typeof o.openInNewTab === "string" ? o.openInNewTab : "false",
     actionType: normalizeActionType(o.actionType),
+    ...(actionTarget ? { actionTarget } : {}),
     ...(styles ? { styles } : {}),
   };
 }
@@ -943,6 +966,7 @@ export function resolveNavItems(
     linkCollectionItemId: it.linkCollectionItemId || "",
     openInNewTab: it.openInNewTab || "false",
     actionType: normalizeActionType(it.actionType),
+    ...(it.actionTarget ? { actionTarget: sanitizeActionTarget(it.actionTarget) } : {}),
     ...(it.styles ? { styles: it.styles } : {}),
   }));
 }

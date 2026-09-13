@@ -10,7 +10,7 @@ import {
   type HttpAction,
 } from "@/lib/http-action";
 import { resolveBlockHref } from "@/lib/block-style";
-import { normalizeActionType } from "@/lib/design";
+import { normalizeActionType, sanitizeActionTarget } from "@/lib/design";
 import { useSiteChrome } from "@/components/site-chrome-context";
 
 async function runViaProxy(
@@ -81,6 +81,7 @@ export function ActionableControl({
   style,
   children,
   as: Comp = "a",
+  "data-sf-part": dataSfPart,
 }: {
   siteSlug?: string;
   blockId: string;
@@ -90,6 +91,7 @@ export function ActionableControl({
   style?: CSSProperties;
   children: ReactNode;
   as?: "a" | "button";
+  "data-sf-part"?: string;
 }) {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
@@ -107,10 +109,24 @@ export function ActionableControl({
     if (!chrome) return;
     if (actionType === "toggleTheme") chrome.toggleTheme();
     else if (actionType === "cycleLocale") chrome.cycleLocale();
+    else if (actionType === "scrollTo") {
+      chrome.scrollTo(sanitizeActionTarget(props.actionTarget) || sanitizeActionTarget(props.href));
+    } else if (actionType === "openModal") {
+      chrome.openModal({
+        blockId: sanitizeActionTarget(props.actionTarget) || undefined,
+        title: typeof props.modalTitle === "string" ? props.modalTitle : "",
+        body: typeof props.modalBody === "string" ? props.modalBody : "",
+      });
+    }
   }
 
   async function onClick(e: MouseEvent) {
-    if (actionType === "toggleTheme" || actionType === "cycleLocale") {
+    if (
+      actionType === "toggleTheme" ||
+      actionType === "cycleLocale" ||
+      actionType === "scrollTo" ||
+      actionType === "openModal"
+    ) {
       runChromeAction(e);
       return;
     }
@@ -136,12 +152,17 @@ export function ActionableControl({
     }
   }
 
-  const isChromeAction = actionType === "toggleTheme" || actionType === "cycleLocale";
+  const isChromeAction =
+    actionType === "toggleTheme" ||
+    actionType === "cycleLocale" ||
+    actionType === "scrollTo" ||
+    actionType === "openModal";
   const shared = {
     className: `${className || ""} ${busy ? "opacity-70 pointer-events-none" : ""}`.trim(),
     style,
     onClick: isChromeAction || useHttp ? onClick : undefined,
     "aria-busy": busy || undefined,
+    ...(dataSfPart ? { "data-sf-part": dataSfPart } : {}),
   };
 
   const control =

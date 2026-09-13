@@ -849,3 +849,41 @@ html[data-theme="dark"] .sf-device-screen {
   direction: ltr;
   unicode-bidi: isolate;
 }
+
+
+/* Part hover / focus tokens from atomic inspector */
+[data-sf-part] {
+  transition: color 0.2s var(--sf-ease), background-color 0.2s var(--sf-ease), box-shadow 0.2s var(--sf-ease);
+}
+[data-sf-part]:hover {
+  background-color: var(--sf-part-hover-bg, transparent);
+  color: var(--sf-part-hover-text, inherit);
+}
+[data-sf-part]:focus-visible {
+  outline: 2px solid var(--sf-part-focus-ring, #0f766e);
+  outline-offset: 2px;
+}
+
+
+/* openModal: temporarily reveal a hidden block above the page */
+.sf-modal-reveal {
+  display: block !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
+  position: fixed !important;
+  inset: 12% 8% auto;
+  z-index: 90 !important;
+  max-height: 76vh;
+  overflow: auto;
+  background: var(--sf-site-surface, #fff);
+  border-radius: 1rem;
+  box-shadow: 0 24px 64px rgba(28, 25, 23, 0.28);
+  padding: 1rem;
+}
+@media (min-width: 640px) {
+  .sf-modal-reveal {
+    inset: 10% 20% auto;
+    max-width: 40rem;
+    margin-inline: auto;
+  }
+}

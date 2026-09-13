@@ -58,6 +58,9 @@ export type NavbarPart = BlockPart;
 export type PartStyle = {
   textColor?: string;
   fontSize?: string;
+  hoverBg?: string;
+  hoverText?: string;
+  focusRing?: string;
 };
 
 export type FeatureItem = {
@@ -154,8 +157,13 @@ export function getPartStyles(props: Record<string, unknown>, part: string): Par
   return {
     textColor: typeof o.textColor === "string" ? o.textColor : undefined,
     fontSize: typeof o.fontSize === "string" ? o.fontSize : undefined,
+    hoverBg: typeof o.hoverBg === "string" ? o.hoverBg : undefined,
+    hoverText: typeof o.hoverText === "string" ? o.hoverText : undefined,
+    focusRing: typeof o.focusRing === "string" ? o.focusRing : undefined,
   };
 }
+
+const PART_STYLE_KEYS = ["textColor", "fontSize", "hoverBg", "hoverText", "focusRing"] as const;
 
 export function setPartStyles(
   props: Record<string, unknown>,
@@ -166,16 +174,15 @@ export function setPartStyles(
     props.partStyles && typeof props.partStyles === "object" && !Array.isArray(props.partStyles)
       ? { ...(props.partStyles as Record<string, PartStyle>) }
       : {};
-  const cur = { ...(prev[part] || {}) };
-  if (patch.textColor !== undefined) {
-    if (patch.textColor === "") delete cur.textColor;
-    else cur.textColor = patch.textColor;
+  const cur: PartStyle = { ...(prev[part] || {}) };
+  for (const key of PART_STYLE_KEYS) {
+    if (patch[key] !== undefined) {
+      if (patch[key] === "") delete cur[key];
+      else cur[key] = patch[key];
+    }
   }
-  if (patch.fontSize !== undefined) {
-    if (patch.fontSize === "") delete cur.fontSize;
-    else cur.fontSize = patch.fontSize;
-  }
-  if (!cur.textColor && !cur.fontSize) delete prev[part];
+  const empty = PART_STYLE_KEYS.every((k) => !cur[k]);
+  if (empty) delete prev[part];
   else prev[part] = cur;
   return { ...props, partStyles: prev };
 }

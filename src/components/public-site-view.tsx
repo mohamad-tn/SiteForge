@@ -8,6 +8,7 @@ import { useSearchParams } from "next/navigation";
 import { sanitizeCustomCss } from "@/lib/sanitize-css";
 import { SF_SITE_VIEW_ATTR } from "@/components/platform-lang-provider";
 import { SiteChromeProvider } from "@/components/site-chrome-context";
+import { SiteModalHost } from "@/components/site-modal-host";
 
 function detectSystem(): "light" | "dark" {
   if (typeof window === "undefined") return "light";
@@ -196,6 +197,7 @@ export function PublicSiteView({
             siteSlug={slug}
             focusCollectionSlug={collectionParam}
           />
+          <SiteModalHost uiLang={locale === "ar" ? "ar" : "en"} />
         </div>
       </SiteChromeProvider>
     </div>
