@@ -148,6 +148,32 @@ ${css}
         accept="image/*"
       />
 
+      <div className="rounded-2xl border border-stone-200/80 bg-stone-50/70 p-3 dark:border-stone-800 dark:bg-stone-950/40">
+        <div className="mb-2 text-[10px] font-bold uppercase tracking-[0.12em] text-stone-600 dark:text-stone-400">
+          {t("seoChecklistTitle")}
+        </div>
+        <ul className="space-y-1.5 text-[11px] leading-5 text-stone-700 dark:text-stone-300">
+          {[
+            { ok: Boolean(settings.seoTitle.trim()), label: t("seoCheckTitle") },
+            { ok: Boolean(settings.seoDescription.trim()), label: t("seoCheckDesc") },
+            { ok: Boolean(settings.ogImage.trim()), label: t("seoCheckOg") },
+          ].map((row) => (
+            <li key={row.label} className="flex items-start gap-2">
+              <span
+                className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${
+                  row.ok ? "bg-teal-700 text-white" : "border border-stone-300 text-stone-500 dark:border-stone-600"
+                }`}
+                aria-hidden
+              >
+                {row.ok ? "✓" : ""}
+              </span>
+              <span className={row.ok ? "" : "text-amber-800 dark:text-amber-200"}>{row.label}</span>
+            </li>
+          ))}
+        </ul>
+        <p className="mt-2 text-[10px] leading-4 text-stone-600 dark:text-[var(--muted)]">{t("seoChecklistHint")}</p>
+      </div>
+
       </div>
 
       <div
@@ -205,6 +231,7 @@ ${css}
             </div>
           </div>
         ) : null}
+        <p className="text-[10px] leading-4 text-amber-900/90 dark:text-amber-200/85">{t("domainSslHonest")}</p>
       </div>
 
       <div id="sf-site-secrets" ref={secretsRef} className="scroll-mt-4 rounded-2xl transition-[box-shadow] duration-300">

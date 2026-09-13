@@ -133,6 +133,7 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
   const [editLocale, setEditLocale] = useState(initialContent.defaultLocale || "ar");
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  const [publishConfirmOpen, setPublishConfirmOpen] = useState(false);
   const [message, setMessage] = useState("");
   const [dragId, setDragId] = useState<string | null>(null);
   const [pageTitleDraft, setPageTitleDraft] = useState("");
@@ -680,7 +681,7 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
 
   const commands: CommandItem[] = [
     { id: "save", label: t("savedDraft"), action: () => save(false) },
-    { id: "publish", label: t("publish"), action: () => save(true) },
+    { id: "publish", label: t("publish"), action: () => setPublishConfirmOpen(true) },
     { id: "insert", label: t("cmdInsert"), action: () => setLeftTab("insert") },
     { id: "pages", label: t("cmdPages"), action: () => setLeftTab("pages") },
     { id: "settings", label: t("cmdSettings"), action: () => openSiteSection(null) },
@@ -695,6 +696,48 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
   return (
     <div className="sf-canvas flex h-screen flex-col" dir={uiDir} lang={uiLang} data-sf-chrome="platform">
       <CommandPalette items={commands} />
+      {publishConfirmOpen ? (
+        <div
+          className="fixed inset-0 z-[70] flex items-end justify-center bg-stone-950/45 p-4 sm:items-center"
+          role="presentation"
+          onClick={() => setPublishConfirmOpen(false)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="sf-publish-confirm-title"
+            className="w-full max-w-md rounded-2xl border border-stone-200 bg-white p-5 shadow-xl dark:border-stone-700 dark:bg-stone-950"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="sf-publish-confirm-title" className="text-base font-bold text-stone-900 dark:text-stone-50">
+              {t("publishConfirmTitle")}
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-stone-600 dark:text-stone-300">{t("publishConfirmBody")}</p>
+            <p className="mt-2 font-mono text-[11px] text-stone-500" dir="ltr">
+              /s/{site.slug}
+              {publishedAt
+                ? ` · ${new Date(publishedAt).toLocaleString(uiLang === "ar" ? "ar-SY" : "en-GB", { timeZone: "Asia/Damascus" })}`
+                : ""}
+            </p>
+            <div className="mt-4 flex flex-wrap justify-end gap-2">
+              <Button type="button" variant="outline" className="min-h-11 rounded-full" onClick={() => setPublishConfirmOpen(false)}>
+                {t("publishConfirmCancel")}
+              </Button>
+              <Button
+                type="button"
+                className="min-h-11 rounded-full bg-teal-800 hover:bg-teal-700"
+                disabled={publishing || saving}
+                onClick={() => {
+                  setPublishConfirmOpen(false);
+                  void save(true);
+                }}
+              >
+                {t("publishConfirmOk")}
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
       <header className="sf-editor-topbar" role="banner">
         {/* Zone A — identity */}
         <div className="sf-editor-topbar-start">
@@ -937,10 +980,24 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
               <Save className="h-3.5 w-3.5" aria-hidden />
               <span className="hidden sm:inline">{saving ? t("saving") : t("save")}</span>
             </Button>
+            <div className="hidden flex-col items-end leading-tight sm:flex">
+              <span className="text-[9px] font-bold uppercase tracking-wider text-stone-600 dark:text-[var(--muted)]">
+                {t("lastPublished")}
+              </span>
+              <span className="max-w-[9rem] truncate font-mono text-[10px] text-stone-700 dark:text-stone-300" dir="ltr" title={publishedAt || undefined}>
+                {publishedAt
+                  ? new Date(publishedAt).toLocaleString(uiLang === "ar" ? "ar-SY" : "en-GB", {
+                      timeZone: "Asia/Damascus",
+                      dateStyle: "medium",
+                      timeStyle: "short",
+                    })
+                  : t("neverPublished")}
+              </span>
+            </div>
             <Button
               size="sm"
               className="rounded-full bg-teal-800 shadow-sm hover:bg-teal-700"
-              onClick={() => save(true)}
+              onClick={() => setPublishConfirmOpen(true)}
               disabled={publishing || saving || saveState === "saving"}
               title={saving || saveState === "saving" ? t("publishDisabledSaving") : t("helpPublish")}
               aria-label={publishing ? t("publishing") : t("publish")}

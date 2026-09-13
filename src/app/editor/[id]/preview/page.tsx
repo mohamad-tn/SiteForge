@@ -19,9 +19,9 @@ export default async function EditorDraftPreviewPage({
   const content = ensureContentDefaults(siteContentSchema.parse(site.draftContent));
 
   return (
-    <div className="min-h-screen bg-stone-100 dark:bg-stone-950">
-      <div className="sticky top-0 z-50 flex items-center justify-between gap-3 border-b border-amber-500/30 bg-amber-50/95 px-4 py-2 text-sm backdrop-blur dark:bg-amber-950/90">
-        <div className="min-w-0">
+    <div className="min-h-screen overflow-x-hidden bg-stone-100 dark:bg-stone-950">
+      <div className="sticky top-0 z-50 flex flex-wrap items-center justify-between gap-2 border-b border-amber-500/30 bg-amber-50/95 px-3 py-2 text-sm backdrop-blur sm:px-4 dark:bg-amber-950/90">
+        <div className="min-w-0 max-w-full">
           <span className="rounded-full bg-amber-600 px-2 py-0.5 text-[10px] font-bold text-white">
             مسودة / Draft
           </span>
@@ -29,28 +29,30 @@ export default async function EditorDraftPreviewPage({
             {site.name}
           </span>
           <span className="ms-2 hidden text-[11px] text-amber-900/70 sm:inline dark:text-amber-100/70">
-            معاينة خاصة للمالك — ليست الصفحة العامة
+            Owner draft preview — not the public page · معاينة خاصة
           </span>
         </div>
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
           <Link
             href={`/editor/${site.id}`}
-            className="rounded-full bg-stone-900 px-3 py-1.5 text-xs font-semibold text-white dark:bg-stone-100 dark:text-stone-900"
+            className="inline-flex min-h-11 items-center rounded-full bg-stone-900 px-3 py-1.5 text-xs font-semibold text-white dark:bg-stone-100 dark:text-stone-900"
           >
-            ← المحرر
+            ← Editor / المحرر
           </Link>
           {site.publishedAt ? (
             <Link
               href={`/s/${site.slug}`}
               target="_blank"
-              className="rounded-full border border-amber-700/30 px-3 py-1.5 text-xs font-semibold text-amber-950 dark:text-amber-50"
+              className="inline-flex min-h-11 items-center rounded-full border border-amber-700/30 px-3 py-1.5 text-xs font-semibold text-amber-950 dark:text-amber-50"
             >
-              العرض العام
+              Public / العام
             </Link>
           ) : null}
         </div>
       </div>
-      <PublicSiteView content={content} slug={site.slug} customCss={site.customCss} favicon={site.favicon} />
+      <div className="mx-auto w-full max-w-[100vw] overflow-x-hidden">
+        <PublicSiteView content={content} slug={site.slug} customCss={site.customCss} favicon={site.favicon} />
+      </div>
     </div>
   );
 }
