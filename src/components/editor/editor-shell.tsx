@@ -75,6 +75,7 @@ import { CommandPalette, openCommandPalette, type CommandItem } from "@/componen
 import { AiEditorPanel } from "@/components/editor/ai-panel";
 import { useEditorHistory } from "@/hooks/use-editor-history";
 import { ThemeToggleButton } from "@/components/theme-provider";
+import { AccountMenu } from "@/components/account-menu";
 import { PlatformLangSwitcher, usePlatformLang } from "@/components/platform-lang-provider";
 import { nanoid } from "nanoid";
 import {
@@ -1047,6 +1048,10 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
                   <Upload className="h-4 w-4" aria-hidden /> {publishing ? t("publishing") : t("publish")}
                 </Button>
               </section>
+              <section className="space-y-2 border-t border-[var(--border)] pt-3">
+                <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--muted)]">{t("accountMenu")}</div>
+                <AccountMenu />
+              </section>
             </div>
           </div>
         </div>
@@ -1103,24 +1108,24 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
       <header className="sf-editor-topbar" role="banner" dir={uiDir}>
         {/* Zone A — identity */}
         <div className="sf-editor-topbar-start">
-          <div className="sf-toolbar-group shrink-0 pe-1.5 ps-0.5" data-tone="nav" title={site.name}>
+          <div className="sf-toolbar-group shrink-0 pe-1 ps-0.5" data-tone="nav" title={site.name}>
             <Button
               asChild
               variant="ghost"
-              size="sm"
-              className="rounded-full px-2 text-[var(--foreground)] focus-visible:ring-[3px]"
+              size="icon"
+              className="h-8 w-8 rounded-full text-[var(--foreground)] focus-visible:ring-[3px]"
               title={t("backDashboard")}
               aria-label={t("backDashboard")}
             >
               <Link href="/dashboard">
-                <span className="sm:hidden" aria-hidden>←</span>
-                <span className="hidden sm:inline">{t("backDashboard")}</span>
+                <span aria-hidden>←</span>
               </Link>
             </Button>
-            <div className="sf-toolbar-divider hidden sm:block" aria-hidden />
-            <div className="min-w-0 pe-1.5">
-              <div className="max-w-[6.5rem] truncate text-sm font-semibold tracking-tight sm:max-w-[10rem]">{site.name}</div>
-              <div className="hidden truncate font-mono text-[10px] text-[var(--muted)] sm:block dark:text-[var(--muted)]" dir="ltr">/s/{site.slug}</div>
+            <div className="sf-toolbar-divider" aria-hidden />
+            <div className="min-w-0 max-w-[7.5rem] pe-1.5 sm:max-w-[9rem]" title={site.name}>
+              <div className="truncate font-mono text-[11px] font-semibold text-[var(--foreground)]" dir="ltr">
+                /s/{site.slug}
+              </div>
             </div>
           </div>
         </div>
@@ -1160,7 +1165,7 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
               />
             </label>
             <div className="sf-toolbar-divider" aria-hidden />
-            <label className="flex min-w-0 items-center gap-1">
+            <label className="sf-hide-until-xl flex min-w-0 items-center gap-1">
               <span className="sr-only">{t("contentLang")}</span>
               <Select
                 value={editLocale}
@@ -1226,13 +1231,13 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
 
         {/* Zone C — Site menu (collapsed) + Actions */}
         <div className="sf-editor-topbar-end">
-          <div className="relative hidden sm:block" ref={siteMenuRef}>
+          <div className="relative" ref={siteMenuRef}>
             <div className="sf-toolbar-group" data-tone="site" title={t("siteMenuHint")}>
               <span className="sf-toolbar-label">{t("toolbarSite")}</span>
               <Button
                 variant="ghost"
-                size="sm"
-                className="h-8 rounded-full px-2.5 text-[11px] font-bold"
+                size="icon"
+                className="h-8 w-8 rounded-full"
                 title={t("siteMenuHint")}
                 aria-label={t("siteMenu")}
                 aria-expanded={siteMenuOpen}
@@ -1242,13 +1247,11 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
                 }}
               >
                 <Settings2 className="h-3.5 w-3.5" aria-hidden />
-                <span className="hidden md:inline">{t("siteMenu")}</span>
-                <ChevronDown className="h-3 w-3 opacity-70" aria-hidden />
               </Button>
               <Button
                 variant="ghost"
-                size="sm"
-                className="h-8 rounded-full px-2.5 text-[11px] font-bold"
+                size="icon"
+                className="h-8 w-8 rounded-full"
                 title={t("helpCms")}
                 aria-label={t("openCms")}
                 onClick={() => {
@@ -1257,7 +1260,6 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
                 }}
               >
                 <Library className="h-3.5 w-3.5" aria-hidden />
-                <span className="hidden lg:inline">{t("openCms")}</span>
               </Button>
             </div>
             {siteMenuOpen ? (
@@ -1330,57 +1332,61 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
             <Button
               type="button"
               variant="ghost"
-              size="sm"
-              className="h-8 rounded-full px-2.5 text-[11px] font-bold"
-              title={t("commandPaletteTitle")}
+              size="icon"
+              className="h-8 w-8 rounded-full"
+              title={`${t("commandPaletteTitle")} (⌘K)`}
               aria-label={t("commandPaletteTitle")}
               onClick={() => openCommandPalette()}
             >
               <Command className="h-3.5 w-3.5" aria-hidden />
-              <span className="hidden xl:inline">{t("commands")}</span>
-              <kbd className="sf-latin ms-0.5 hidden rounded bg-[var(--surface)] px-1 py-0.5 font-mono text-[9px] lg:inline" dir="ltr">⌘K</kbd>
             </Button>
             <Button
               type="button"
               variant="ghost"
-              size="sm"
-              className="h-8 rounded-full px-2.5 text-[11px] font-bold text-teal-800 dark:text-teal-300"
+              size="icon"
+              className="h-8 w-8 rounded-full text-teal-800 dark:text-teal-300"
               title={t("aiAssistant")}
               aria-label={t("aiAssistant")}
               onClick={() => setAiOpen(true)}
             >
               <Sparkles className="h-3.5 w-3.5" aria-hidden />
-              <span className="hidden xl:inline">{t("aiAssistant")}</span>
             </Button>
             <span
-              className="sf-save-pill hidden sm:inline-flex"
+              className="sf-save-pill inline-flex"
               data-state={saveState === "saving" || saving ? "saving" : saveState}
-              title={message || undefined}
+              title={
+                message ||
+                (saving || saveState === "saving"
+                  ? t("saveStatusSaving")
+                  : saveState === "dirty"
+                    ? t("saveStatusDirty")
+                    : t("saveStatusSaved"))
+              }
             >
               <span className="sf-save-dot" aria-hidden />
-              {saving || saveState === "saving"
-                ? t("saveStatusSaving")
-                : saveState === "dirty"
-                  ? t("saveStatusDirty")
-                  : t("saveStatusSaved")}
+              <span className="sr-only">
+                {saving || saveState === "saving"
+                  ? t("saveStatusSaving")
+                  : saveState === "dirty"
+                    ? t("saveStatusDirty")
+                    : t("saveStatusSaved")}
+              </span>
             </span>
-            <Button asChild variant="outline" size="sm" className="rounded-full" title={t("previewDraftHint")} aria-label={t("preview")}>
+            <Button asChild variant="outline" size="icon" className="h-8 w-8 rounded-full" title={t("previewDraftHint")} aria-label={t("preview")}>
               <Link href={`/editor/${site.id}/preview`} target="_blank">
                 <Eye className="h-3.5 w-3.5" aria-hidden />
-                <span className="hidden lg:inline">{t("preview")}</span>
               </Link>
             </Button>
             {publishedAt ? (
-              <Button asChild variant="outline" size="sm" className="hidden rounded-full md:inline-flex" title={t("view")} aria-label={t("view")}>
+              <Button asChild variant="outline" size="icon" className="h-8 w-8 rounded-full" title={t("view")} aria-label={t("view")}>
                 <Link href={`/s/${site.slug}`} target="_blank">
                   <Eye className="h-3.5 w-3.5" aria-hidden />
-                  <span className="hidden xl:inline">{t("view")}</span>
                 </Link>
               </Button>
             ) : null}
-            <Button variant="outline" size="sm" className="rounded-full" onClick={() => save(false)} disabled={saving || publishing} title={t("helpSave")} aria-label={saving ? t("saving") : t("save")}>
+            <Button variant="outline" size="sm" className="h-8 rounded-full px-2.5" onClick={() => save(false)} disabled={saving || publishing} title={t("helpSave")} aria-label={saving ? t("saving") : t("save")}>
               <Save className="h-3.5 w-3.5" aria-hidden />
-              <span className="hidden sm:inline">{saving ? t("saving") : t("save")}</span>
+              <span className="hidden 2xl:inline">{saving ? t("saving") : t("save")}</span>
             </Button>
             <button
               type="button"
@@ -1396,14 +1402,14 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
             </button>
             <Button
               size="sm"
-              className="rounded-full bg-teal-800 shadow-sm hover:bg-teal-700"
+              className="h-8 rounded-full bg-teal-800 px-2.5 shadow-sm hover:bg-teal-700"
               onClick={() => setPublishConfirmOpen(true)}
               disabled={publishing || saving || saveState === "saving"}
               title={saving || saveState === "saving" ? t("publishDisabledSaving") : t("helpPublish")}
               aria-label={publishing ? t("publishing") : t("publish")}
             >
               <Upload className="h-3.5 w-3.5" aria-hidden />
-              <span className="hidden sm:inline">{publishing ? t("publishing") : t("publish")}</span>
+              <span className="hidden xl:inline">{publishing ? t("publishing") : t("publish")}</span>
             </Button>
 
             <div className="relative" ref={moreRef}>
@@ -1423,9 +1429,9 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
               </Button>
               {moreOpen ? (
                 <div className="absolute end-0 top-full z-50 mt-1 w-64 max-w-[min(16rem,calc(100vw-1.25rem))] rounded-2xl border border-[var(--border)] bg-[var(--card)] p-2 text-[var(--foreground)] shadow-[var(--shadow-md)]" data-sf-chrome="platform">
-                  <div className="px-2.5 py-1.5 text-[9px] font-bold uppercase tracking-[0.12em] text-[var(--muted)] sm:hidden dark:text-[var(--muted)]">{t("toolbarContent")}</div>
-                  <div className="space-y-0.5 sm:hidden">
-                    <div className="px-2 py-1">
+                  <div className="px-2.5 py-1.5 text-[9px] font-bold uppercase tracking-[0.12em] text-[var(--muted)] xl:hidden dark:text-[var(--muted)]">{t("toolbarContent")}</div>
+                  <div className="space-y-0.5 xl:hidden">
+                    <div className="px-2 py-1 sm:hidden">
                       <Select
                         value={pageId}
                         onValueChange={(id) => { setPageId(id); setMoreOpen(false); }}
@@ -1447,7 +1453,7 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
                       />
                     </div>
                   </div>
-                  <div className="my-1 h-px bg-[var(--border)] sm:hidden" />
+                  <div className="my-1 h-px bg-[var(--border)] xl:hidden" />
                   <div className="px-2.5 py-1.5 text-[9px] font-bold uppercase tracking-[0.12em] text-[var(--muted)] sm:hidden dark:text-[var(--muted)]">{t("toolbarSite")}</div>
                   <button type="button" className="flex min-h-[44px] w-full items-center gap-2 rounded-xl px-3 py-2.5 text-start text-xs font-semibold hover:bg-[var(--surface)] sm:hidden" onClick={() => { openSiteSection(null); setMoreOpen(false); }}>
                     <Settings2 className="h-3.5 w-3.5" aria-hidden /> {t("openSiteSettings")}
@@ -1503,6 +1509,7 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
                 </div>
               ) : null}
             </div>
+            <AccountMenu className="ms-0.5" />
           </div>
 
           <div className="flex shrink-0 items-center gap-1 xl:hidden">

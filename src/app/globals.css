@@ -176,9 +176,78 @@ html[data-theme="dark"] .sf-auth-bg::before {
   opacity: 0.28;
   mix-blend-mode: overlay;
 }
-.sf-auth-bg > * {
+/* Do NOT force position:relative on all children — that overrides
+   absolute/fixed lang+theme controls and turns them into flex siblings. */
+.sf-auth-mesh {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+.sf-auth-controls {
+  position: fixed;
+  top: 1rem;
+  inset-inline-end: 1rem;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+@media (min-width: 640px) {
+  .sf-auth-controls {
+    top: 1.25rem;
+    inset-inline-end: 1.25rem;
+  }
+}
+.sf-auth-layout {
   position: relative;
   z-index: 1;
+  display: grid;
+  width: min(100% - 2rem, 72rem);
+  margin-inline: auto;
+  min-height: min(100vh, 52rem);
+  align-items: center;
+  gap: 1.5rem;
+  padding-block: 4.5rem 2rem;
+}
+.sf-auth-brand {
+  display: none;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1rem;
+  padding: 1.5rem 1.25rem;
+  min-height: 22rem;
+}
+.sf-auth-brand-quote {
+  max-width: 28rem;
+  font-size: clamp(1.35rem, 1.1rem + 1.1vw, 1.85rem);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.35;
+  color: var(--foreground);
+}
+.sf-auth-brand-meta {
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  color: var(--muted);
+  max-width: 26rem;
+}
+.sf-auth-card-wrap {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+}
+@media (min-width: 1024px) {
+  .sf-auth-layout {
+    grid-template-columns: 1fr minmax(22rem, 26rem);
+    gap: 2.5rem;
+    padding-block: 2.5rem;
+    align-items: stretch;
+  }
+  .sf-auth-brand { display: flex; }
+  .sf-auth-card-wrap {
+    align-items: center;
+  }
 }
 
 .sf-glass-card {
@@ -215,8 +284,19 @@ html[data-theme="dark"] .sf-glass-card {
   flex-direction: column;
   gap: 0.2rem;
   padding: 0.85rem 0.65rem;
-  border-inline-end: 1px solid color-mix(in oklab, var(--border) 85%, transparent);
-  background: color-mix(in oklab, var(--surface) 55%, var(--card));
+  margin: 0.75rem 0 0.75rem var(--sf-shell-gutter);
+  border-radius: var(--radius-xl);
+  border: 1px solid color-mix(in oklab, var(--border) 88%, transparent);
+  background: var(--card);
+  box-shadow: var(--shadow-xs);
+  align-self: flex-start;
+  position: sticky;
+  top: 4.25rem;
+  max-height: calc(100vh - 5rem);
+  overflow-y: auto;
+}
+[dir="rtl"] .sf-admin-nav {
+  margin: 0.75rem var(--sf-shell-gutter) 0.75rem 0;
 }
 @media (min-width: 900px) {
   .sf-admin-nav { display: flex; }
@@ -281,8 +361,14 @@ html[data-theme="dark"] .sf-glass-card {
   border-bottom: 1px solid color-mix(in oklab, var(--border) 70%, transparent);
   vertical-align: middle;
 }
+.sf-dense-table tbody tr[data-zebra="true"] td {
+  background: color-mix(in oklab, var(--foreground) 1.6%, transparent);
+}
 .sf-dense-table tr:hover td {
-  background: color-mix(in oklab, var(--foreground) 2.5%, transparent);
+  background: color-mix(in oklab, var(--foreground) 3.5%, transparent);
+}
+.sf-data-table-grid {
+  min-width: 32rem;
 }
 
 .sf-soft-card {
@@ -445,6 +531,12 @@ html[data-theme="dark"] .sf-segment button[data-active="true"] {
 
 .sf-field::placeholder {
   color: var(--placeholder);
+  font-family: var(--font-sans, var(--font-cairo), system-ui, sans-serif);
+}
+/* Keep typed mono content opt-in; placeholders always inherit chrome sans */
+.sf-field.font-mono::placeholder,
+input.font-mono::placeholder {
+  font-family: var(--font-sans, var(--font-cairo), system-ui, sans-serif);
 }
 
 .sf-field:disabled {
@@ -957,9 +1049,10 @@ html[data-theme="dark"] .sf-device-screen {
 .sf-editor-topbar-end {
   margin-inline-start: auto;
   z-index: 2;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   justify-content: flex-end;
-  max-width: min(100%, 42rem);
+  max-width: none;
+  min-width: 0;
 }
 .sf-editor-topbar-mid {
   display: flex;
@@ -975,7 +1068,7 @@ html[data-theme="dark"] .sf-device-screen {
 .sf-editor-topbar-mid > .sf-toolbar-group {
   max-width: 100%;
   position: static;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
 }
 .sf-editor-topbar .sf-toolbar-group {
   position: static;
@@ -1039,8 +1132,8 @@ html[data-theme="dark"] .sf-device-screen {
   border-inline-end: 1px solid var(--border);
   box-shadow: 18px 0 50px -24px rgba(28, 25, 23, 0.4);
 }
-/* Below Tailwind lg (1024): identity + hamburger only — no squeezed mid/end */
-@media (max-width: 1023px) {
+/* Below 64rem: identity + hamburger only — no squeezed mid/end */
+@media (max-width: 63.99rem) {
   .sf-editor-topbar {
     flex-wrap: nowrap;
   }
@@ -1056,11 +1149,26 @@ html[data-theme="dark"] .sf-device-screen {
     min-width: 0;
   }
 }
-@media (min-width: 1024px) {
+@media (min-width: 64rem) {
+  .sf-editor-topbar {
+    flex-wrap: nowrap !important;
+  }
+  .sf-editor-topbar-start,
+  .sf-editor-topbar-mid,
+  .sf-editor-topbar-end {
+    flex-wrap: nowrap;
+  }
+  .sf-editor-topbar .sf-toolbar-group {
+    flex-wrap: nowrap;
+  }
   .sf-editor-topbar-burger {
     display: none !important;
   }
   .sf-editor-topbar-mid .sf-hide-until-xl {
+    display: none !important;
+  }
+  /* Collapse zone labels on laptop to keep a single row */
+  .sf-editor-topbar .sf-toolbar-label {
     display: none !important;
   }
 }

@@ -37,64 +37,78 @@ export default function LoginPage() {
   }
 
   return (
-    <AuthAtmosphere className="px-4" dir={dir} lang={lang}>
-      <div className="absolute top-4 end-4 flex items-center gap-2 sm:top-5 sm:end-5">
+    <AuthAtmosphere dir={dir} lang={lang}>
+      <div className="sf-auth-controls">
         <PlatformLangSwitcher size="compact" />
         <ThemeToggleButton />
       </div>
-      <GlassCard className="w-full max-w-md p-7 sm:p-8">
-        <div className="mb-6 flex items-center gap-2.5">
-          <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-teal-800 text-xs font-bold text-white dark:bg-teal-500 dark:text-teal-950">
-            SF
+      <div className="sf-auth-layout">
+        <aside className="sf-auth-brand" aria-hidden={false}>
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-teal-800 text-xs font-bold text-white dark:bg-teal-500 dark:text-teal-950">
+              SF
+            </div>
+            <div className="text-sm font-semibold tracking-tight text-teal-800 dark:text-teal-300">SiteForge</div>
           </div>
-          <div className="text-sm font-semibold tracking-tight text-teal-800 dark:text-teal-300">SiteForge</div>
+          <p className="sf-auth-brand-quote">{t("authBrandQuote")}</p>
+          <p className="sf-auth-brand-meta">{t("authBrandMeta")}</p>
+        </aside>
+        <div className="sf-auth-card-wrap">
+          <GlassCard className="w-full max-w-md p-7 sm:p-8">
+            <div className="mb-6 flex items-center gap-2.5 lg:hidden">
+              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-teal-800 text-xs font-bold text-white dark:bg-teal-500 dark:text-teal-950">
+                SF
+              </div>
+              <div className="text-sm font-semibold tracking-tight text-teal-800 dark:text-teal-300">SiteForge</div>
+            </div>
+            <div className="mb-6">
+              <h1 className="text-xl font-bold tracking-tight sm:text-2xl">{t("login")}</h1>
+              <p className="mt-1.5 text-sm leading-6 text-[var(--muted)]">{t("welcomeBack")}</p>
+            </div>
+            <form onSubmit={onSubmit} className="space-y-3.5">
+              <div className="space-y-1.5">
+                <Label htmlFor="email">{t("email")}</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  dir="ltr"
+                  autoComplete="email"
+                  placeholder={t("placeholderEmail")}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="password">{t("password")}</Label>
+                <Input
+                  id="password"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  dir="ltr"
+                  autoComplete="current-password"
+                  placeholder={t("placeholderPassword")}
+                />
+              </div>
+              {error ? <p className="text-sm text-rose-600 dark:text-rose-400">{error}</p> : null}
+              <Button type="submit" className="w-full rounded-full" disabled={loading}>
+                {loading ? t("signingIn") : t("enter")}
+              </Button>
+            </form>
+            <p className="mt-5 text-center text-sm text-[var(--muted)]">
+              {t("noAccount")}{" "}
+              <Link href="/signup" className="font-medium text-teal-800 hover:underline dark:text-teal-300">
+                {t("createAccount")}
+              </Link>
+            </p>
+            <p className="mt-2 text-center text-xs text-[var(--muted)]" dir="ltr">
+              demo@siteforge.local / demo1234
+            </p>
+          </GlassCard>
         </div>
-        <div className="mb-6">
-          <h1 className="text-xl font-bold tracking-tight sm:text-2xl">{t("login")}</h1>
-          <p className="mt-1.5 text-sm leading-6 text-[var(--muted)]">{t("welcomeBack")}</p>
-        </div>
-        <form onSubmit={onSubmit} className="space-y-3.5">
-          <div className="space-y-1.5">
-            <Label htmlFor="email">{t("email")}</Label>
-            <Input
-              id="email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              dir="ltr"
-              autoComplete="email"
-              placeholder={t("placeholderEmail")}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="password">{t("password")}</Label>
-            <Input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              dir="ltr"
-              autoComplete="current-password"
-              placeholder={t("placeholderPassword")}
-            />
-          </div>
-          {error ? <p className="text-sm text-rose-600 dark:text-rose-400">{error}</p> : null}
-          <Button type="submit" className="w-full rounded-full" disabled={loading}>
-            {loading ? t("signingIn") : t("enter")}
-          </Button>
-        </form>
-        <p className="mt-5 text-center text-sm text-[var(--muted)]">
-          {t("noAccount")}{" "}
-          <Link href="/signup" className="font-medium text-teal-800 hover:underline dark:text-teal-300">
-            {t("createAccount")}
-          </Link>
-        </p>
-        <p className="mt-2 text-center text-xs text-[var(--muted)]" dir="ltr">
-          demo@siteforge.local / demo1234
-        </p>
-      </GlassCard>
+      </div>
     </AuthAtmosphere>
   );
 }

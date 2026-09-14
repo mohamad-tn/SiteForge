@@ -6,7 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
+import { DataTable } from "@/components/ui/data-table";
+import { RemoteCombobox, type ComboboxOption } from "@/components/ui/combobox";
 import { usePlatformLang } from "@/components/platform-lang-provider";
+import { ADMIN_PAGE_SIZE } from "@/lib/admin-format";
 
 type Settings = {
   provider: string;
@@ -28,9 +31,12 @@ type QuotaRow = {
 type CatalogModel = { id: string; label: string; vision?: boolean };
 
 const OTHER = "__other__";
+const DEFAULT_MODEL = "gpt-4o-mini";
+const DEFAULT_LIMIT = 20;
+const DEFAULT_TOKENS = 4096;
 
 export function AdminAiPanel() {
-  const { t, lang } = usePlatformLang();
+  const { t, lang, dir } = usePlatformLang();
   const [settings, setSettings] = useState<Settings | null>(null);
   const [quotas, setQuotas] = useState<QuotaRow[]>([]);
   const [apiKey, setApiKey] = useState("");
@@ -38,11 +44,21 @@ export function AdminAiPanel() {
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
   const [quotaUserId, setQuotaUserId] = useState("");
+  const [quotaUserLabel, setQuotaUserLabel] = useState("");
   const [quotaLimit, setQuotaLimit] = useState("20");
   const [models, setModels] = useState<CatalogModel[]>([]);
   const [modelsSource, setModelsSource] = useState<"live" | "fallback" | null>(null);
   const [modelsLoading, setModelsLoading] = useState(false);
   const [customModel, setCustomModel] = useState(false);
+  const [clearOpen, setClearOpen] = useState(false);
+  const [clearWord, setClearWord] = useState("");
+  const [clearing, setClearing] = useState(false);
+
+  const confirmExpected = lang === "ar" ? "مسح" : "clear";
+  const confirmOk =
+    lang === "ar"
+      ? clearWord.trim() === confirmExpected
+      : clearWord.trim().toLowerCase() === confirmExpected;
 
   async function load() {
     const res = await fetch("/api/admin/ai");
@@ -87,7 +103,24 @@ export function AdminAiPanel() {
   useEffect(() => {
     if (!settings?.provider) return;
     void loadModels(settings.provider, settings.model);
-  }, [settings?.provider, loadModels]); // eslint-disable-line react-hooks/exhaustive-deps -- reload on provider change only
+  }, [settings?.provider, loadModels]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const fetchUsers = useCallback(async ({ q, page }: { q: string; page: number }) => {
+    const res = await fetch(
+      `/api/admin/users?q=${encodeURIComponent(q)}&page=${page}&pageSize=${ADMIN_PAGE_SIZE}`
+    );
+    if (!res.ok) return { options: [] as ComboboxOption[], hasMore: false };
+    const data = await res.json();
+    const options: ComboboxOption[] = (data.users || []).map(
+      (u: { id: string; email: string; name?: string | null }) => ({
+        value: u.id,
+        label: u.email,
+        description: u.name || undefined,
+      })
+    );
+    const pageCount = data.pageCount || 1;
+    return { options, hasMore: page < pageCount };
+  }, []);
 
   async function save() {
     if (!settings || saving) return;
@@ -120,6 +153,40 @@ export function AdminAiPanel() {
       void loadModels(data.settings.provider, data.settings.model);
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function clearConfig() {
+    if (!confirmOk || clearing) return;
+    setClearing(true);
+    setMsg("");
+    try {
+      const res = await fetch("/api/admin/ai", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          apiKey: null,
+          enabled: false,
+          model: DEFAULT_MODEL,
+          defaultDailyLimit: DEFAULT_LIMIT,
+          maxTokens: DEFAULT_TOKENS,
+          provider: "openai",
+        }),
+      });
+      if (!res.ok) {
+        setMsg(t("aiError"));
+        return;
+      }
+      const data = await res.json();
+      setSettings(data.settings);
+      setApiKey("");
+      setClearKey(false);
+      setClearOpen(false);
+      setClearWord("");
+      setMsg(t("aiClearConfigOk"));
+      void loadModels(data.settings.provider, data.settings.model);
+    } finally {
+      setClearing(false);
     }
   }
 
@@ -209,7 +276,7 @@ export function AdminAiPanel() {
               <Input
                 value={settings.model}
                 onChange={(e) => setSettings({ ...settings, model: e.target.value })}
-                className="mt-1.5 h-10 rounded-2xl font-mono text-xs"
+                className="sf-field mt-1.5 h-10 rounded-2xl text-xs"
                 dir="ltr"
                 placeholder="model-id"
               />
@@ -225,7 +292,7 @@ export function AdminAiPanel() {
                 setClearKey(false);
               }}
               placeholder={settings.hasApiKey ? t("aiApiKeySet") : "sk-…"}
-              className="h-10 rounded-2xl font-mono text-xs"
+              className="sf-field h-10 rounded-2xl text-xs"
               dir="ltr"
               autoComplete="off"
             />
@@ -246,7 +313,7 @@ export function AdminAiPanel() {
               onChange={(e) =>
                 setSettings({ ...settings, defaultDailyLimit: Number(e.target.value) || 0 })
               }
-              className="h-10 rounded-2xl"
+              className="sf-field h-10 rounded-2xl"
               dir="ltr"
             />
             <p className="text-[11px] leading-5 text-[var(--muted)]">{t("aiDefaultQuotaHelp")}</p>
@@ -259,7 +326,7 @@ export function AdminAiPanel() {
               max={128000}
               value={settings.maxTokens}
               onChange={(e) => setSettings({ ...settings, maxTokens: Number(e.target.value) || 4096 })}
-              className="h-10 rounded-2xl"
+              className="sf-field h-10 rounded-2xl"
               dir="ltr"
             />
             <p className="text-[11px] leading-5 text-[var(--muted)]">{t("aiMaxTokensHelp")}</p>
@@ -277,6 +344,17 @@ export function AdminAiPanel() {
           <Button type="button" className="rounded-full bg-teal-800 hover:bg-teal-700" disabled={saving} onClick={() => void save()}>
             {saving ? t("saving") : t("aiSaveSettings")}
           </Button>
+          <Button
+            type="button"
+            variant="outline"
+            className="rounded-full text-rose-700"
+            onClick={() => {
+              setClearOpen(true);
+              setClearWord("");
+            }}
+          >
+            {t("aiClearConfig")}
+          </Button>
           {msg ? <span className="text-xs text-[var(--muted)]">{msg}</span> : null}
         </div>
       </SoftCard>
@@ -284,40 +362,102 @@ export function AdminAiPanel() {
       <SoftCard className="space-y-3 p-5">
         <h3 className="font-semibold">{t("aiPerUserQuota")}</h3>
         <div className="grid gap-2 sm:grid-cols-[1fr_6rem_auto]">
-          <Input
-            placeholder="userId"
+          <RemoteCombobox
             value={quotaUserId}
-            onChange={(e) => setQuotaUserId(e.target.value)}
-            className="h-10 rounded-2xl font-mono text-xs"
-            dir="ltr"
+            selectedLabel={quotaUserLabel}
+            onChange={(id, opt) => {
+              setQuotaUserId(id);
+              setQuotaUserLabel(opt?.label || "");
+            }}
+            fetchPage={fetchUsers}
+            placeholder={t("aiPickUser")}
+            searchPlaceholder={t("adminSearchUsers")}
+            emptyLabel={t("emptyTable")}
+            dir={dir}
           />
           <Input
             type="number"
             value={quotaLimit}
             onChange={(e) => setQuotaLimit(e.target.value)}
-            className="h-10 rounded-2xl"
+            className="sf-field h-10 rounded-2xl"
             dir="ltr"
+            aria-label={t("aiDefaultQuota")}
           />
           <Button type="button" variant="outline" className="rounded-full" onClick={() => void saveUserQuota()}>
             {t("save")}
           </Button>
         </div>
-        <ul className="divide-y divide-[var(--border)] text-sm">
-          {quotas.map((q) => (
-            <li key={q.userId} className="flex flex-wrap items-center justify-between gap-2 py-2">
-              <span className="min-w-0">
-                <span className="font-medium break-all">{q.email}</span>
-                <span className="ms-2 font-mono text-[10px] text-[var(--muted)]" dir="ltr">
-                  {q.userId}
+        <DataTable
+          dir={dir}
+          rows={quotas}
+          rowKey={(q) => q.userId}
+          empty={t("emptyTable")}
+          columns={[
+            {
+              id: "user",
+              header: t("adminColUser"),
+              cell: (q) => (
+                <span className="min-w-0">
+                  <span className="font-medium break-all">{q.email}</span>
+                  {q.name ? <span className="ms-2 text-[11px] text-[var(--muted)]">{q.name}</span> : null}
                 </span>
-              </span>
-              <span className="text-xs text-[var(--muted)]">
-                {q.usedToday}/{q.dailyLimit ?? "default"}
-              </span>
-            </li>
-          ))}
-        </ul>
+              ),
+            },
+            {
+              id: "usage",
+              header: t("aiQuotaUsage"),
+              className: "text-xs text-[var(--muted)]",
+              cell: (q) => `${q.usedToday}/${q.dailyLimit ?? t("default")}`,
+            },
+          ]}
+        />
       </SoftCard>
+
+      {clearOpen ? (
+        <div
+          className="fixed inset-0 z-[80] flex items-center justify-center bg-black/45 p-4"
+          role="dialog"
+          aria-modal="true"
+          onClick={() => {
+            if (!clearing) setClearOpen(false);
+          }}
+        >
+          <div
+            className="w-full max-w-md rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--card)] p-5 shadow-[var(--shadow-sm)]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-lg font-bold">{t("aiClearConfigTitle")}</h3>
+            <p className="mt-2 text-sm leading-6 text-[var(--muted)]">{t("aiClearConfigBody")}</p>
+            <label className="mt-4 block text-xs" htmlFor="sf-ai-clear-confirm">
+              {t("deleteConfirmPrompt")}{" "}
+              <span className="font-mono font-bold" dir="ltr">
+                {confirmExpected}
+              </span>
+            </label>
+            <Input
+              id="sf-ai-clear-confirm"
+              className="sf-field mt-1.5"
+              value={clearWord}
+              onChange={(e) => setClearWord(e.target.value)}
+              disabled={clearing}
+              autoFocus
+            />
+            <div className="mt-5 flex flex-wrap justify-end gap-2">
+              <Button type="button" variant="outline" className="rounded-full" disabled={clearing} onClick={() => setClearOpen(false)}>
+                {t("close")}
+              </Button>
+              <Button
+                type="button"
+                className="rounded-full bg-rose-700 text-white hover:bg-rose-800 disabled:opacity-40"
+                disabled={!confirmOk || clearing}
+                onClick={() => void clearConfig()}
+              >
+                {clearing ? t("deleting") : t("aiClearConfig")}
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { SoftCard, Toolbar, StatCard, AdminShell } from "@/components/ui/surface";
+import { SoftCard, StatCard, AdminShell } from "@/components/ui/surface";
 import { SegmentedControl } from "@/components/ui/segmented";
 import { ThemeToggleButton } from "@/components/theme-provider";
 import { PlatformLangSwitcher, usePlatformLang } from "@/components/platform-lang-provider";
@@ -16,9 +17,22 @@ import {
   Link2,
   LayoutTemplate,
   Sparkles,
+  Activity,
+  ExternalLink,
 } from "lucide-react";
 import { SearchField } from "@/components/ui/search-field";
+import { DataTable } from "@/components/ui/data-table";
+import { Select } from "@/components/ui/select";
 import { AdminAiPanel } from "@/components/admin/admin-ai-panel";
+import { AccountMenu } from "@/components/account-menu";
+import {
+  ADMIN_PAGE_SIZE,
+  eventTypeLabel,
+  formatRelativeTime,
+  knownEventTypes,
+  paginateSlice,
+  templateDisplayTitle,
+} from "@/lib/admin-format";
 
 type Overview = {
   metrics: { users: number; sites: number; published: number; views7d: number };
@@ -39,18 +53,43 @@ type Overview = {
   }>;
 };
 
-type AdminTab = "overview" | "users" | "sites" | "domains" | "templates" | "ai";
+type AdminTab = "overview" | "users" | "sites" | "domains" | "templates" | "ai" | "events";
+
+type EventRow = {
+  id: string;
+  type: string;
+  path: string | null;
+  createdAt: string;
+  site: { id?: string; name: string; slug: string };
+};
 
 export default function AdminPage() {
   const { lang, dir, t } = usePlatformLang();
+  const { data: session } = useSession();
   const [overview, setOverview] = useState<Overview | null>(null);
   const [usersQ, setUsersQ] = useState("");
   const [sitesQ, setSitesQ] = useState("");
+  const [domainsQ, setDomainsQ] = useState("");
+  const [templatesQ, setTemplatesQ] = useState("");
+  const [eventsQ, setEventsQ] = useState("");
+  const [eventType, setEventType] = useState("all");
   const [users, setUsers] = useState<Array<Record<string, unknown>>>([]);
+  const [usersTotal, setUsersTotal] = useState(0);
+  const [usersPage, setUsersPage] = useState(1);
+  const [usersPageCount, setUsersPageCount] = useState(1);
   const [sites, setSites] = useState<Array<Record<string, unknown>>>([]);
+  const [sitesTotal, setSitesTotal] = useState(0);
+  const [sitesPage, setSitesPage] = useState(1);
+  const [sitesPageCount, setSitesPageCount] = useState(1);
   const [tab, setTab] = useState<AdminTab>("overview");
   const [domains, setDomains] = useState<Array<Record<string, unknown>>>([]);
   const [templates, setTemplates] = useState<Array<Record<string, unknown>>>([]);
+  const [events, setEvents] = useState<EventRow[]>([]);
+  const [eventsTotal, setEventsTotal] = useState(0);
+  const [eventsPage, setEventsPage] = useState(1);
+  const [eventsPageCount, setEventsPageCount] = useState(1);
+  const [domainsPage, setDomainsPage] = useState(1);
+  const [templatesPage, setTemplatesPage] = useState(1);
   const [deleteSiteId, setDeleteSiteId] = useState<string | null>(null);
   const [deleteSiteLabel, setDeleteSiteLabel] = useState("");
   const [deleteTplId, setDeleteTplId] = useState<string | null>(null);
@@ -72,6 +111,7 @@ export default function AdminPage() {
         { id: "sites" as const, label: t("tabSites"), icon: <Globe2 className="h-3.5 w-3.5 shrink-0" /> },
         { id: "domains" as const, label: t("tabDomains"), icon: <Link2 className="h-3.5 w-3.5 shrink-0" /> },
         { id: "templates" as const, label: t("tabTemplates"), icon: <LayoutTemplate className="h-3.5 w-3.5 shrink-0" /> },
+        { id: "events" as const, label: t("tabEvents"), icon: <Activity className="h-3.5 w-3.5 shrink-0" /> },
         { id: "ai" as const, label: t("tabAi"), icon: <Sparkles className="h-3.5 w-3.5 shrink-0" /> },
       ] as const,
     [t]
@@ -87,22 +127,42 @@ export default function AdminPage() {
   useEffect(() => {
     if (tab !== "users") return;
     const timer = setTimeout(() => {
-      fetch(`/api/admin/users?q=${encodeURIComponent(usersQ)}&pageSize=30`)
+      fetch(
+        `/api/admin/users?q=${encodeURIComponent(usersQ)}&page=${usersPage}&pageSize=${ADMIN_PAGE_SIZE}`
+      )
         .then((r) => r.json())
-        .then((d) => setUsers(d.users || []));
+        .then((d) => {
+          setUsers(d.users || []);
+          setUsersTotal(d.total || 0);
+          setUsersPageCount(d.pageCount || 1);
+        });
     }, 200);
     return () => clearTimeout(timer);
-  }, [tab, usersQ]);
+  }, [tab, usersQ, usersPage]);
+
+  useEffect(() => {
+    setUsersPage(1);
+  }, [usersQ]);
 
   useEffect(() => {
     if (tab !== "sites") return;
     const timer = setTimeout(() => {
-      fetch(`/api/admin/sites?q=${encodeURIComponent(sitesQ)}&pageSize=30`)
+      fetch(
+        `/api/admin/sites?q=${encodeURIComponent(sitesQ)}&page=${sitesPage}&pageSize=${ADMIN_PAGE_SIZE}`
+      )
         .then((r) => r.json())
-        .then((d) => setSites(d.sites || []));
+        .then((d) => {
+          setSites(d.sites || []);
+          setSitesTotal(d.total || 0);
+          setSitesPageCount(d.pageCount || 1);
+        });
     }, 200);
     return () => clearTimeout(timer);
-  }, [tab, sitesQ]);
+  }, [tab, sitesQ, sitesPage]);
+
+  useEffect(() => {
+    setSitesPage(1);
+  }, [sitesQ]);
 
   useEffect(() => {
     if (tab !== "domains") return;
@@ -113,12 +173,46 @@ export default function AdminPage() {
   }, [tab]);
 
   useEffect(() => {
+    setDomainsPage(1);
+  }, [domainsQ]);
+
+  useEffect(() => {
     if (tab !== "templates") return;
-    fetch("/api/templates")
+    fetch(`/api/templates?q=${encodeURIComponent(templatesQ)}`)
       .then((r) => r.json())
       .then((d) => setTemplates(d.templates || []))
       .catch(() => setTemplates([]));
-  }, [tab]);
+  }, [tab, templatesQ]);
+
+  useEffect(() => {
+    setTemplatesPage(1);
+  }, [templatesQ]);
+
+  useEffect(() => {
+    if (tab !== "events" && tab !== "overview") return;
+    if (tab !== "events") return;
+    const timer = setTimeout(() => {
+      const typeParam = eventType && eventType !== "all" ? `&type=${encodeURIComponent(eventType)}` : "";
+      fetch(
+        `/api/admin/events?q=${encodeURIComponent(eventsQ)}&page=${eventsPage}&pageSize=${ADMIN_PAGE_SIZE}${typeParam}`
+      )
+        .then((r) => r.json())
+        .then((d) => {
+          setEvents(d.events || []);
+          setEventsTotal(d.total || 0);
+          setEventsPageCount(d.pageCount || 1);
+        })
+        .catch(() => {
+          setEvents([]);
+          setEventsTotal(0);
+        });
+    }, 200);
+    return () => clearTimeout(timer);
+  }, [tab, eventsQ, eventsPage, eventType]);
+
+  useEffect(() => {
+    setEventsPage(1);
+  }, [eventsQ, eventType]);
 
   async function runDeleteSite() {
     if (!deleteSiteId || !confirmOk || deleting) return;
@@ -150,7 +244,59 @@ export default function AdminPage() {
     }
   }
 
-  const locale = lang === "ar" ? "ar" : "en";
+  const filteredDomains = useMemo(() => {
+    const needle = domainsQ.trim().toLowerCase();
+    if (!needle) return domains;
+    return domains.filter((d) => {
+      const hay = [
+        String(d.customDomain || ""),
+        String((d as { name?: string }).name || ""),
+        String(d.slug || ""),
+        String((d.owner as { email?: string } | undefined)?.email || ""),
+      ]
+        .join(" ")
+        .toLowerCase();
+      return hay.includes(needle);
+    });
+  }, [domains, domainsQ]);
+
+  const domainsPaged = useMemo(
+    () => paginateSlice(filteredDomains, domainsPage, ADMIN_PAGE_SIZE),
+    [filteredDomains, domainsPage]
+  );
+
+  const templatesPaged = useMemo(
+    () => paginateSlice(templates, templatesPage, ADMIN_PAGE_SIZE),
+    [templates, templatesPage]
+  );
+
+  const eventTypeOptions = useMemo(
+    () => [
+      { value: "all", label: t("eventTypeAll") },
+      ...knownEventTypes().map((k) => ({ value: k, label: eventTypeLabel(k, lang) })),
+    ],
+    [t, lang]
+  );
+
+  const renderEventRow = useCallback(
+    (e: { id: string; type: string; path: string | null; createdAt: string; site: { name: string; slug: string } }) => (
+      <li key={e.id} className="flex items-start justify-between gap-3 px-4 py-2.5 text-sm">
+        <span className="min-w-0">
+          <span className="font-medium">{e.site.name}</span>
+          <span className="text-[var(--muted)]"> · {eventTypeLabel(e.type, lang)}</span>
+          {e.path ? (
+            <span className="ms-1 font-mono text-[11px] text-[var(--muted)]" dir="ltr">
+              {e.path}
+            </span>
+          ) : null}
+        </span>
+        <span className="shrink-0 whitespace-nowrap text-[11px] text-[var(--muted)]" title={new Date(e.createdAt).toISOString()}>
+          {formatRelativeTime(e.createdAt, lang)}
+        </span>
+      </li>
+    ),
+    [lang]
+  );
 
   return (
     <>
@@ -169,6 +315,7 @@ export default function AdminPage() {
             <Button asChild variant="outline" size="sm" className="rounded-full">
               <Link href="/dashboard?tenant=1">{t("mySandboxSites")}</Link>
             </Button>
+            <AccountMenu email={session?.user?.email} name={session?.user?.name} />
           </>
         }
         mobileTabs={
@@ -190,27 +337,17 @@ export default function AdminPage() {
             </div>
             <div className="grid gap-3 lg:grid-cols-2">
               <SoftCard className="overflow-hidden p-0">
-                <div className="border-b border-[var(--border)] px-4 py-2.5 text-sm font-semibold">
-                  {t("adminRecentEvents")}
+                <div className="flex items-center justify-between gap-2 border-b border-[var(--border)] px-4 py-2.5">
+                  <div className="text-sm font-semibold">{t("adminRecentEvents")}</div>
+                  <Button type="button" variant="ghost" size="sm" className="rounded-full text-xs" onClick={() => setTab("events")}>
+                    {t("viewAll")}
+                  </Button>
                 </div>
                 <ul className="divide-y divide-[color-mix(in_oklab,var(--border)_70%,transparent)]">
                   {overview.recentEvents.length === 0 ? (
-                    <li className="px-4 py-5 text-center text-sm text-[var(--muted)]">—</li>
+                    <li className="px-4 py-5 text-center text-sm text-[var(--muted)]">{t("emptyTable")}</li>
                   ) : (
-                    overview.recentEvents.map((e) => (
-                      <li key={e.id} className="flex items-start justify-between gap-3 px-4 py-2.5 text-sm">
-                        <span className="min-w-0">
-                          <span className="font-medium">{e.site.name}</span>
-                          <span className="text-[var(--muted)]">
-                            {" "}
-                            · {e.type} · {e.path}
-                          </span>
-                        </span>
-                        <span className="shrink-0 whitespace-nowrap text-[11px] text-[var(--muted)]">
-                          {new Date(e.createdAt).toLocaleString(locale)}
-                        </span>
-                      </li>
-                    ))
+                    overview.recentEvents.slice(0, 8).map((e) => renderEventRow(e))
                   )}
                 </ul>
               </SoftCard>
@@ -228,7 +365,7 @@ export default function AdminPage() {
                         </span>
                       </span>
                       <span className="shrink-0 text-[11px] text-[var(--muted)]">
-                        {u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleString(locale) : "—"}
+                        {u.lastLoginAt ? formatRelativeTime(u.lastLoginAt, lang) : "—"}
                       </span>
                     </li>
                   ))}
@@ -243,8 +380,17 @@ export default function AdminPage() {
         ) : null}
 
         {tab === "users" ? (
-          <SoftCard className="space-y-0 overflow-hidden p-0">
-            <Toolbar className="m-3">
+          <DataTable
+            dir={dir}
+            rows={users}
+            rowKey={(u) => String(u.id)}
+            page={usersPage}
+            pageCount={usersPageCount}
+            total={usersTotal}
+            pageSize={ADMIN_PAGE_SIZE}
+            onPageChange={setUsersPage}
+            empty={t("emptyTable")}
+            toolbar={
               <SearchField
                 grow
                 value={usersQ}
@@ -252,46 +398,63 @@ export default function AdminPage() {
                 placeholder={t("adminSearchUsers")}
                 aria-label={t("adminSearchUsers")}
               />
-            </Toolbar>
-            <div className="overflow-x-auto px-2 pb-3 sm:px-3">
-              <table className="sf-dense-table min-w-[36rem]">
-                <thead>
-                  <tr>
-                    <th>{t("adminColUser")}</th>
-                    <th>{t("adminColRole")}</th>
-                    <th>{t("adminColSites")}</th>
-                    <th>{t("adminColLastLogin")}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {users.map((u) => (
-                    <tr key={String(u.id)}>
-                      <td className="max-w-[16rem]">
-                        <div className="truncate font-medium">{String(u.email)}</div>
-                        <div className="truncate text-xs text-[var(--muted)]">{String(u.name || "")}</div>
-                      </td>
-                      <td>
-                        <span className="rounded-full bg-[var(--surface)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[var(--muted)]">
-                          {String(u.role)}
-                        </span>
-                      </td>
-                      <td className="tabular-nums">{String((u._count as { sites: number } | undefined)?.sites ?? 0)}</td>
-                      <td className="text-xs text-[var(--muted)]">
-                        {u.lastLoginAt
-                          ? new Date(String(u.lastLoginAt)).toLocaleString(locale)
-                          : "—"}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </SoftCard>
+            }
+            columns={[
+              {
+                id: "user",
+                header: t("adminColUser"),
+                cell: (u) => (
+                  <div className="max-w-[16rem]">
+                    <div className="truncate font-medium">{String(u.email)}</div>
+                    <div className="truncate text-xs text-[var(--muted)]">{String(u.name || "")}</div>
+                  </div>
+                ),
+              },
+              {
+                id: "role",
+                header: t("adminColRole"),
+                cell: (u) => (
+                  <span className="rounded-full bg-[var(--surface)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[var(--muted)]">
+                    {String(u.role)}
+                  </span>
+                ),
+              },
+              {
+                id: "sites",
+                header: t("adminColSites"),
+                cell: (u) => {
+                  const n = (u._count as { sites: number } | undefined)?.sites ?? 0;
+                  return (
+                    <span className="tabular-nums">
+                      {n}{" "}
+                      <span className="text-[10px] font-normal text-[var(--muted)]">{t("adminColSites")}</span>
+                    </span>
+                  );
+                },
+              },
+              {
+                id: "login",
+                header: t("adminColLastLogin"),
+                className: "text-xs text-[var(--muted)]",
+                cell: (u) =>
+                  u.lastLoginAt ? formatRelativeTime(String(u.lastLoginAt), lang) : "—",
+              },
+            ]}
+          />
         ) : null}
 
         {tab === "sites" ? (
-          <SoftCard className="space-y-0 overflow-hidden p-0">
-            <Toolbar className="m-3">
+          <DataTable
+            dir={dir}
+            rows={sites}
+            rowKey={(s) => String(s.id)}
+            page={sitesPage}
+            pageCount={sitesPageCount}
+            total={sitesTotal}
+            pageSize={ADMIN_PAGE_SIZE}
+            onPageChange={setSitesPage}
+            empty={t("emptyTable")}
+            toolbar={
               <SearchField
                 grow
                 value={sitesQ}
@@ -299,155 +462,301 @@ export default function AdminPage() {
                 placeholder={t("adminSearchSites")}
                 aria-label={t("adminSearchSites")}
               />
-            </Toolbar>
-            <div className="overflow-x-auto px-2 pb-3 sm:px-3">
-              <table className="sf-dense-table min-w-[40rem]">
-                <thead>
-                  <tr>
-                    <th>{t("adminColSite")}</th>
-                    <th>{t("adminColOwner")}</th>
-                    <th>{t("adminColStatus")}</th>
-                    <th>{t("adminColEvents")}</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {sites.map((s) => (
-                    <tr key={String(s.id)}>
-                      <td className="max-w-[14rem]">
-                        <div className="truncate font-medium">{String(s.name)}</div>
-                        <div className="truncate font-mono text-xs text-[var(--muted)]" dir="ltr">
-                          /s/{String(s.slug)}
-                        </div>
-                      </td>
-                      <td className="max-w-[12rem] truncate text-xs">
-                        {String((s.owner as { email: string } | undefined)?.email || "")}
-                      </td>
-                      <td>
-                        <span
-                          className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
-                            s.publishedAt
-                              ? "bg-teal-50 text-teal-800 dark:bg-teal-950/50 dark:text-teal-300"
-                              : "bg-[var(--surface)] text-[var(--muted)]"
-                          }`}
-                        >
-                          {s.publishedAt ? t("published") : t("draft")}
-                        </span>
-                      </td>
-                      <td className="tabular-nums">
-                        {String((s._count as { events: number } | undefined)?.events ?? 0)}
-                      </td>
-                      <td>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="rounded-full text-rose-700"
-                          onClick={() => {
-                            setDeleteSiteId(String(s.id));
-                            setDeleteSiteLabel(String(s.name));
-                            setDeleteTplId(null);
-                            setConfirmWord("");
-                          }}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </SoftCard>
+            }
+            columns={[
+              {
+                id: "site",
+                header: t("adminColSite"),
+                cell: (s) => {
+                  const slug = String(s.slug);
+                  const href = `/s/${slug}`;
+                  return (
+                    <div className="max-w-[16rem]">
+                      <a
+                        href={href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex max-w-full items-center gap-1 truncate font-medium text-teal-800 hover:underline dark:text-teal-300"
+                      >
+                        <span className="truncate">{String(s.name)}</span>
+                        <ExternalLink className="h-3 w-3 shrink-0 opacity-60" aria-hidden />
+                      </a>
+                      <a
+                        href={href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-0.5 block truncate font-mono text-xs text-[var(--muted)] hover:underline"
+                        dir="ltr"
+                      >
+                        /s/{slug}
+                      </a>
+                    </div>
+                  );
+                },
+              },
+              {
+                id: "owner",
+                header: t("adminColOwner"),
+                cell: (s) => (
+                  <div className="max-w-[12rem] truncate text-xs">
+                    <div className="truncate font-medium">
+                      {String((s.owner as { email?: string } | undefined)?.email || "")}
+                    </div>
+                    <div className="truncate text-[10px] text-[var(--muted)]">
+                      {String((s.owner as { name?: string } | undefined)?.name || "")}
+                    </div>
+                  </div>
+                ),
+              },
+              {
+                id: "status",
+                header: t("adminColStatus"),
+                cell: (s) => (
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
+                      s.publishedAt
+                        ? "bg-teal-50 text-teal-800 dark:bg-teal-950/50 dark:text-teal-300"
+                        : "bg-[var(--surface)] text-[var(--muted)]"
+                    }`}
+                  >
+                    {s.publishedAt ? t("published") : t("draft")}
+                  </span>
+                ),
+              },
+              {
+                id: "events",
+                header: t("adminColEvents"),
+                cell: (s) => {
+                  const n = (s._count as { events: number } | undefined)?.events ?? 0;
+                  return (
+                    <span className="tabular-nums">
+                      {n}{" "}
+                      <span className="text-[10px] font-normal text-[var(--muted)]">{t("adminEventsUnit")}</span>
+                    </span>
+                  );
+                },
+              },
+              {
+                id: "actions",
+                header: "",
+                cell: (s) => (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="rounded-full text-rose-700"
+                    onClick={() => {
+                      setDeleteSiteId(String(s.id));
+                      setDeleteSiteLabel(String(s.name));
+                      setDeleteTplId(null);
+                      setConfirmWord("");
+                    }}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                ),
+              },
+            ]}
+          />
         ) : null}
 
         {tab === "domains" ? (
-          <SoftCard className="overflow-hidden p-0">
-            <div className="border-b border-[var(--border)] px-4 py-2.5 text-sm font-semibold">
-              {t("adminDomainsTitle")}
-            </div>
-            <div className="divide-y divide-[color-mix(in_oklab,var(--border)_70%,transparent)]">
-              {domains.length === 0 ? (
-                <div className="px-4 py-6 text-center text-sm text-[var(--muted)]">{t("adminDomainsEmpty")}</div>
-              ) : (
-                domains.map((d) => (
-                  <div
-                    key={String(d.id)}
-                    className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5 text-sm"
-                  >
-                    <div className="min-w-0">
-                      <div className="font-semibold" dir="ltr">
-                        {String(d.customDomain || "")}
-                      </div>
-                      <div className="truncate text-xs text-[var(--muted)]">
-                        {String((d as { name?: string }).name || "")} · /s/{String(d.slug)} ·{" "}
-                        {String((d.owner as { email?: string } | undefined)?.email || "")}
-                      </div>
+          <DataTable
+            dir={dir}
+            rows={domainsPaged.rows}
+            rowKey={(d) => String(d.id)}
+            page={domainsPaged.page}
+            pageCount={domainsPaged.pageCount}
+            total={domainsPaged.total}
+            pageSize={ADMIN_PAGE_SIZE}
+            onPageChange={setDomainsPage}
+            empty={t("adminDomainsEmpty")}
+            toolbar={
+              <SearchField
+                grow
+                value={domainsQ}
+                onChange={(e) => setDomainsQ(e.target.value)}
+                placeholder={t("adminSearchDomains")}
+                aria-label={t("adminSearchDomains")}
+              />
+            }
+            columns={[
+              {
+                id: "domain",
+                header: t("tabDomains"),
+                cell: (d) => (
+                  <div className="min-w-0">
+                    <div className="font-semibold" dir="ltr">
+                      {String(d.customDomain || "")}
                     </div>
-                    <span className="rounded-full bg-[var(--surface)] px-2 py-0.5 text-[10px] font-bold text-[var(--muted)]">
-                      {String(d.domainStatus)}
-                    </span>
+                    <div className="truncate text-xs text-[var(--muted)]">
+                      {String((d as { name?: string }).name || "")} · /s/{String(d.slug)}
+                    </div>
                   </div>
-                ))
-              )}
-            </div>
-          </SoftCard>
+                ),
+              },
+              {
+                id: "owner",
+                header: t("adminColOwner"),
+                className: "text-xs",
+                cell: (d) => String((d.owner as { email?: string } | undefined)?.email || ""),
+              },
+              {
+                id: "status",
+                header: t("adminColStatus"),
+                cell: (d) => (
+                  <span className="rounded-full bg-[var(--surface)] px-2 py-0.5 text-[10px] font-bold text-[var(--muted)]">
+                    {String(d.domainStatus)}
+                  </span>
+                ),
+              },
+            ]}
+          />
         ) : null}
 
         {tab === "templates" ? (
-          <SoftCard className="overflow-hidden p-0">
-            <div className="border-b border-[var(--border)] px-4 py-2.5">
-              <div className="text-sm font-semibold">{t("tabTemplates")}</div>
-              <p className="mt-0.5 text-xs text-[var(--muted)]">{t("adminTemplatesHint")}</p>
-            </div>
-            <div className="overflow-x-auto px-2 pb-3 sm:px-3">
-              <table className="sf-dense-table min-w-[32rem]">
-                <thead>
-                  <tr>
-                    <th>{t("adminColTemplate")}</th>
-                    <th>{t("adminColCategory")}</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {templates.length === 0 ? (
-                    <tr>
-                      <td colSpan={3} className="py-6 text-center text-[var(--muted)]">
-                        —
-                      </td>
-                    </tr>
-                  ) : (
-                    templates.map((tpl) => (
-                      <tr key={String(tpl.id)}>
-                        <td className="max-w-[18rem]">
-                          <div className="truncate font-medium">{String(tpl.nameAr || tpl.name || "")}</div>
-                          <div className="truncate font-mono text-xs text-[var(--muted)]" dir="ltr">
-                            {String(tpl.slug)}
-                          </div>
-                        </td>
-                        <td className="text-xs text-[var(--muted)]">{String(tpl.category || "")}</td>
-                        <td className="text-end">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="rounded-full text-rose-700"
-                            onClick={() => {
-                              setDeleteTplId(String(tpl.id));
-                              setDeleteTplLabel(String(tpl.nameAr || tpl.name || ""));
-                              setDeleteSiteId(null);
-                              setConfirmWord("");
-                            }}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                            {t("deleteTemplate")}
-                          </Button>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </SoftCard>
+          <DataTable
+            dir={dir}
+            rows={templatesPaged.rows}
+            rowKey={(tpl) => String(tpl.id)}
+            page={templatesPaged.page}
+            pageCount={templatesPaged.pageCount}
+            total={templatesPaged.total}
+            pageSize={ADMIN_PAGE_SIZE}
+            onPageChange={setTemplatesPage}
+            empty={t("emptyTable")}
+            toolbar={
+              <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center">
+                <SearchField
+                  grow
+                  value={templatesQ}
+                  onChange={(e) => setTemplatesQ(e.target.value)}
+                  placeholder={t("adminSearchTemplates")}
+                  aria-label={t("adminSearchTemplates")}
+                />
+                <p className="shrink-0 text-[11px] text-[var(--muted)] sm:max-w-[14rem]">{t("adminTemplatesHint")}</p>
+              </div>
+            }
+            columns={[
+              {
+                id: "tpl",
+                header: t("adminColTemplate"),
+                cell: (tpl) => {
+                  const title = templateDisplayTitle(
+                    {
+                      name: String(tpl.name || ""),
+                      nameAr: String(tpl.nameAr || ""),
+                    },
+                    lang
+                  );
+                  const slug = String(tpl.slug || "");
+                  return (
+                    <div className="max-w-[18rem]">
+                      <div className="truncate font-medium">{title}</div>
+                      <code className="mt-0.5 inline-block truncate rounded-md bg-[var(--surface)] px-1.5 py-0.5 font-mono text-[11px] text-[var(--muted)]" dir="ltr">
+                        /{slug}
+                      </code>
+                    </div>
+                  );
+                },
+              },
+              {
+                id: "cat",
+                header: t("adminColCategory"),
+                className: "text-xs text-[var(--muted)]",
+                cell: (tpl) => String(tpl.category || ""),
+              },
+              {
+                id: "actions",
+                header: "",
+                className: "text-end",
+                cell: (tpl) => (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="rounded-full text-rose-700"
+                    onClick={() => {
+                      setDeleteTplId(String(tpl.id));
+                      setDeleteTplLabel(
+                        templateDisplayTitle(
+                          { name: String(tpl.name || ""), nameAr: String(tpl.nameAr || "") },
+                          lang
+                        )
+                      );
+                      setDeleteSiteId(null);
+                      setConfirmWord("");
+                    }}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    {t("deleteTemplate")}
+                  </Button>
+                ),
+              },
+            ]}
+          />
+        ) : null}
+
+        {tab === "events" ? (
+          <DataTable
+            dir={dir}
+            rows={events}
+            rowKey={(e) => e.id}
+            page={eventsPage}
+            pageCount={eventsPageCount}
+            total={eventsTotal}
+            pageSize={ADMIN_PAGE_SIZE}
+            onPageChange={setEventsPage}
+            empty={t("emptyTable")}
+            toolbar={
+              <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center">
+                <SearchField
+                  grow
+                  value={eventsQ}
+                  onChange={(e) => setEventsQ(e.target.value)}
+                  placeholder={t("adminSearchEvents")}
+                  aria-label={t("adminSearchEvents")}
+                />
+                <Select
+                  value={eventType}
+                  onValueChange={setEventType}
+                  options={eventTypeOptions}
+                  triggerClassName="h-10 min-w-[10rem] rounded-2xl"
+                  wrapperClassName="w-full sm:w-auto"
+                  aria-label={t("eventTypeFilter")}
+                />
+              </div>
+            }
+            columns={[
+              {
+                id: "site",
+                header: t("adminColSite"),
+                cell: (e) => <span className="font-medium">{e.site.name}</span>,
+              },
+              {
+                id: "action",
+                header: t("adminColAction"),
+                cell: (e) => eventTypeLabel(e.type, lang),
+              },
+              {
+                id: "path",
+                header: t("adminColPath"),
+                cell: (e) => (
+                  <span className="font-mono text-[11px] text-[var(--muted)]" dir="ltr">
+                    {e.path || "—"}
+                  </span>
+                ),
+              },
+              {
+                id: "when",
+                header: t("adminColWhen"),
+                className: "text-xs text-[var(--muted)]",
+                cell: (e) => (
+                  <span title={new Date(e.createdAt).toLocaleString(lang === "ar" ? "ar" : "en")}>
+                    {formatRelativeTime(e.createdAt, lang)}
+                  </span>
+                ),
+              },
+            ]}
+          />
         ) : null}
 
         {tab === "ai" ? <AdminAiPanel /> : null}

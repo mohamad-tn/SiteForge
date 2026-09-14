@@ -10,7 +10,7 @@ import { Select } from "@/components/ui/select";
 import { AppCanvas, AppHeader, SoftCard, StatCard, Toolbar, Shell } from "@/components/ui/surface";
 import { SegmentedControl } from "@/components/ui/segmented";
 import { ThemeToggleButton } from "@/components/theme-provider";
-import { SignOutButton } from "@/components/sign-out-button";
+import { AccountMenu } from "@/components/account-menu";
 import { CommandPalette, openCommandPalette, type CommandItem } from "@/components/command-palette";
 import { PlatformLangSwitcher, usePlatformLang } from "@/components/platform-lang-provider";
 import { CATEGORY_LABELS } from "@/lib/platform-i18n";
@@ -306,7 +306,7 @@ export function DashboardClient({
                 {t.demo}
               </Link>
             </Button>
-            <SignOutButton />
+            <AccountMenu email={userEmail} name={userName} />
           </div>
         </Shell>
       </AppHeader>

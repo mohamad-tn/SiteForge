@@ -68,7 +68,7 @@ export function AuthAtmosphere({
 }: HTMLAttributes<HTMLDivElement> & { dir?: "rtl" | "ltr"; lang?: string }) {
   return (
     <div
-      className={cn("sf-auth-bg flex items-center justify-center", className)}
+      className={cn("sf-auth-bg", className)}
       data-sf-chrome="platform"
       dir={dir}
       lang={lang}
@@ -76,7 +76,7 @@ export function AuthAtmosphere({
     >
       <svg
         aria-hidden
-        className="pointer-events-none absolute inset-0 h-full w-full opacity-[0.35] dark:opacity-[0.22]"
+        className="sf-auth-mesh opacity-[0.35] dark:opacity-[0.22]"
         xmlns="http://www.w3.org/2000/svg"
         preserveAspectRatio="none"
       >
