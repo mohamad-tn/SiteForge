@@ -24,6 +24,7 @@ const COPY_KEYS = new Set([
   "items",
   "links",
   "navItems",
+  "columns",
 ]);
 
 function summarizeLocalized(value: unknown, locale: string): unknown {
@@ -55,7 +56,6 @@ function summarizeLocalized(value: unknown, locale: string): unknown {
     if (typeof map[locale] === "string") return String(map[locale]).slice(0, 400);
     if (typeof map.en === "string") return String(map.en).slice(0, 400);
     if (typeof map.ar === "string") return String(map.ar).slice(0, 400);
-    // shallow style maps
     const out: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(map)) {
       if (typeof v === "string") out[k] = v.slice(0, 80);
@@ -89,7 +89,11 @@ function compactProps(
       key === "bgColor" ||
       key === "effect" ||
       key === "linkMode" ||
-      key === "linkPageSlug"
+      key === "linkPageSlug" ||
+      key === "linkCollectionSlug" ||
+      key === "collectionSlug" ||
+      key === "actionType" ||
+      key === "actionTarget"
     ) {
       out[key] = summarizeLocalized(value, locale);
     } else if (typeof value === "string") {
@@ -101,65 +105,213 @@ function compactProps(
   return out;
 }
 
+function blockKeyProp(
+  props: Record<string, unknown>,
+  locale: string
+): string | undefined {
+  for (const key of ["headline", "title", "label", "cta", "subtitle", "body", "text"]) {
+    if (!(key in props)) continue;
+    const s = summarizeLocalized(props[key], locale);
+    if (typeof s === "string" && s.trim()) return s.slice(0, 80);
+  }
+  return undefined;
+}
+
+type LinkSummary = {
+  id?: string;
+  label?: unknown;
+  linkMode?: string;
+  linkPageSlug?: string;
+  linkCollectionSlug?: string;
+  href?: string;
+  actionType?: string;
+};
+
+function summarizeLinkish(it: unknown, locale: string): LinkSummary {
+  if (!it || typeof it !== "object") return {};
+  const o = it as Record<string, unknown>;
+  return {
+    id: typeof o.id === "string" ? o.id : undefined,
+    label: summarizeLocalized(o.label ?? o.title, locale),
+    linkMode: typeof o.linkMode === "string" ? o.linkMode : undefined,
+    linkPageSlug: typeof o.linkPageSlug === "string" ? o.linkPageSlug : undefined,
+    linkCollectionSlug:
+      typeof o.linkCollectionSlug === "string" ? o.linkCollectionSlug : undefined,
+    href: typeof o.href === "string" ? o.href.slice(0, 80) : undefined,
+    actionType: typeof o.actionType === "string" ? o.actionType : undefined,
+  };
+}
+
+function ctaLinkSummary(props: Record<string, unknown>, locale: string) {
+  return {
+    linkMode: typeof props.linkMode === "string" ? props.linkMode : undefined,
+    linkPageSlug:
+      typeof props.linkPageSlug === "string" ? props.linkPageSlug : undefined,
+    linkCollectionSlug:
+      typeof props.linkCollectionSlug === "string"
+        ? props.linkCollectionSlug
+        : undefined,
+    ctaHref:
+      typeof props.ctaHref === "string"
+        ? props.ctaHref.slice(0, 80)
+        : typeof props.href === "string"
+          ? props.href.slice(0, 80)
+          : undefined,
+    label: summarizeLocalized(props.cta ?? props.ctaLabel ?? props.label, locale),
+    actionType: typeof props.actionType === "string" ? props.actionType : undefined,
+  };
+}
+
+function tokensSummary(content: SiteContent) {
+  const c = content.tokens.colors || ({} as SiteContent["tokens"]["colors"]);
+  const f = content.tokens.fonts || ({} as SiteContent["tokens"]["fonts"]);
+  return {
+    primary: c.primary,
+    accent: c.accent,
+    background: c.background,
+    text: c.text,
+    fontHeading: f.heading,
+    fontBody: f.body,
+    radius: content.tokens.radius,
+    rtl: content.tokens.rtl,
+    themeMode: content.tokens.themeMode,
+  };
+}
+
 function buildSiteIndex(content: SiteContent, locale: string) {
   const pages = content.pages.map((p) => ({
     id: p.id,
     slug: p.slug,
     title: p.title,
+    layout: p.layout || "flow",
+    blockCount: p.blocks.length,
   }));
+
   const navbars: Array<{
     pageId: string;
     blockId: string;
-    navItems: Array<{
-      id?: string;
-      label?: unknown;
-      linkMode?: string;
-      linkPageSlug?: string;
-      href?: string;
-    }>;
-    ctaLinkMode?: string;
-    ctaLinkPageSlug?: string;
-    ctaHref?: string;
+    navItems: LinkSummary[];
+    cta?: ReturnType<typeof ctaLinkSummary>;
   }> = [];
+  const footers: Array<{
+    pageId: string;
+    blockId: string;
+    links?: LinkSummary[];
+  }> = [];
+  const ctas: Array<{
+    pageId: string;
+    blockId: string;
+    type: string;
+    link: ReturnType<typeof ctaLinkSummary>;
+  }> = [];
+  const blocksByPage: Record<
+    string,
+    Array<{ id: string; type: string; key?: string }>
+  > = {};
+
   for (const p of content.pages) {
+    const blockIndex: Array<{ id: string; type: string; key?: string }> = [];
     for (const b of p.blocks) {
-      if (b.type !== "navbar") continue;
       const props = (b.props || {}) as Record<string, unknown>;
-      const items = Array.isArray(props.navItems) ? props.navItems : [];
-      navbars.push({
-        pageId: p.id,
-        blockId: b.id,
-        navItems: items.slice(0, 16).map((it) => {
-          if (!it || typeof it !== "object") return {};
-          const o = it as Record<string, unknown>;
-          return {
-            id: typeof o.id === "string" ? o.id : undefined,
-            label: summarizeLocalized(o.label, locale),
-            linkMode: typeof o.linkMode === "string" ? o.linkMode : "url",
-            linkPageSlug: typeof o.linkPageSlug === "string" ? o.linkPageSlug : "",
-            href: typeof o.href === "string" ? o.href.slice(0, 80) : undefined,
-          };
-        }),
-        ctaLinkMode: typeof props.linkMode === "string" ? props.linkMode : undefined,
-        ctaLinkPageSlug:
-          typeof props.linkPageSlug === "string" ? props.linkPageSlug : undefined,
-        ctaHref: typeof props.ctaHref === "string" ? props.ctaHref.slice(0, 80) : undefined,
-      });
+      const key = blockKeyProp(props, locale);
+      blockIndex.push(key ? { id: b.id, type: b.type, key } : { id: b.id, type: b.type });
+
+      if (b.type === "navbar") {
+        const items = Array.isArray(props.navItems) ? props.navItems : [];
+        navbars.push({
+          pageId: p.id,
+          blockId: b.id,
+          navItems: items.slice(0, 16).map((it) => summarizeLinkish(it, locale)),
+          cta: ctaLinkSummary(props, locale),
+        });
+      } else if (b.type === "footer") {
+        const cols = Array.isArray(props.columns)
+          ? props.columns
+          : Array.isArray(props.links)
+            ? props.links
+            : Array.isArray(props.items)
+              ? props.items
+              : [];
+        footers.push({
+          pageId: p.id,
+          blockId: b.id,
+          links: cols.slice(0, 16).map((it) => summarizeLinkish(it, locale)),
+        });
+      } else if (b.type === "cta" || b.type === "button" || b.type === "hero") {
+        const link = ctaLinkSummary(props, locale);
+        if (
+          link.linkMode ||
+          link.linkPageSlug ||
+          link.ctaHref ||
+          link.actionType ||
+          b.type === "cta" ||
+          b.type === "button"
+        ) {
+          ctas.push({
+            pageId: p.id,
+            blockId: b.id,
+            type: b.type,
+            link,
+          });
+        }
+      }
     }
+    blocksByPage[p.id] = blockIndex;
   }
-  return { pages, navbars };
+
+  const components = Array.isArray(content.components)
+    ? content.components.map((c) => ({
+        id: c.id,
+        name: c.name,
+        blockCount: c.blocks?.length ?? 0,
+      }))
+    : [];
+
+  return {
+    pages,
+    navbars,
+    footers,
+    ctas: ctas.slice(0, 40),
+    tokens: tokensSummary(content),
+    locales: content.locales,
+    defaultLocale: content.defaultLocale,
+    blocksByPage,
+    components,
+  };
 }
+
+export type CompactSiteOptions = {
+  activePageId?: string;
+  maxJsonChars?: number;
+};
 
 /** Compact draft for the model — index first, then active page detail; strip heavy fields. */
 export function compactSiteForModel(
   content: SiteContent,
   locale?: string,
-  maxJsonChars = 48_000
+  maxJsonCharsOrOpts: number | CompactSiteOptions = 48_000,
+  activePageIdArg?: string
 ): unknown {
+  const opts: CompactSiteOptions =
+    typeof maxJsonCharsOrOpts === "number"
+      ? { maxJsonChars: maxJsonCharsOrOpts, activePageId: activePageIdArg }
+      : maxJsonCharsOrOpts || {};
+  const maxJsonChars = opts.maxJsonChars ?? 48_000;
+  const activePageId = opts.activePageId;
+
   const loc = locale || content.defaultLocale || content.locales[0] || "ar";
   const index = buildSiteIndex(content, loc);
 
-  const pageDetails = content.pages.map((p) => ({
+  const orderedPages = [...content.pages];
+  if (activePageId) {
+    const idx = orderedPages.findIndex((p) => p.id === activePageId);
+    if (idx > 0) {
+      const [active] = orderedPages.splice(idx, 1);
+      orderedPages.unshift(active);
+    }
+  }
+
+  const pageDetails = orderedPages.map((p) => ({
     id: p.id,
     title: p.title,
     slug: p.slug,
@@ -183,7 +335,7 @@ export function compactSiteForModel(
   let json = JSON.stringify(compact);
   if (json.length <= maxJsonChars) return compact;
 
-  // Prefer index + first page full detail; slim other pages to ids/types only
+  // Prefer index + first (active) page full detail; slim other pages to ids/types only
   const slim = {
     index,
     locales: content.locales,

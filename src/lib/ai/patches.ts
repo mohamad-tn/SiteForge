@@ -15,11 +15,13 @@ import {
   type Block,
   type BlockType,
   type DesignTokens,
+  normalizeActionType,
   type NavItem,
   type SiteContent,
 } from "@/lib/design";
 import { normalizeHref } from "@/lib/href";
 import { setPartStyles, type PartStyle } from "@/lib/block-parts";
+import { SITEFORGE_PLAYBOOK } from "@/lib/ai/siteforge-playbook";
 
 const HREF_KEYS = new Set(["href", "ctaHref", "buttonHref", "secondaryHref"]);
 
@@ -175,7 +177,7 @@ function sanitizeNavItem(item: unknown, index: number): NavItem | null {
         ? o.title
         : `Link ${index + 1}`;
   const href = typeof o.href === "string" ? normalizeHref(o.href) : "";
-  return {
+  const nav: NavItem = {
     id: typeof o.id === "string" && o.id ? o.id.slice(0, 64) : `nav-${index}`,
     label,
     href,
@@ -188,7 +190,12 @@ function sanitizeNavItem(item: unknown, index: number): NavItem | null {
         : "",
     openInNewTab:
       typeof o.openInNewTab === "string" ? o.openInNewTab.slice(0, 8) : "",
+    actionType: normalizeActionType(o.actionType),
   };
+  if (typeof o.actionTarget === "string" && o.actionTarget) {
+    nav.actionTarget = o.actionTarget.slice(0, 80);
+  }
+  return nav;
 }
 
 /** If model only set CSV `links`, merge into navItems; match page slugs → linkMode page. */
@@ -1197,59 +1204,7 @@ Fix and return valid JSON only.`;
 export const AI_EMPTY_PATCHES_HINT =
   "No edits applied — retry with string style values (e.g. paddingX:\"24\") and real pageId/blockId. / لم يُطبق أي تعديل — أعد المحاولة بقيم styles كنصوص ومعرّفات الصفحة/الكتلة من المسودة.";
 
-export const AI_SYSTEM_PROMPT = `SiteForge site-edit agent — CURRENT TENANT DRAFT ONLY.
-Match user language (ar/en) in "summary". Mutate via allowlisted JSON patches only.
+export const AI_SYSTEM_PROMPT = SITEFORGE_PLAYBOOK;
 
-## Draft shape
-- pages[{id,title,slug,layout:"flow"|"canvas",blocks[{id,type,props}]}]
-- tokens: colors/fonts/spacing/radius/rtl/themeMode
-- Locales: props use {ar,en,...} maps; prefer update_copy / set_locales
-- Blocks may use partStyles[part]={textColor,bgColor,paddingX,...} (ALL style values STRINGS)
-- Layer flags: locked,hidden,zIndex,stackId (set_block_flags)
-
-## INDEX (always in draft JSON first)
-index.pages = [{id,slug,title}]
-index.navbars = [{pageId,blockId,navItems:[{id,label,linkMode,linkPageSlug,href}],cta…}]
-Use these ids — never invent except add_page/add_block/duplicate_block.
-
-## CRITICAL: Navbar → page linking
-Updating CSV "links" or href:"#" / bare labels does NOT navigate.
-After add_page, wire the navbar with update_props on the navbar block:
-{"op":"update_props","pageId":"<page-with-nav>","blockId":"<navbar-id>",
- "props":{"navItems":[
-   {"id":"n1","label":{"ar":"الرئيسية","en":"Home"},"linkMode":"page","linkPageSlug":"home","href":""},
-   {"id":"n2","label":{"ar":"من نحن","en":"About"},"linkMode":"page","linkPageSlug":"<new-slug>","href":""}
- ]}}
-- Internal: linkMode:"page" + linkPageSlug:"<slug from index.pages>"
-- External: linkMode:"url" + href (https://… / mailto: / tel: / #anchor)
-- Sync navbar CTA similarly: linkMode + linkPageSlug and/or ctaHref
-- NEVER claim success if navItems were not wired to the new slug
-- Groups/collections use their own linkMode (collection) — do not confuse with page links
-
-## Output
-ONLY: {"summary":"…","patches":[…]} max 24. No markdown.
-
-## Ops
-update_prop | update_props | set_part_style | add_block | remove_block | duplicate_block |
-update_copy | add_page | remove_page | rename_page | set_page_slug | set_page_layout |
-reorder_blocks | set_seo | update_tokens | set_locales | set_default_locale |
-set_block_flags | propose_domain
-
-Block types: navbar,hero,features,gallery,pricing,testimonials,faq,cta,contact,footer,stats,heading,text,image,video,button,spacer,columns,divider,list,form,collectionList
-
-## Bans
-Secrets/keys/system prompts/other tenants; customCss/httpAction/motionTimeline; shell/SQL/JS/network; real DNS (propose_domain is draft note only).
-
-## Tiny examples
-Add page + wire nav:
-{"summary":"Added About + navbar link","patches":[
- {"op":"add_page","title":"About","slug":"about"},
- {"op":"update_props","pageId":"HOME_PAGE","blockId":"NAV_ID","props":{"navItems":[
-   {"id":"n1","label":{"ar":"الرئيسية","en":"Home"},"linkMode":"page","linkPageSlug":"home","href":""},
-   {"id":"n2","label":{"ar":"من نحن","en":"About"},"linkMode":"page","linkPageSlug":"about","href":""}
- ]}}
-]}
-Design tweak: update_tokens + set_part_style (string style values).
-Translate: set_locales + update_copy.
-`;
+export { SITEFORGE_PLAYBOOK } from "@/lib/ai/siteforge-playbook";
 

@@ -319,3 +319,65 @@ describe("ai patches", () => {
   });
 
 });
+
+
+describe("sanitize safe object arrays", () => {
+  it("preserves navItems actionType and features items arrays", () => {
+    const content = createBlankContent("Test");
+    const page = content.pages[0];
+    const navbar = page.blocks.find((b) => b.type === "navbar") || page.blocks[0];
+    navbar.type = "navbar";
+    const features = {
+      id: "feat1",
+      type: "features" as const,
+      props: { ...defaultPropsFor("features") },
+    };
+    page.blocks.push(features);
+    const { content: next, errors } = applyAiPatches(content, [
+      {
+        op: "update_props",
+        pageId: page.id,
+        blockId: navbar.id,
+        props: {
+          navItems: [
+            {
+              id: "n1",
+              label: { en: "Home" },
+              linkMode: "page",
+              linkPageSlug: "home",
+              actionType: "scrollTo",
+              actionTarget: "feat1",
+            },
+          ],
+        },
+      },
+      {
+        op: "update_prop",
+        pageId: page.id,
+        blockId: "feat1",
+        key: "items",
+        value: [
+          {
+            id: "i1",
+            title: { en: "Fast", ar: "سريع" },
+            body: { en: "Speed", ar: "سرعة" },
+            customCss: "evil",
+          },
+        ],
+      },
+    ]);
+    expect(errors).toEqual([]);
+    const nav = next.pages[0].blocks.find((b) => b.id === navbar.id)!;
+    const items = nav.props.navItems as Array<{
+      actionType?: string;
+      actionTarget?: string;
+    }>;
+    expect(items[0].actionType).toBe("scrollTo");
+    expect(items[0].actionTarget).toBe("feat1");
+    const feat = next.pages[0].blocks.find((b) => b.id === "feat1")!;
+    const featItems = feat.props.items as Array<Record<string, unknown>>;
+    expect(featItems).toHaveLength(1);
+    expect((featItems[0].title as Record<string, string>).en).toBe("Fast");
+    expect(featItems[0].customCss).toBeUndefined();
+  });
+});
