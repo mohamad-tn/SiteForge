@@ -4,6 +4,8 @@
  * Multimodal user content supported when the model/provider accepts vision.
  */
 
+import { throwProviderHttpError } from "@/lib/ai/provider-errors";
+
 export type AiTextPart = { type: "text"; text: string };
 export type AiImagePart = { type: "image_url"; image_url: { url: string } };
 export type AiContentPart = AiTextPart | AiImagePart;
@@ -39,6 +41,7 @@ function asPlainText(content: string | AiContentPart[]): string {
 }
 
 async function openaiCompatibleComplete(
+  provider: AiProviderId,
   baseUrl: string,
   opts: { apiKey: string; model: string; messages: AiChatMessage[]; maxTokens: number }
 ): Promise<AiCompletionResult> {
@@ -61,7 +64,7 @@ async function openaiCompatibleComplete(
   });
   if (!res.ok) {
     const body = await res.text().catch(() => "");
-    throw new Error(`Provider error ${res.status}: ${body.slice(0, 200)}`);
+    throwProviderHttpError(provider, res.status, body);
   }
   const data = (await res.json()) as {
     choices?: Array<{ message?: { content?: string } }>;
@@ -77,12 +80,12 @@ async function openaiCompatibleComplete(
 
 export const openaiAdapter: AiProviderAdapter = {
   id: "openai",
-  complete: (opts) => openaiCompatibleComplete("https://api.openai.com/v1", opts),
+  complete: (opts) => openaiCompatibleComplete("openai", "https://api.openai.com/v1", opts),
 };
 
 export const xaiAdapter: AiProviderAdapter = {
   id: "xai",
-  complete: (opts) => openaiCompatibleComplete("https://api.x.ai/v1", opts),
+  complete: (opts) => openaiCompatibleComplete("xai", "https://api.x.ai/v1", opts),
 };
 
 export const anthropicAdapter: AiProviderAdapter = {
@@ -140,7 +143,7 @@ export const anthropicAdapter: AiProviderAdapter = {
     });
     if (!res.ok) {
       const body = await res.text().catch(() => "");
-      throw new Error(`Anthropic error ${res.status}: ${body.slice(0, 200)}`);
+      throwProviderHttpError("anthropic", res.status, body);
     }
     const data = (await res.json()) as {
       content?: Array<{ type?: string; text?: string }>;
@@ -203,7 +206,7 @@ export const googleAdapter: AiProviderAdapter = {
     });
     if (!res.ok) {
       const body = await res.text().catch(() => "");
-      throw new Error(`Google error ${res.status}: ${body.slice(0, 200)}`);
+      throwProviderHttpError("google", res.status, body);
     }
     const data = (await res.json()) as {
       candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;

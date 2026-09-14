@@ -20,6 +20,7 @@ import {
   type AiContentPart,
   type AiProviderId,
 } from "@/lib/ai/providers";
+import { toUserFacingAiError } from "@/lib/ai/provider-errors";
 import { consumeQuota, getQuotaStatus } from "@/lib/ai/quota";
 import {
   aiAttachmentsField,
@@ -351,7 +352,7 @@ export async function POST(req: Request) {
           });
           send({
             type: "error",
-            error: errText.slice(0, 800),
+            error: errText.slice(0, 300),
             messageId: assistantPartial.id,
             hint,
             rawSnippet,
@@ -452,7 +453,7 @@ export async function POST(req: Request) {
         } else if (emptySoft) {
           send({
             type: "error",
-            error: summary.slice(0, 800),
+            error: summary.slice(0, 300),
             messageId: assistantPartial.id,
             applied: 0,
             steps,
@@ -476,8 +477,9 @@ export async function POST(req: Request) {
         const isAbort =
           (e instanceof Error && e.name === "AbortError") ||
           isAiChatCancelled(assistantPartial.id);
-        const msg = e instanceof Error ? e.message : "AI failed";
-        if (!isAbort) console.error(e);
+        const facing = toUserFacingAiError(e, { maxLen: 300 });
+        const msg = facing.message;
+        if (!isAbort) console.error(e, facing.code || "", facing.raw?.slice(0, 200));
         await prisma.aiUsageLog
           .create({
             data: {
@@ -486,28 +488,26 @@ export async function POST(req: Request) {
               provider: resolved.provider,
               model: resolved.model,
               ok: false,
-              error: (isAbort ? "cancelled" : msg).slice(0, 500),
+              error: (isAbort ? "cancelled" : `${facing.code || "error"}: ${msg}`).slice(0, 500),
               keySource: resolved.source,
             },
           })
           .catch(() => null);
+        const persistText = isAbort ? "أُلغي / Cancelled" : msg.slice(0, 500);
         await prisma.aiChatMessage
           .update({
             where: { id: assistantPartial.id },
             data: {
-              text: isAbort ? "أُلغي / Cancelled" : msg.slice(0, 500),
+              text: persistText,
               status: isAbort ? "cancelled" : "error",
               steps,
             },
           })
           .catch(() => null);
+        // Stream the same clean text persisted on the assistant row (never raw JSON).
         send({
           type: isAbort ? "cancelled" : "error",
-          error: isAbort
-            ? "أُلغي"
-            : process.env.NODE_ENV === "production"
-              ? "AI request failed"
-              : msg.slice(0, 300),
+          error: isAbort ? "أُلغي" : msg.slice(0, 300),
           messageId: assistantPartial.id,
           steps,
         });

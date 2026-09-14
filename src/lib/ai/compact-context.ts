@@ -87,7 +87,9 @@ function compactProps(
       key === "src" ||
       key === "image" ||
       key === "bgColor" ||
-      key === "effect"
+      key === "effect" ||
+      key === "linkMode" ||
+      key === "linkPageSlug"
     ) {
       out[key] = summarizeLocalized(value, locale);
     } else if (typeof value === "string") {
@@ -99,37 +101,95 @@ function compactProps(
   return out;
 }
 
-/** Compact draft for the model — active locale copy only, strip heavy unused fields. */
+function buildSiteIndex(content: SiteContent, locale: string) {
+  const pages = content.pages.map((p) => ({
+    id: p.id,
+    slug: p.slug,
+    title: p.title,
+  }));
+  const navbars: Array<{
+    pageId: string;
+    blockId: string;
+    navItems: Array<{
+      id?: string;
+      label?: unknown;
+      linkMode?: string;
+      linkPageSlug?: string;
+      href?: string;
+    }>;
+    ctaLinkMode?: string;
+    ctaLinkPageSlug?: string;
+    ctaHref?: string;
+  }> = [];
+  for (const p of content.pages) {
+    for (const b of p.blocks) {
+      if (b.type !== "navbar") continue;
+      const props = (b.props || {}) as Record<string, unknown>;
+      const items = Array.isArray(props.navItems) ? props.navItems : [];
+      navbars.push({
+        pageId: p.id,
+        blockId: b.id,
+        navItems: items.slice(0, 16).map((it) => {
+          if (!it || typeof it !== "object") return {};
+          const o = it as Record<string, unknown>;
+          return {
+            id: typeof o.id === "string" ? o.id : undefined,
+            label: summarizeLocalized(o.label, locale),
+            linkMode: typeof o.linkMode === "string" ? o.linkMode : "url",
+            linkPageSlug: typeof o.linkPageSlug === "string" ? o.linkPageSlug : "",
+            href: typeof o.href === "string" ? o.href.slice(0, 80) : undefined,
+          };
+        }),
+        ctaLinkMode: typeof props.linkMode === "string" ? props.linkMode : undefined,
+        ctaLinkPageSlug:
+          typeof props.linkPageSlug === "string" ? props.linkPageSlug : undefined,
+        ctaHref: typeof props.ctaHref === "string" ? props.ctaHref.slice(0, 80) : undefined,
+      });
+    }
+  }
+  return { pages, navbars };
+}
+
+/** Compact draft for the model — index first, then active page detail; strip heavy fields. */
 export function compactSiteForModel(
   content: SiteContent,
   locale?: string,
   maxJsonChars = 48_000
 ): unknown {
   const loc = locale || content.defaultLocale || content.locales[0] || "ar";
+  const index = buildSiteIndex(content, loc);
+
+  const pageDetails = content.pages.map((p) => ({
+    id: p.id,
+    title: p.title,
+    slug: p.slug,
+    seoTitle: p.seoTitle,
+    seoDescription: p.seoDescription,
+    layout: p.layout,
+    blocks: p.blocks.map((b) => ({
+      id: b.id,
+      type: b.type,
+      props: compactProps((b.props || {}) as Record<string, unknown>, loc),
+    })),
+  }));
+
   const compact = {
+    index,
     locales: content.locales,
     defaultLocale: content.defaultLocale,
     meta: (content as { meta?: unknown }).meta ?? undefined,
-    pages: content.pages.map((p) => ({
-      id: p.id,
-      title: p.title,
-      slug: p.slug,
-      seoTitle: p.seoTitle,
-      seoDescription: p.seoDescription,
-      layout: p.layout,
-      blocks: p.blocks.map((b) => ({
-        id: b.id,
-        type: b.type,
-        props: compactProps((b.props || {}) as Record<string, unknown>, loc),
-      })),
-    })),
+    pages: pageDetails,
   };
   let json = JSON.stringify(compact);
   if (json.length <= maxJsonChars) return compact;
-  // Drop props from later pages if still huge
+
+  // Prefer index + first page full detail; slim other pages to ids/types only
   const slim = {
-    ...compact,
-    pages: compact.pages.map((p, i) =>
+    index,
+    locales: content.locales,
+    defaultLocale: content.defaultLocale,
+    meta: compact.meta,
+    pages: pageDetails.map((p, i) =>
       i === 0
         ? p
         : {
@@ -140,8 +200,11 @@ export function compactSiteForModel(
   };
   json = JSON.stringify(slim);
   if (json.length <= maxJsonChars) return slim;
+
   return {
-    ...slim,
+    index,
+    locales: slim.locales,
+    defaultLocale: slim.defaultLocale,
     pages: slim.pages.slice(0, 3).map((p) => ({
       ...p,
       blocks: p.blocks.slice(0, 24),

@@ -267,6 +267,21 @@ export function AiEditorPanel({
     scroller.current?.scrollTo({ top: scroller.current.scrollHeight });
   }, [open, messages, steps]);
 
+
+  function upsertMessage(msg: ChatMsg) {
+    setMessages((m) => {
+      if (msg.id) {
+        const idx = m.findIndex((x) => x.id === msg.id);
+        if (idx >= 0) {
+          const next = [...m];
+          next[idx] = { ...next[idx], ...msg };
+          return next;
+        }
+      }
+      return [...m, msg];
+    });
+  }
+
   async function cancelInFlight() {
     userCancelRef.current = true;
     const messageId = inFlightAssistantIdRef.current;
@@ -334,26 +349,21 @@ export function AiEditorPanel({
             },
           ]);
         } else if (target.status === "error") {
-          setMessages((m) => [
-            ...m,
-            {
-              id: target.id,
-              role: "error",
-              text: target.text || t("aiError"),
-              steps: target.steps,
-            },
-          ]);
+          upsertMessage({
+            id: target.id,
+            role: "error",
+            text: target.text || t("aiError"),
+            status: "error",
+            steps: target.steps,
+          });
         } else {
-          setMessages((m) => [
-            ...m,
-            {
-              id: target.id,
-              role: "assistant",
-              text: target.text || t("aiNoEdits"),
-              status: "ok",
-              steps: target.steps,
-            },
-          ]);
+          upsertMessage({
+            id: target.id,
+            role: "assistant",
+            text: target.text || t("aiNoEdits"),
+            status: "ok",
+            steps: target.steps,
+          });
         }
         return true;
       } catch {
@@ -607,6 +617,12 @@ export function AiEditorPanel({
             };
             if (evt.type === "started" && evt.messageId) {
               inFlightAssistantIdRef.current = evt.messageId;
+              upsertMessage({
+                id: evt.messageId,
+                role: "assistant",
+                text: t("aiWorking"),
+                status: "partial",
+              });
             } else if (evt.type === "step" && evt.step && evt.message) {
               const rec = { step: evt.step, message: evt.message, at: evt.at };
               liveSteps = [...liveSteps, rec];
@@ -622,16 +638,14 @@ export function AiEditorPanel({
                       ? `تم تطبيق ${appliedN} تعديلاً`
                       : `Applied ${appliedN} patch(es)`);
               const finalSteps = evt.steps?.length ? evt.steps : liveSteps;
-              setMessages((m) => [
-                ...m,
-                {
-                  id: evt.messageId,
-                  role: appliedN === 0 ? "system" : "assistant",
-                  text: summary,
-                  status: appliedN === 0 ? "error" : "ok",
-                  steps: finalSteps,
-                },
-              ]);
+              upsertMessage({
+                id: evt.messageId,
+                role: appliedN === 0 ? "system" : "assistant",
+                text: summary,
+                status: appliedN === 0 ? "error" : "ok",
+                steps: finalSteps,
+              });
+              setBusy(false);
               if (evt.quota) {
                 setQuotaLabel(
                   lang === "ar"
@@ -646,29 +660,29 @@ export function AiEditorPanel({
                 ]);
               }
             } else if (evt.type === "cancelled") {
-              setMessages((m) => [
-                ...m,
-                {
-                  id: evt.messageId,
-                  role: "system",
-                  text: t("aiCancelled"),
-                  status: "cancelled",
-                  steps: evt.steps || liveSteps,
-                },
-              ]);
+              upsertMessage({
+                id: evt.messageId,
+                role: "system",
+                text: t("aiCancelled"),
+                status: "cancelled",
+                steps: evt.steps || liveSteps,
+              });
+              setBusy(false);
             } else if (evt.type === "error") {
-              const detail = [evt.error || t("aiError"), evt.hint, evt.rawSnippet]
-                .filter(Boolean)
-                .join(" · ");
-              setMessages((m) => [
-                ...m,
-                {
-                  id: evt.messageId,
-                  role: "error",
-                  text: detail,
-                  steps: evt.steps || liveSteps,
-                },
-              ]);
+              // Prefer clean server error text immediately; keep steps on the bubble.
+              const detail = (evt.error || "").trim() || t("aiError");
+              upsertMessage({
+                id: evt.messageId || inFlightAssistantIdRef.current || undefined,
+                role: "error",
+                text: detail.slice(0, 800),
+                status: "error",
+                steps: evt.steps || liveSteps,
+              });
+              setBusy(false);
+              // Keep timeline steps visible with the error message (do not wipe yet)
+              if ((evt.steps || liveSteps)?.length) {
+                setSteps(evt.steps?.length ? evt.steps : liveSteps);
+              }
             }
           } catch {
             /* ignore bad SSE */
@@ -678,27 +692,72 @@ export function AiEditorPanel({
     } catch (e) {
       const isAbort = (e as Error)?.name === "AbortError";
       if (isAbort && userCancelRef.current) {
-        setMessages((m) => [
-          ...m,
-          { role: "system", text: t("aiCancelled"), status: "cancelled" },
-        ]);
+        upsertMessage({
+          id: inFlightAssistantIdRef.current || undefined,
+          role: "system",
+          text: t("aiCancelled"),
+          status: "cancelled",
+        });
       } else if (isAbort || e instanceof TypeError) {
         // Tab background / network abort — durable server run; poll for completion.
         const recovered = await recoverAfterDisconnect(inFlightAssistantIdRef.current);
         if (!recovered && !userCancelRef.current) {
-          setMessages((m) => [...m, { role: "error", text: t("aiError") }]);
+          upsertMessage({
+            id: inFlightAssistantIdRef.current || undefined,
+            role: "error",
+            text: t("aiError"),
+            status: "error",
+          });
         }
       } else {
-        setMessages((m) => [...m, { role: "error", text: t("aiError") }]);
+        const detail =
+          e instanceof Error && e.message && e.message.length < 400
+            ? e.message
+            : t("aiError");
+        // Try history recovery for a richer server-persisted error text
+        const aid = inFlightAssistantIdRef.current;
+        let shown = detail;
+        if (aid) {
+          try {
+            const res = await fetch(`/api/ai/chat?siteId=${encodeURIComponent(siteId)}`);
+            if (res.ok) {
+              const data = await res.json();
+              const target = (data.messages || []).find(
+                (m: { id: string }) => m.id === aid
+              ) as { text?: string; status?: string; steps?: Step[] } | undefined;
+              if (target?.status === "error" && target.text) {
+                shown = target.text;
+                upsertMessage({
+                  id: aid,
+                  role: "error",
+                  text: shown,
+                  status: "error",
+                  steps: target.steps,
+                });
+                shown = "";
+              }
+            }
+          } catch {
+            /* ignore */
+          }
+        }
+        if (shown) {
+          upsertMessage({
+            id: aid || undefined,
+            role: "error",
+            text: shown,
+            status: "error",
+          });
+        }
       }
     } finally {
       abortRef.current = null;
       inFlightAssistantIdRef.current = null;
       setBusy(false);
-      // Keep last steps briefly visible until next send; clear after paint
+      // Keep last steps briefly; errors keep steps on the message bubble
       setTimeout(() => {
         if (!busyRef.current) setSteps([]);
-      }, 400);
+      }, 1200);
     }
   }
 
@@ -827,7 +886,7 @@ export function AiEditorPanel({
                   onOpen={(url) => setLightbox(url)}
                 />
               ) : null}
-              {m.steps?.length && m.role === "assistant" ? (
+              {m.steps?.length && (m.role === "assistant" || m.role === "error") ? (
                 <ol className="mt-2 space-y-1 border-t border-black/10 pt-2 dark:border-white/10">
                   {m.steps.map((s, si) => (
                     <li key={`${s.step}-${si}`} className="text-[10px] opacity-80">

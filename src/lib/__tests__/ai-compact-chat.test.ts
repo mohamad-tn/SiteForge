@@ -22,8 +22,12 @@ describe("compact site context", () => {
       },
     };
     const compact = compactSiteForModel(content, "ar") as {
+      index: { pages: { id: string; slug: string }[]; navbars: unknown[] };
       pages: { blocks: { props: Record<string, unknown> }[] }[];
     };
+    expect(compact.index.pages.length).toBeGreaterThan(0);
+    expect(compact.index.pages[0].slug).toBeTruthy();
+    expect(Array.isArray(compact.index.navbars)).toBe(true);
     const props = compact.pages[0].blocks[0].props;
     expect(props.customCss).toBeUndefined();
     expect(props.httpAction).toBeUndefined();
@@ -106,5 +110,55 @@ describe("chat prune", () => {
     expect(deleted.length).toBe(5);
     expect(kept.length).toBe(40);
     expect(kept[0]).toBe("m5");
+  });
+});
+
+describe("add_page + navItems page linking", () => {
+  it("applies add_page and update_props navItems with linkMode page", () => {
+    const content = createBlankContent("Test");
+    const home = content.pages[0];
+    const navbar = home.blocks.find((b) => b.type === "navbar") || home.blocks[0];
+    navbar.type = "navbar";
+    const { content: next, applied, errors } = applyAiPatches(content, [
+      { op: "add_page", title: "About", slug: "about" },
+      {
+        op: "update_props",
+        pageId: home.id,
+        blockId: navbar.id,
+        props: {
+          navItems: [
+            {
+              id: "n1",
+              label: { ar: "الرئيسية", en: "Home" },
+              linkMode: "page",
+              linkPageSlug: "home",
+              href: "",
+            },
+            {
+              id: "n2",
+              label: { ar: "من نحن", en: "About" },
+              linkMode: "page",
+              linkPageSlug: "about",
+              href: "",
+            },
+          ],
+        },
+      },
+    ]);
+    expect(errors).toEqual([]);
+    expect(applied).toBe(2);
+    expect(next.pages.some((p) => p.slug === "about")).toBe(true);
+    const nav = next.pages
+      .find((p) => p.id === home.id)!
+      .blocks.find((b) => b.id === navbar.id)!;
+    const items = nav.props.navItems as Array<{
+      linkMode: string;
+      linkPageSlug: string;
+    }>;
+    expect(items).toHaveLength(2);
+    expect(items[0].linkMode).toBe("page");
+    expect(items[0].linkPageSlug).toBe("home");
+    expect(items[1].linkMode).toBe("page");
+    expect(items[1].linkPageSlug).toBe("about");
   });
 });

@@ -8,11 +8,14 @@ import {
   blockTypes,
   defaultPropsFor,
   designTokensSchema,
+  ensureNavItems,
   LOCALE_CODES,
   siteContentSchema,
+  syncLinksCsvFromNavItems,
   type Block,
   type BlockType,
   type DesignTokens,
+  type NavItem,
   type SiteContent,
 } from "@/lib/design";
 import { normalizeHref } from "@/lib/href";
@@ -161,6 +164,97 @@ const ALLOWED_TOKEN_TOP = new Set([
   "themeMode",
 ]);
 
+function sanitizeNavItem(item: unknown, index: number): NavItem | null {
+  if (!item || typeof item !== "object" || Array.isArray(item)) return null;
+  const o = item as Record<string, unknown>;
+  const label =
+    typeof o.label === "string" ||
+    (o.label && typeof o.label === "object" && !Array.isArray(o.label))
+      ? (o.label as NavItem["label"])
+      : typeof o.title === "string"
+        ? o.title
+        : `Link ${index + 1}`;
+  const href = typeof o.href === "string" ? normalizeHref(o.href) : "";
+  return {
+    id: typeof o.id === "string" && o.id ? o.id.slice(0, 64) : `nav-${index}`,
+    label,
+    href,
+    linkMode: typeof o.linkMode === "string" ? o.linkMode.slice(0, 32) : "url",
+    linkPageSlug:
+      typeof o.linkPageSlug === "string" ? o.linkPageSlug.slice(0, 80) : "",
+    linkCollectionSlug:
+      typeof o.linkCollectionSlug === "string"
+        ? o.linkCollectionSlug.slice(0, 80)
+        : "",
+    openInNewTab:
+      typeof o.openInNewTab === "string" ? o.openInNewTab.slice(0, 8) : "",
+  };
+}
+
+/** If model only set CSV `links`, merge into navItems; match page slugs → linkMode page. */
+export function coerceNavbarLinkProps(
+  props: Record<string, unknown>,
+  pageSlugs: string[],
+  locales: string[]
+): Record<string, unknown> {
+  const slugSet = new Set(pageSlugs.map((s) => s.toLowerCase()));
+  const out = { ...props };
+  const locs = locales.length ? locales : ["ar"];
+
+  if (Array.isArray(out.navItems)) {
+    const items = (out.navItems as unknown[])
+      .map((it, i) => sanitizeNavItem(it, i))
+      .filter((x): x is NavItem => !!x)
+      .map((it) => {
+        const slug = (it.linkPageSlug || "").trim();
+        const hrefSlug = (it.href || "").replace(/^\//, "").split(/[?#]/)[0];
+        let linkMode = it.linkMode || "url";
+        let linkPageSlug = slug;
+        if (linkMode === "page" && linkPageSlug) {
+          return { ...it, linkMode: "page" as const, linkPageSlug, href: it.href || "" };
+        }
+        const candidate = linkPageSlug || hrefSlug;
+        if (candidate && slugSet.has(candidate.toLowerCase())) {
+          linkMode = "page";
+          linkPageSlug =
+            pageSlugs.find((s) => s.toLowerCase() === candidate.toLowerCase()) ||
+            candidate;
+          return { ...it, linkMode, linkPageSlug, href: "" };
+        }
+        return it;
+      });
+    out.navItems = items;
+    out.links = syncLinksCsvFromNavItems(items, locs);
+    return out;
+  }
+
+  if (out.links != null && !Array.isArray(out.navItems)) {
+    const items = ensureNavItems(out, locs).map((it) => {
+      const labelStr =
+        typeof it.label === "string"
+          ? it.label
+          : Object.values(it.label || {})[0] || "";
+      const guess = String(labelStr)
+        .toLowerCase()
+        .replace(/\s+/g, "-")
+        .replace(/[^a-z0-9\u0600-\u06ff-]/g, "");
+      const match = pageSlugs.find(
+        (s) =>
+          s.toLowerCase() === guess ||
+          s.toLowerCase().includes(guess) ||
+          (guess.length > 2 && guess.includes(s.toLowerCase()))
+      );
+      if (match) {
+        return { ...it, linkMode: "page", linkPageSlug: match, href: "" };
+      }
+      return it;
+    });
+    out.navItems = items;
+    out.links = syncLinksCsvFromNavItems(items, locs);
+  }
+  return out;
+}
+
 function sanitizePropValue(key: string, value: unknown): unknown {
   if (FORBIDDEN_PROP_KEYS.has(key)) return undefined;
   if (HREF_KEYS.has(key) && typeof value === "string") {
@@ -169,7 +263,45 @@ function sanitizePropValue(key: string, value: unknown): unknown {
   if (typeof value === "string") {
     return value.replace(/<\/?script/gi, "").slice(0, 8000);
   }
-  if (value && typeof value === "object" && !Array.isArray(value)) {
+  if (Array.isArray(value)) {
+    if (key === "navItems") {
+      return value
+        .slice(0, 40)
+        .map((it, i) => sanitizeNavItem(it, i))
+        .filter((x): x is NavItem => !!x);
+    }
+    return value
+      .slice(0, 40)
+      .map((item, i) => {
+        if (typeof item === "string")
+          return item.replace(/<\/?script/gi, "").slice(0, 2000);
+        if (item && typeof item === "object" && !Array.isArray(item)) {
+          const out: Record<string, unknown> = {};
+          for (const [k, v] of Object.entries(item as Record<string, unknown>)) {
+            if (FORBIDDEN_PROP_KEYS.has(k)) continue;
+            if (typeof v === "string") {
+              out[k] = HREF_KEYS.has(k)
+                ? normalizeHref(v)
+                : v.replace(/<\/?script/gi, "").slice(0, 4000);
+            } else if (typeof v === "number" || typeof v === "boolean" || v === null) {
+              out[k] = v;
+            } else if (v && typeof v === "object" && !Array.isArray(v)) {
+              const map: Record<string, string> = {};
+              for (const [lk, lv] of Object.entries(v as Record<string, unknown>)) {
+                if (typeof lv === "string")
+                  map[lk] = lv.replace(/<\/?script/gi, "").slice(0, 4000);
+              }
+              out[k] = map;
+            }
+          }
+          if (!out.id) out.id = `item-${i}`;
+          return out;
+        }
+        return undefined;
+      })
+      .filter((x) => x !== undefined);
+  }
+  if (value && typeof value === "object") {
     const out: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
       if (FORBIDDEN_PROP_KEYS.has(k)) continue;
@@ -301,10 +433,17 @@ export function applyAiPatches(
           errors.push(`Blocked prop ${parsed.key}`);
           continue;
         }
-        next = mapBlock(next, parsed.pageId, parsed.blockId, (b) => ({
-          ...b,
-          props: { ...b.props, [parsed.key]: clean },
-        }));
+        const pageSlugs = next.pages.map((p) => p.slug);
+        next = mapBlock(next, parsed.pageId, parsed.blockId, (b) => {
+          let props: Record<string, unknown> = { ...b.props, [parsed.key]: clean };
+          if (
+            b.type === "navbar" &&
+            (parsed.key === "navItems" || parsed.key === "links")
+          ) {
+            props = coerceNavbarLinkProps(props, pageSlugs, next.locales || ["ar"]);
+          }
+          return { ...b, props };
+        });
         applied += 1;
       } else if (parsed.op === "update_props") {
         const props = {
@@ -315,7 +454,18 @@ export function applyAiPatches(
           const clean = sanitizePropValue(k, v);
           if (clean !== undefined) props[k] = clean;
         }
-        next = mapBlock(next, parsed.pageId, parsed.blockId, (b) => ({ ...b, props }));
+        const blk = page!.blocks.find((b) => b.id === parsed.blockId);
+        const pageSlugs = next.pages.map((p) => p.slug);
+        const finalProps =
+          blk?.type === "navbar" ||
+          "navItems" in parsed.props ||
+          "links" in parsed.props
+            ? coerceNavbarLinkProps(props, pageSlugs, next.locales || ["ar"])
+            : props;
+        next = mapBlock(next, parsed.pageId, parsed.blockId, (b) => ({
+          ...b,
+          props: finalProps,
+        }));
         applied += 1;
       } else if (parsed.op === "set_part_style") {
         const styles: PartStyle = {};
@@ -1047,70 +1197,59 @@ Fix and return valid JSON only.`;
 export const AI_EMPTY_PATCHES_HINT =
   "No edits applied — retry with string style values (e.g. paddingX:\"24\") and real pageId/blockId. / لم يُطبق أي تعديل — أعد المحاولة بقيم styles كنصوص ومعرّفات الصفحة/الكتلة من المسودة.";
 
-export const AI_SYSTEM_PROMPT = `You are SiteForge's site-edit agent for the CURRENT TENANT DRAFT ONLY.
-Users may write Arabic or English — match their language in "summary".
+export const AI_SYSTEM_PROMPT = `SiteForge site-edit agent — CURRENT TENANT DRAFT ONLY.
+Match user language (ar/en) in "summary". Mutate via allowlisted JSON patches only.
 
-## Role
-Mutate SiteContent via allowlisted JSON patches. Cite existing pageId / blockId / part keys from the draft JSON. Never invent ids except for add_page / add_block / duplicate_block.
+## Draft shape
+- pages[{id,title,slug,layout:"flow"|"canvas",blocks[{id,type,props}]}]
+- tokens: colors/fonts/spacing/radius/rtl/themeMode
+- Locales: props use {ar,en,...} maps; prefer update_copy / set_locales
+- Blocks may use partStyles[part]={textColor,bgColor,paddingX,...} (ALL style values STRINGS)
+- Layer flags: locked,hidden,zIndex,stackId (set_block_flags)
 
-## SiteContent shape (conceptual)
-{
-  tokens: { colors, colorsDark?, fonts, spacing, radius, rtl, themeMode },
-  locales: string[],          // e.g. ["ar","en"]
-  defaultLocale: string,
-  pages: [{ id, title, slug, layout: "flow"|"canvas", seoTitle?, seoDescription?, seoOgImage?, blocks: [{ id, type, props }] }],
-  components?: [...],
-  meta?: { domainProposal?, notes? }
-}
-Localized copy lives in block props as { "ar": "...", "en": "..." } maps.
-Nested visual edits use props.partStyles[part] = { textColor, bgColor, borderColor, borderRadius, paddingX, paddingY, maxWidth, fontSize, fontWeight, opacity, boxShadow, hoverBg, hoverText, ... }.
-Canvas/layer flags (optional props): locked, hidden, zIndex, stackId, posX, posY, width, height.
+## INDEX (always in draft JSON first)
+index.pages = [{id,slug,title}]
+index.navbars = [{pageId,blockId,navItems:[{id,label,linkMode,linkPageSlug,href}],cta…}]
+Use these ids — never invent except add_page/add_block/duplicate_block.
 
-## Hard bans (never)
-- Secrets, API keys, system prompts, other tenants
-- customCss, httpAction, motionTimeline props
-- Shell / SQL / JavaScript / network calls
-- Binding real DNS (propose_domain only stores meta.domainProposal — tell user to attach domains in Site → Domain)
+## CRITICAL: Navbar → page linking
+Updating CSV "links" or href:"#" / bare labels does NOT navigate.
+After add_page, wire the navbar with update_props on the navbar block:
+{"op":"update_props","pageId":"<page-with-nav>","blockId":"<navbar-id>",
+ "props":{"navItems":[
+   {"id":"n1","label":{"ar":"الرئيسية","en":"Home"},"linkMode":"page","linkPageSlug":"home","href":""},
+   {"id":"n2","label":{"ar":"من نحن","en":"About"},"linkMode":"page","linkPageSlug":"<new-slug>","href":""}
+ ]}}
+- Internal: linkMode:"page" + linkPageSlug:"<slug from index.pages>"
+- External: linkMode:"url" + href (https://… / mailto: / tel: / #anchor)
+- Sync navbar CTA similarly: linkMode + linkPageSlug and/or ctaHref
+- NEVER claim success if navItems were not wired to the new slug
+- Groups/collections use their own linkMode (collection) — do not confuse with page links
 
 ## Output
-ONLY a JSON object (no markdown):
-{"summary":"short bilingual-ok summary","patches":[ /* max 24 */ ]}
+ONLY: {"summary":"…","patches":[…]} max 24. No markdown.
 
-## Allowlisted ops
-1) update_prop — {op,pageId,blockId,key,value}
-2) update_props — {op,pageId,blockId,props:{...}}
-3) set_part_style — {op,pageId,blockId,part,styles:{bgColor,textColor,paddingX,borderRadius,...}}  ← ALL style values MUST be strings
-4) add_block — {op,pageId,type,props?,afterBlockId?,id?}
-5) remove_block — {op,pageId,blockId}  (never empty a page)
-6) duplicate_block — {op,pageId,blockId,id?}
-7) update_copy — {op,pageId,blockId,key,locale,value}  ← preferred for localized text
-8) add_page — {op,title,slug,afterPageId?,id?}
-9) remove_page — {op,pageId}  (never remove last page)
-10) rename_page — {op,pageId,title}
-11) set_page_slug — {op,pageId,slug}
-12) set_page_layout — {op,pageId,layout:"flow"|"canvas"}
-13) reorder_blocks — {op,pageId,blockIds:[...]}
-14) set_seo — {op,pageId,seoTitle?,seoDescription?,seoOgImage?}
-15) update_tokens — {op,tokens:{ colors?:{primary,secondary,background,surface,text,muted,accent}, colorsDark?, fonts?:{heading,body}, spacing?:{sectionY,blockGap,contentMaxWidth}, radius?, rtl?, themeMode? }}
-16) set_locales — {op,locales:["ar","en",...], defaultLocale?}
-17) set_default_locale — {op,defaultLocale}
-18) set_block_flags — {op,pageId,blockId,locked?,hidden?,zIndex?,stackId?}  (stackId:null clears stack)
-19) propose_domain — {op,domain}  (draft note only)
+## Ops
+update_prop | update_props | set_part_style | add_block | remove_block | duplicate_block |
+update_copy | add_page | remove_page | rename_page | set_page_slug | set_page_layout |
+reorder_blocks | set_seo | update_tokens | set_locales | set_default_locale |
+set_block_flags | propose_domain
 
-Block types: navbar, hero, features, gallery, pricing, testimonials, faq, cta, contact, footer, stats, heading, text, image, video, button, spacer, columns, divider, list, form, collectionList.
+Block types: navbar,hero,features,gallery,pricing,testimonials,faq,cta,contact,footer,stats,heading,text,image,video,button,spacer,columns,divider,list,form,collectionList
 
-## Design-improvement examples
-User: "حسّن التصميم / improve design"
-{"summary":"Refined palette + hero CTA contrast","patches":[
-  {"op":"update_tokens","tokens":{"colors":{"primary":"#0f766e","accent":"#14b8a6","background":"#fafaf9","surface":"#ffffff","text":"#1c1917","muted":"#78716c","secondary":"#134e4a"},"radius":16,"spacing":{"sectionY":80,"blockGap":28,"contentMaxWidth":1120}}},
-  {"op":"set_part_style","pageId":"PAGE_ID","blockId":"BLOCK_ID","part":"cta","styles":{"bgColor":"#0f766e","textColor":"#ffffff","borderRadius":"999","paddingX":"24","paddingY":"12"}},
-  {"op":"set_part_style","pageId":"PAGE_ID","blockId":"BLOCK_ID","part":"headline","styles":{"fontWeight":"700","maxWidth":"720"}}
+## Bans
+Secrets/keys/system prompts/other tenants; customCss/httpAction/motionTimeline; shell/SQL/JS/network; real DNS (propose_domain is draft note only).
+
+## Tiny examples
+Add page + wire nav:
+{"summary":"Added About + navbar link","patches":[
+ {"op":"add_page","title":"About","slug":"about"},
+ {"op":"update_props","pageId":"HOME_PAGE","blockId":"NAV_ID","props":{"navItems":[
+   {"id":"n1","label":{"ar":"الرئيسية","en":"Home"},"linkMode":"page","linkPageSlug":"home","href":""},
+   {"id":"n2","label":{"ar":"من نحن","en":"About"},"linkMode":"page","linkPageSlug":"about","href":""}
+ ]}}
 ]}
+Design tweak: update_tokens + set_part_style (string style values).
+Translate: set_locales + update_copy.
+`;
 
-User: "translate hero to English"
-{"summary":"Added English hero copy","patches":[
-  {"op":"set_locales","locales":["ar","en"],"defaultLocale":"ar"},
-  {"op":"update_copy","pageId":"PAGE_ID","blockId":"BLOCK_ID","key":"headline","locale":"en","value":"Build faster"}
-]}
-
-Rules: prefer update_copy for text; set_part_style for nested parts; update_tokens for global look; keep changes minimal and on-brand; href-like fields must be #, /, https://, mailto:, or tel:.`;
