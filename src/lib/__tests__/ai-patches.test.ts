@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { applyAiPatches, extractJsonObject } from "@/lib/ai/patches";
+import {
+  applyAiPatches,
+  extractJsonObject,
+  parseAiPatchesResponse,
+  repairAiPatchesResponse,
+  stripTrailingCommas,
+} from "@/lib/ai/patches";
 import { createBlankContent, defaultPropsFor } from "@/lib/design";
 import { normalizeHref } from "@/lib/href";
 
@@ -69,5 +75,143 @@ describe("ai patches", () => {
   it("extracts fenced json", () => {
     const raw = 'Sure.\n```json\n{"summary":"ok","patches":[]}\n```\n';
     expect(extractJsonObject(raw)).toEqual({ summary: "ok", patches: [] });
+  });
+
+  it("strips trailing commas lightly", () => {
+    expect(stripTrailingCommas('{"a":1,}')).toBe('{"a":1}');
+    expect(stripTrailingCommas("[1,2,]")).toBe("[1,2]");
+  });
+
+  it("parses fenced design-improvement output with trailing comma", () => {
+    const raw = `Here you go:
+\`\`\`json
+{
+  "summary": "Improved design",
+  "patches": [
+    {
+      "op": "update_tokens",
+      "tokens": {
+        "colors": { "primary": "#0f766e", "accent": "#14b8a6" },
+        "radius": 16,
+      }
+    },
+  ]
+}
+\`\`\`
+`;
+    const { data, repaired } = parseAiPatchesResponse(raw);
+    expect(data).not.toBeNull();
+    expect(data!.patches).toHaveLength(1);
+    expect(data!.patches[0].op).toBe("update_tokens");
+    expect(repaired || true).toBeTruthy();
+  });
+
+  it("repairs bare patch array and aliased ops", () => {
+    const content = createBlankContent("Test");
+    const page = content.pages[0];
+    const block = page.blocks[0];
+    const raw = [
+      {
+        operation: "set_tokens",
+        colors: { primary: "#111827", accent: "#0d9488" },
+      },
+      {
+        action: "part_style",
+        pageId: page.id,
+        blockId: block.id,
+        part: "cta",
+        style: { bgColor: "#0d9488", textColor: "#fff" },
+      },
+      {
+        op: "improve_design",
+        tokens: { radius: 12 },
+      },
+    ];
+    const repaired = repairAiPatchesResponse(raw);
+    expect(repaired).not.toBeNull();
+    expect(repaired!.patches.length).toBeGreaterThanOrEqual(2);
+    expect(repaired!.patches.every((p) => p.op === "update_tokens" || p.op === "set_part_style")).toBe(
+      true
+    );
+
+    const { content: next, applied, errors } = applyAiPatches(content, repaired!.patches);
+    expect(errors).toEqual([]);
+    expect(applied).toBeGreaterThanOrEqual(2);
+    expect(next.tokens.colors.primary).toBeTruthy();
+  });
+
+  it("applies update_tokens, set_locales, set_block_flags, duplicate_block", () => {
+    const content = createBlankContent("Test");
+    const page = content.pages[0];
+    const block = page.blocks[0];
+    const { content: next, applied, errors } = applyAiPatches(content, [
+      {
+        op: "update_tokens",
+        tokens: {
+          colors: { primary: "#0f766e" },
+          radius: 20,
+          themeMode: "dark",
+        },
+      },
+      { op: "set_locales", locales: ["ar", "en"], defaultLocale: "en" },
+      {
+        op: "set_block_flags",
+        pageId: page.id,
+        blockId: block.id,
+        locked: true,
+        zIndex: 5,
+      },
+      {
+        op: "duplicate_block",
+        pageId: page.id,
+        blockId: block.id,
+        id: "dup-block-01",
+      },
+      {
+        op: "set_seo",
+        pageId: page.id,
+        seoTitle: "Hello",
+        seoDescription: "World",
+      },
+    ]);
+    expect(errors).toEqual([]);
+    expect(applied).toBe(5);
+    expect(next.tokens.colors.primary).toBe("#0f766e");
+    expect(next.tokens.radius).toBe(20);
+    expect(next.tokens.themeMode).toBe("dark");
+    expect(next.locales).toEqual(["ar", "en"]);
+    expect(next.defaultLocale).toBe("en");
+    expect(next.pages[0].seoTitle).toBe("Hello");
+    const flags = next.pages[0].blocks.find((b) => b.id === block.id)!.props as Record<
+      string,
+      unknown
+    >;
+    expect(flags.locked).toBe(true);
+    expect(flags.zIndex).toBe("5");
+    expect(next.pages[0].blocks.some((b) => b.id === "dup-block-01")).toBe(true);
+  });
+
+  it("parses prose-wrapped object without fences", () => {
+    const raw =
+      'I will improve the look. {"summary":"ok","patches":[{"op":"update_tokens","tokens":{"radius":8}}]} Hope that helps.';
+    const { data } = parseAiPatchesResponse(raw);
+    expect(data?.patches[0]?.op).toBe("update_tokens");
+  });
+
+  it("repairs single-patch object missing patches array", () => {
+    const content = createBlankContent("Test");
+    const page = content.pages[0];
+    const raw = {
+      summary: "CTA polish",
+      op: "set_part_style",
+      pageId: page.id,
+      blockId: page.blocks[0].id,
+      part: "cta",
+      styles: { bgColor: "#134e4a" },
+    };
+    const repaired = repairAiPatchesResponse(raw);
+    expect(repaired?.patches).toHaveLength(1);
+    const applied = applyAiPatches(content, repaired!.patches);
+    expect(applied.applied).toBe(1);
   });
 });

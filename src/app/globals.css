@@ -562,6 +562,36 @@ input.font-mono::placeholder {
   opacity: 0.5;
 }
 
+/* Platform RTL/LTR — centralized on shared fields (Input/Textarea/TextField/SearchField) */
+.sf-field,
+.sf-label {
+  text-align: start;
+  unicode-bidi: isolate;
+}
+.sf-field--rtl,
+.sf-label--rtl {
+  direction: rtl;
+  text-align: start;
+}
+.sf-field--ltr,
+.sf-label--ltr {
+  direction: ltr;
+  text-align: left;
+}
+/* Email/password/url values stay LTR; chrome/labels follow html[dir] */
+.sf-field[type="email"],
+.sf-field[type="password"],
+.sf-field[type="url"],
+.sf-field[type="tel"],
+.sf-field[type="number"] {
+  direction: ltr;
+  text-align: left;
+  unicode-bidi: isolate;
+}
+.sf-text-field {
+  text-align: start;
+}
+
 /* Sticky app header */
 .sf-app-header {
   position: sticky;

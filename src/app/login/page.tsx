@@ -75,7 +75,6 @@ export default function LoginPage() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
-                  dir="ltr"
                   autoComplete="email"
                   placeholder={t("placeholderEmail")}
                 />

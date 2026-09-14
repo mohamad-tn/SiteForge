@@ -17,9 +17,9 @@ import {
   AI_TEXT_MIMES,
   type AiAttachment,
 } from "@/lib/ai/attachments";
-import { KeyRound, Paperclip, Sparkles, X } from "lucide-react";
+import { KeyRound, Paperclip, Sparkles, Square, X } from "lucide-react";
 
-type Step = { step: string; message: string };
+type Step = { step: string; message: string; at?: string };
 type AttMeta = {
   type?: string;
   name?: string;
@@ -54,6 +54,23 @@ function readFileAsDataUrl(file: File): Promise<string> {
     r.onerror = () => reject(new Error("read failed"));
     r.readAsDataURL(file);
   });
+}
+
+function stepLabel(
+  step: string,
+  t: (k: string) => string
+): string {
+  const map: Record<string, string> = {
+    thinking: t("aiStepThinking"),
+    planning: t("aiStepPlanning"),
+    calling_model: t("aiStepCalling"),
+    parsing: t("aiStepParsing"),
+    repairing: t("aiStepRepairing"),
+    repaired: t("aiStepRepaired"),
+    applying: t("aiStepApplying"),
+    done: t("aiStepDone"),
+  };
+  return map[step] || step;
 }
 
 function AttChips({
@@ -138,11 +155,16 @@ export function AiEditorPanel({
   const [hasUserKey, setHasUserKey] = useState(false);
   const [usageLabel, setUsageLabel] = useState("");
   const [savingKey, setSavingKey] = useState(false);
+  const [historyLoaded, setHistoryLoaded] = useState(false);
   const scroller = useRef<HTMLDivElement | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const contentRef = useRef(content);
+  contentRef.current = content;
   const openRef = useRef(open);
   openRef.current = open;
+  const busyRef = useRef(busy);
+  busyRef.current = busy;
 
   const loadStatus = useCallback(async () => {
     try {
@@ -182,55 +204,56 @@ export function AiEditorPanel({
     }
   }, [lang]);
 
+  const mapHistoryMsg = useCallback(
+    (m: {
+      id: string;
+      role: string;
+      text: string;
+      status?: string;
+      attachmentMeta?: AttMeta[];
+      steps?: Step[];
+    }): ChatMsg => ({
+      id: m.id,
+      role:
+        m.status === "error"
+          ? "error"
+          : m.role === "user"
+            ? "user"
+            : m.role === "assistant"
+              ? "assistant"
+              : "system",
+      text:
+        m.status === "cancelled"
+          ? `${m.text || ""}${m.text ? " · " : ""}${t("aiCancelled")}`
+          : m.text,
+      status: m.status,
+      attachmentMeta: m.attachmentMeta,
+      steps: m.steps as Step[] | null,
+    }),
+    [t]
+  );
+
   const loadHistory = useCallback(async () => {
     try {
       const res = await fetch(`/api/ai/chat?siteId=${encodeURIComponent(siteId)}`);
       if (!res.ok) return;
       const data = await res.json();
-      setMessages(
-        (data.messages || []).map(
-          (m: {
-            id: string;
-            role: string;
-            text: string;
-            status?: string;
-            attachmentMeta?: AttMeta[];
-            steps?: Step[];
-          }) => ({
-            id: m.id,
-            role:
-              m.status === "error"
-                ? "error"
-                : m.role === "user"
-                  ? "user"
-                  : m.role === "assistant"
-                    ? "assistant"
-                    : "system",
-            text:
-              m.status === "cancelled"
-                ? `${m.text || ""}${m.text ? " · " : ""}${t("aiCancelled")}`
-                : m.text,
-            status: m.status,
-            attachmentMeta: m.attachmentMeta,
-            steps: m.steps as Step[] | null,
-          })
-        )
-      );
+      // Don't clobber in-flight local messages while a request is running
+      if (busyRef.current) {
+        setNextCursor(data.nextCursor || null);
+        return;
+      }
+      setMessages((data.messages || []).map(mapHistoryMsg));
       setNextCursor(data.nextCursor || null);
+      setHistoryLoaded(true);
     } catch {
       /* ignore */
     }
-  }, [siteId, t]);
+  }, [siteId, mapHistoryMsg]);
 
+  // Load status/history when drawer opens — never abort in-flight work on close
   useEffect(() => {
-    if (!open) {
-      // Abort in-flight when drawer closes
-      if (abortRef.current) {
-        abortRef.current.abort();
-        abortRef.current = null;
-      }
-      return;
-    }
+    if (!open) return;
     void loadStatus();
     void loadUserAi();
     void loadHistory();
@@ -240,6 +263,13 @@ export function AiEditorPanel({
     if (!open) return;
     scroller.current?.scrollTo({ top: scroller.current.scrollHeight });
   }, [open, messages, steps]);
+
+  function cancelInFlight() {
+    if (abortRef.current) {
+      abortRef.current.abort();
+      abortRef.current = null;
+    }
+  }
 
   async function loadOlder() {
     if (!nextCursor || loadingOlder) return;
@@ -257,16 +287,8 @@ export function AiEditorPanel({
           text: string;
           status?: string;
           attachmentMeta?: AttMeta[];
-        }) => ({
-          id: m.id,
-          role: (m.status === "error" ? "error" : m.role) as ChatMsg["role"],
-          text:
-            m.status === "cancelled"
-              ? `${m.text || ""} · ${t("aiCancelled")}`
-              : m.text,
-          status: m.status,
-          attachmentMeta: m.attachmentMeta,
-        })
+          steps?: Step[];
+        }) => mapHistoryMsg(m)
       );
       setMessages((prev) => [...older, ...prev]);
       setNextCursor(data.nextCursor || null);
@@ -431,8 +453,8 @@ export function AiEditorPanel({
             (lang === "ar"
               ? "راجع المرفقات وطبق التعديلات المناسبة."
               : "Review attachments and apply suitable edits."),
-          content,
-          locale: content.defaultLocale,
+          content: contentRef.current,
+          locale: contentRef.current.defaultLocale,
           attachments: payloadAttachments,
         }),
         signal: ac.signal,
@@ -462,6 +484,7 @@ export function AiEditorPanel({
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buf = "";
+      let liveSteps: Step[] = [];
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
@@ -476,15 +499,20 @@ export function AiEditorPanel({
               type: string;
               step?: string;
               message?: string;
+              at?: string;
               summary?: string;
               applied?: number;
               errors?: string[];
               content?: SiteContent;
               error?: string;
+              messageId?: string;
+              steps?: Step[];
               quota?: { remaining: number; dailyLimit: number; usedToday: number };
             };
             if (evt.type === "step" && evt.step && evt.message) {
-              setSteps((s) => [...s, { step: evt.step!, message: evt.message! }]);
+              const rec = { step: evt.step, message: evt.message, at: evt.at };
+              liveSteps = [...liveSteps, rec];
+              setSteps(liveSteps);
             } else if (evt.type === "result" && evt.content) {
               onApplyContent(evt.content);
               const summary =
@@ -492,9 +520,17 @@ export function AiEditorPanel({
                 (lang === "ar"
                   ? `تم تطبيق ${evt.applied ?? 0} تعديلاً`
                   : `Applied ${evt.applied ?? 0} patch(es)`);
-              if (openRef.current) {
-                setMessages((m) => [...m, { role: "assistant", text: summary }]);
-              }
+              const finalSteps = evt.steps?.length ? evt.steps : liveSteps;
+              setMessages((m) => [
+                ...m,
+                {
+                  id: evt.messageId,
+                  role: "assistant",
+                  text: summary,
+                  status: "ok",
+                  steps: finalSteps,
+                },
+              ]);
               if (evt.quota) {
                 setQuotaLabel(
                   lang === "ar"
@@ -511,12 +547,23 @@ export function AiEditorPanel({
             } else if (evt.type === "cancelled") {
               setMessages((m) => [
                 ...m,
-                { role: "system", text: t("aiCancelled"), status: "cancelled" },
+                {
+                  id: evt.messageId,
+                  role: "system",
+                  text: t("aiCancelled"),
+                  status: "cancelled",
+                  steps: evt.steps || liveSteps,
+                },
               ]);
             } else if (evt.type === "error") {
               setMessages((m) => [
                 ...m,
-                { role: "error", text: evt.error || t("aiError") },
+                {
+                  id: evt.messageId,
+                  role: "error",
+                  text: evt.error || t("aiError"),
+                  steps: evt.steps || liveSteps,
+                },
               ]);
             }
           } catch {
@@ -536,23 +583,32 @@ export function AiEditorPanel({
     } finally {
       abortRef.current = null;
       setBusy(false);
-      setSteps([]);
+      // Keep last steps briefly visible until next send; clear after paint
+      setTimeout(() => {
+        if (!busyRef.current) setSteps([]);
+      }, 400);
     }
   }
 
-  if (!open) return null;
-
+  // Keep panel mounted so fetch + state survive drawer close (CSS hide only)
   return (
     <div
-      className="fixed inset-0 z-[85] flex justify-end bg-[color-mix(in_oklab,var(--foreground)_35%,transparent)] backdrop-blur-[2px]"
+      className={
+        open
+          ? "fixed inset-0 z-[85] flex justify-end bg-[color-mix(in_oklab,var(--foreground)_35%,transparent)] backdrop-blur-[2px]"
+          : "pointer-events-none fixed inset-0 z-[85] hidden"
+      }
       dir={dir}
-      onClick={() => onOpenChange(false)}
+      onClick={() => {
+        if (open) onOpenChange(false);
+      }}
+      aria-hidden={!open}
     >
       <aside
         className="flex h-full w-full max-w-md flex-col border-s border-[var(--border)] bg-[var(--card)] shadow-2xl"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
-        aria-modal="true"
+        aria-modal={open}
         aria-label={t("aiAssistant")}
       >
         <header className="flex items-center justify-between gap-2 border-b border-[var(--border)] px-4 py-3">
@@ -563,20 +619,35 @@ export function AiEditorPanel({
             <div className="min-w-0">
               <div className="truncate text-sm font-bold">{t("aiAssistant")}</div>
               <div className="truncate text-[10px] text-[var(--muted)]">
-                {quotaLabel || t("aiAssistantHint")}
+                {busy ? t("aiWorking") : quotaLabel || t("aiAssistantHint")}
               </div>
             </div>
           </div>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="rounded-full"
-            onClick={() => onOpenChange(false)}
-            aria-label={t("close")}
-          >
-            <X className="h-4 w-4" />
-          </Button>
+          <div className="flex items-center gap-1">
+            {busy ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="rounded-full text-rose-700 dark:text-rose-300"
+                onClick={() => cancelInFlight()}
+                aria-label={t("aiCancel")}
+              >
+                <Square className="h-3 w-3 fill-current" />
+                {t("aiCancel")}
+              </Button>
+            ) : null}
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="rounded-full"
+              onClick={() => onOpenChange(false)}
+              aria-label={t("close")}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
         </header>
 
         <div
@@ -613,7 +684,7 @@ export function AiEditorPanel({
             </div>
           ) : null}
 
-          {messages.length === 0 && !disabledReason ? (
+          {messages.length === 0 && !disabledReason && historyLoaded ? (
             <div className="rounded-2xl border border-dashed border-[var(--border)] bg-[var(--surface)] p-4 text-sm leading-6 text-[var(--muted)]">
               {t("aiEmptyHint")}
             </div>
@@ -644,16 +715,44 @@ export function AiEditorPanel({
                   onOpen={(url) => setLightbox(url)}
                 />
               ) : null}
+              {m.steps?.length && m.role === "assistant" ? (
+                <ol className="mt-2 space-y-1 border-t border-black/10 pt-2 dark:border-white/10">
+                  {m.steps.map((s, si) => (
+                    <li key={`${s.step}-${si}`} className="text-[10px] opacity-80">
+                      <span className="font-semibold">{stepLabel(s.step, t)}</span>
+                      {" — "}
+                      {s.message}
+                    </li>
+                  ))}
+                </ol>
+              ) : null}
             </div>
           ))}
 
-          {steps.length ? (
-            <ol className="space-y-1.5 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3">
+          {busy && steps.length ? (
+            <ol
+              className="space-y-1.5 rounded-2xl border border-teal-500/30 bg-teal-50/50 p-3 dark:bg-teal-950/20"
+              aria-live="polite"
+              aria-label={t("aiTimeline")}
+            >
+              <li className="text-[10px] font-bold uppercase tracking-wider text-teal-800 dark:text-teal-300">
+                {t("aiTimeline")}
+              </li>
               {steps.map((s, i) => (
-                <li key={`${s.step}-${i}`} className="flex items-start gap-2 text-[11px] text-[var(--muted)]">
-                  <span className="mt-0.5 inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-teal-600" aria-hidden />
+                <li
+                  key={`${s.step}-${i}`}
+                  className="flex items-start gap-2 text-[11px] text-[var(--muted)]"
+                >
+                  <span
+                    className={`mt-0.5 inline-block h-1.5 w-1.5 shrink-0 rounded-full ${
+                      i === steps.length - 1 ? "animate-pulse bg-teal-600" : "bg-teal-600/50"
+                    }`}
+                    aria-hidden
+                  />
                   <span>
-                    <span className="font-semibold text-[var(--foreground)]">{s.step}</span>
+                    <span className="font-semibold text-[var(--foreground)]">
+                      {stepLabel(s.step, t)}
+                    </span>
                     {" — "}
                     {s.message}
                   </span>
@@ -698,7 +797,9 @@ export function AiEditorPanel({
                     value={userModel}
                     onChange={(e) => setUserModel(e.target.value)}
                     className="h-8 text-xs"
-                    dir="ltr"
+                    inputMode="text"
+                    autoComplete="off"
+                    valueDir="ltr"
                   />
                 </div>
               </div>
@@ -710,7 +811,6 @@ export function AiEditorPanel({
                   onChange={(e) => setUserKey(e.target.value)}
                   placeholder={hasUserKey ? t("aiApiKeySet") : "sk-…"}
                   className="h-8 text-xs"
-                  dir="ltr"
                   autoComplete="off"
                 />
               </div>
@@ -797,16 +897,28 @@ export function AiEditorPanel({
                 {attachBusy ? t("aiAttachBusy") : t("aiShortcutHint")}
               </span>
             </div>
-            <Button
-              type="button"
-              className="rounded-full bg-teal-800 hover:bg-teal-700"
-              disabled={busy || (!input.trim() && !attachments.length) || !aiAvailable}
-              onClick={() => void send()}
-              title={!aiAvailable ? t("aiNeedKey") : undefined}
-            >
-              <Sparkles className="h-3.5 w-3.5" aria-hidden />
-              {busy ? t("aiWorking") : t("aiSend")}
-            </Button>
+            {busy ? (
+              <Button
+                type="button"
+                variant="outline"
+                className="rounded-full border-rose-500/40 text-rose-700 dark:text-rose-300"
+                onClick={() => cancelInFlight()}
+              >
+                <Square className="h-3.5 w-3.5 fill-current" />
+                {t("aiCancel")}
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                className="rounded-full bg-teal-800 hover:bg-teal-700"
+                disabled={(!input.trim() && !attachments.length) || !aiAvailable}
+                onClick={() => void send()}
+                title={!aiAvailable ? t("aiNeedKey") : undefined}
+              >
+                <Sparkles className="h-3.5 w-3.5" aria-hidden />
+                {t("aiSend")}
+              </Button>
+            )}
           </div>
         </footer>
       </aside>

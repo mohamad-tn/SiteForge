@@ -112,3 +112,6 @@ export function PasswordChecklist({
 export function passwordRulesPass(password: string, confirm?: string): boolean {
   return evaluatePasswordRules(password, confirm).every((r) => r.ok);
 }
+
+/** Alias for shared naming (Input/TextField/PasswordField/SearchField). */
+export const PasswordField = PasswordInput;

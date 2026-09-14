@@ -3,10 +3,10 @@ import { prisma } from "@/lib/prisma";
 import { jsonError, parseJsonBody, requireSession, requireSiteAccess } from "@/lib/api";
 import { siteContentSchema, type SiteContent } from "@/lib/design";
 import {
+  AI_REPAIR_PROMPT,
   AI_SYSTEM_PROMPT,
   applyAiPatches,
-  aiPatchesResponseSchema,
-  extractJsonObject,
+  parseAiPatchesResponse,
 } from "@/lib/ai/patches";
 import {
   getProviderAdapter,
@@ -45,6 +45,8 @@ const bodySchema = z.object({
   attachments: aiAttachmentsField,
   /** Client message id for cancel/partial tracking */
   clientMessageId: z.string().max(64).optional(),
+  /** When true, client is cancelling — only then should work stop early */
+  clientCancel: z.boolean().optional(),
 });
 
 function attachmentMeta(atts: AiAttachment[]) {
@@ -57,6 +59,8 @@ function attachmentMeta(atts: AiAttachment[]) {
     previewUrl: a.type === "image" ? a.mediaUrl || a.dataUrl || null : null,
   }));
 }
+
+type StepRec = { step: string; message: string; at?: string };
 
 export async function GET(req: Request) {
   const auth = await requireSession();
@@ -154,50 +158,63 @@ export async function POST(req: Request) {
 
   const attParts = buildAttachmentPromptParts(attachments);
   const visionOk = modelLikelySupportsVision(resolved.model);
+  // Only treat abort as cancel when the client explicitly aborts the fetch
+  // (Cancel button). Closing the drawer must NOT abort — keep the socket open.
   const abortSignal = req.signal;
 
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
     async start(controller) {
       const send = (obj: unknown) => {
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify(obj)}\n\n`));
+        try {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify(obj)}\n\n`));
+        } catch {
+          /* client may have gone; still finish server work */
+        }
       };
-      const steps: { step: string; message: string }[] = [];
+      const steps: StepRec[] = [];
       let cancelled = false;
+
+      const pushStep = (step: string, message: string) => {
+        const rec = { step, message, at: new Date().toISOString() };
+        steps.push(rec);
+        send({ type: "step", step, message, at: rec.at });
+      };
 
       const onAbort = () => {
         cancelled = true;
       };
       abortSignal.addEventListener("abort", onAbort);
 
-      try {
-        send({ type: "step", step: "thinking", message: "Planning edits…" });
-        steps.push({ step: "thinking", message: "Planning edits…" });
-
-        if (resolved.usePlatformQuota) {
-          await consumeQuota(auth.user.id);
-        }
-
-        const adapter = getProviderAdapter(resolved.provider as AiProviderId);
-        send({
-          type: "step",
-          step: "calling_model",
-          message: `Calling ${resolved.provider} (${resolved.source})…`,
-        });
-        steps.push({
-          step: "calling_model",
-          message: `Calling ${resolved.provider}…`,
-        });
-
+      const throwIfCancelled = () => {
         if (abortSignal.aborted || cancelled) {
           const err = new Error("Aborted");
           err.name = "AbortError";
           throw err;
         }
+      };
+
+      try {
+        pushStep("thinking", "Analyzing your request… / جاري تحليل طلبك…");
+
+        if (resolved.usePlatformQuota) {
+          await consumeQuota(auth.user.id);
+        }
+
+        throwIfCancelled();
+
+        pushStep(
+          "planning",
+          `Planning edits with ${resolved.provider}… / التخطيط عبر ${resolved.provider}…`
+        );
+
+        const adapter = getProviderAdapter(resolved.provider as AiProviderId);
 
         const userText = [
           `Site id: ${parsed.data.siteId}`,
           `Preferred locale: ${locale}`,
+          `Enabled locales: ${(content.locales || []).join(", ")}`,
+          `Default locale: ${content.defaultLocale}`,
           `User goal:\n${parsed.data.message}`,
           attParts.textBlocks.length ? `Attachments:\n${attParts.textBlocks.join("\n\n")}` : "",
           attParts.mediaUrls.length
@@ -218,7 +235,7 @@ export async function POST(req: Request) {
           ];
         }
 
-        const messages: AiChatMessage[] = [
+        const baseMessages: AiChatMessage[] = [
           { role: "system", content: AI_SYSTEM_PROMPT },
           ...historyForModel
             .filter((m) => m.role === "user" || m.role === "assistant")
@@ -229,22 +246,66 @@ export async function POST(req: Request) {
           { role: "user", content: userContent },
         ];
 
-        const result = await adapter.complete({
+        pushStep(
+          "calling_model",
+          `Calling ${resolved.provider} (${resolved.source})… / استدعاء النموذج…`
+        );
+
+        throwIfCancelled();
+
+        let result = await adapter.complete({
           apiKey: resolved.apiKey,
           model: resolved.model,
           maxTokens: resolved.maxTokens,
-          messages,
+          messages: baseMessages,
         });
 
-        // If the model finished, persist the result even when the client closed.
-        // Only treat as cancelled when abort happens before completion (handled in catch).
+        // Persist even if client closed the drawer (socket may still be open,
+        // or write may fail — work continues).
         const clientGone = abortSignal.aborted || cancelled;
 
-        send({ type: "step", step: "parsing", message: "Parsing patches…" });
-        steps.push({ step: "parsing", message: "Parsing patches…" });
-        const raw = extractJsonObject(result.text);
-        const validated = aiPatchesResponseSchema.safeParse(raw);
-        if (!validated.success) {
+        pushStep("parsing", "Parsing patches… / تحليل التعديلات…");
+        let parsedPatches = parseAiPatchesResponse(result.text);
+
+        if (!parsedPatches.data) {
+          pushStep(
+            "repairing",
+            "Repairing invalid patches… / إصلاح التعديلات غير الصالحة…"
+          );
+          throwIfCancelled();
+          try {
+            const repairResult = await adapter.complete({
+              apiKey: resolved.apiKey,
+              model: resolved.model,
+              maxTokens: Math.min(resolved.maxTokens, 2048),
+              messages: [
+                { role: "system", content: AI_SYSTEM_PROMPT },
+                { role: "user", content: userText.slice(0, 12000) },
+                { role: "assistant", content: result.text.slice(0, 6000) },
+                {
+                  role: "user",
+                  content: `${AI_REPAIR_PROMPT}\n\nValidation hint: output must match {"summary":string,"patches":[{op:...}]}.`,
+                },
+              ],
+            });
+            result = {
+              text: repairResult.text,
+              tokensIn: (result.tokensIn || 0) + (repairResult.tokensIn || 0),
+              tokensOut: (result.tokensOut || 0) + (repairResult.tokensOut || 0),
+            };
+            parsedPatches = parseAiPatchesResponse(result.text);
+          } catch (repairErr) {
+            if (
+              repairErr instanceof Error &&
+              repairErr.name === "AbortError"
+            ) {
+              throw repairErr;
+            }
+            // fall through with prior parse
+          }
+        }
+
+        if (!parsedPatches.data) {
           await prisma.aiUsageLog.create({
             data: {
               userId: auth.user.id,
@@ -276,9 +337,19 @@ export async function POST(req: Request) {
           return;
         }
 
-        send({ type: "step", step: "applying", message: "Applying validated patches…" });
-        steps.push({ step: "applying", message: "Applying validated patches…" });
-        const applied = applyAiPatches(content, validated.data.patches);
+        if (parsedPatches.repaired) {
+          pushStep(
+            "repaired",
+            "Deterministic repair applied… / طُبّق إصلاح تلقائي…"
+          );
+        }
+
+        const patchCount = parsedPatches.data.patches.length;
+        pushStep(
+          "applying",
+          `Applying ${patchCount} patch(es)… / تطبيق ${patchCount} تعديلاً…`
+        );
+        const applied = applyAiPatches(content, parsedPatches.data.patches);
 
         await prisma.aiUsageLog.create({
           data: {
@@ -295,10 +366,18 @@ export async function POST(req: Request) {
         });
 
         const summary =
-          validated.data.summary ||
-          (applied.applied > 0 ? `Applied ${applied.applied} patch(es)` : "No patches applied");
+          parsedPatches.data.summary ||
+          (applied.applied > 0
+            ? `Applied ${applied.applied} patch(es)`
+            : "No patches applied");
 
-        // Persist even if client closed — reopen shows result
+        pushStep(
+          "done",
+          applied.applied > 0
+            ? `Done — ${applied.applied} applied / تم — ${applied.applied} تعديلاً`
+            : "Done — nothing applied / تم — بلا تعديلات"
+        );
+
         await prisma.aiChatMessage.update({
           where: { id: assistantPartial.id },
           data: {
@@ -323,6 +402,7 @@ export async function POST(req: Request) {
           userMessageId: userMsg.id,
           keySource: resolved.source,
           clientGone,
+          steps,
         });
       } catch (e) {
         const isAbort = e instanceof Error && e.name === "AbortError";
@@ -359,10 +439,15 @@ export async function POST(req: Request) {
               ? "AI request failed"
               : msg.slice(0, 300),
           messageId: assistantPartial.id,
+          steps,
         });
       } finally {
         abortSignal.removeEventListener("abort", onAbort);
-        controller.close();
+        try {
+          controller.close();
+        } catch {
+          /* already closed */
+        }
       }
     },
   });
