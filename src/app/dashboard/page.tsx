@@ -1,9 +1,23 @@
 import { requireUser } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { DashboardClient } from "@/components/dashboard-client";
+import { redirect } from "next/navigation";
 
-export default async function DashboardPage() {
+type SearchParams = { tenant?: string };
+
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams?: Promise<SearchParams>;
+}) {
   const user = await requireUser();
+  const sp = (await searchParams) ?? {};
+
+  // Admins land on platform ops by default; ?tenant=1 is the escape hatch.
+  if (user.role === "ADMIN" && sp.tenant !== "1") {
+    redirect("/admin");
+  }
+
   const templates = await prisma.template.findMany({
     orderBy: { nameAr: "asc" },
     select: {

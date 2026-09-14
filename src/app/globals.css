@@ -28,13 +28,22 @@
   --shadow-xs: 0 1px 2px rgba(28, 25, 23, 0.04);
   --shadow-sm: 0 8px 24px -18px rgba(28, 25, 23, 0.28);
   --shadow-md: 0 20px 50px -32px rgba(28, 25, 23, 0.38);
-  --radius-sm: 0.65rem;
-  --radius-md: 0.85rem;
-  --radius-lg: 1rem;
-  --radius-xl: 1.25rem;
-  --radius-2xl: 1.5rem;
-  --radius-card: 1.65rem;
-  --control-h: 2.5rem;
+  --radius-sm: 0.55rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 0.9rem;
+  --radius-xl: 1.1rem;
+  --radius-2xl: 1.35rem;
+  --radius-card: 1.35rem;
+  /* Fluid density — laptop stays tight; phones still touch-friendly */
+  --control-h: clamp(2.15rem, 1.9rem + 0.45vw, 2.5rem);
+  --sf-shell-gutter: clamp(0.85rem, 0.55rem + 1.1vw, 1.35rem);
+  --sf-shell-max: min(100% - (2 * var(--sf-shell-gutter)), 90rem);
+  --sf-shell-max-wide: min(100% - (2 * var(--sf-shell-gutter)), 96rem);
+  --sf-card-pad: clamp(0.85rem, 0.65rem + 0.55vw, 1.35rem);
+  --sf-section-gap: clamp(1.1rem, 0.85rem + 0.7vw, 1.85rem);
+  --sf-stat-pad-y: clamp(0.65rem, 0.5rem + 0.35vw, 0.9rem);
+  --sf-stat-pad-x: clamp(0.75rem, 0.55rem + 0.4vw, 1rem);
+  --sf-stat-value: clamp(1.2rem, 1.05rem + 0.45vw, 1.5rem);
   --canvas: linear-gradient(180deg, #f7f4ef 0%, #ebe6dc 100%);
 }
 
@@ -72,6 +81,7 @@ html[data-theme="dark"] {
 
 html {
   scroll-behavior: smooth;
+  font-size: clamp(14px, 0.35vw + 13px, 16px);
 }
 
 body,
@@ -120,32 +130,187 @@ details > summary::-webkit-details-marker {
   overflow-x: hidden;
 }
 
-.sf-soft-card {
+/* Near full-bleed columns — Grok / GitHub density */
+.sf-shell {
+  width: var(--sf-shell-max);
+  max-width: 100%;
+  margin-inline: auto;
+  padding-inline: 0;
+}
+.sf-shell-wide {
+  width: var(--sf-shell-max-wide);
+  max-width: 100%;
+  margin-inline: auto;
+  padding-inline: 0;
+}
+.sf-shell-pad {
+  padding-inline: var(--sf-shell-gutter);
+}
+
+/* Auth atmosphere — layered mesh / noise, theme-aware */
+.sf-auth-bg {
+  position: relative;
+  isolation: isolate;
+  min-height: 100vh;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse 80% 55% at 12% -10%, color-mix(in oklab, var(--accent) 18%, transparent), transparent 55%),
+    radial-gradient(ellipse 70% 50% at 92% 8%, color-mix(in oklab, #d4a574 14%, transparent), transparent 50%),
+    radial-gradient(ellipse 60% 45% at 50% 110%, color-mix(in oklab, var(--accent) 10%, transparent), transparent 55%),
+    var(--canvas);
+  color: var(--foreground);
+}
+.sf-auth-bg::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.45;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.55'/%3E%3C/svg%3E");
+  background-size: 160px 160px;
+  mix-blend-mode: soft-light;
+}
+html.dark .sf-auth-bg::before,
+html[data-theme="dark"] .sf-auth-bg::before {
+  opacity: 0.28;
+  mix-blend-mode: overlay;
+}
+.sf-auth-bg > * {
+  position: relative;
+  z-index: 1;
+}
+
+.sf-glass-card {
   border-radius: var(--radius-card);
-  border: 1px solid var(--border);
-  background: var(--card);
+  border: 1px solid color-mix(in oklab, var(--border) 75%, transparent);
+  background: color-mix(in oklab, var(--card) 78%, transparent);
   color: var(--foreground);
   box-shadow: var(--shadow-md);
+  backdrop-filter: blur(18px) saturate(1.15);
+  -webkit-backdrop-filter: blur(18px) saturate(1.15);
+}
+html.dark .sf-glass-card,
+html[data-theme="dark"] .sf-glass-card {
+  background: color-mix(in oklab, var(--card) 72%, transparent);
+  border-color: color-mix(in oklab, var(--border) 70%, transparent);
+}
+
+/* Admin ops chrome */
+.sf-admin-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+.sf-admin-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+}
+.sf-admin-nav {
+  display: none;
+  width: 13.5rem;
+  flex-shrink: 0;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.85rem 0.65rem;
+  border-inline-end: 1px solid color-mix(in oklab, var(--border) 85%, transparent);
+  background: color-mix(in oklab, var(--surface) 55%, var(--card));
+}
+@media (min-width: 900px) {
+  .sf-admin-nav { display: flex; }
+}
+.sf-admin-nav button,
+.sf-admin-nav a.sf-admin-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  width: 100%;
+  border: 0;
+  border-radius: var(--radius-md);
+  padding: 0.5rem 0.7rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-align: start;
+  color: var(--muted);
+  background: transparent;
+  transition: background 0.12s ease, color 0.12s ease;
+  cursor: pointer;
+  text-decoration: none;
+}
+.sf-admin-nav button[data-active="true"],
+.sf-admin-nav a.sf-admin-nav-item[data-active="true"] {
+  color: var(--foreground);
+  background: color-mix(in oklab, var(--foreground) 7%, transparent);
+}
+.sf-admin-nav button:hover:not([data-active="true"]),
+.sf-admin-nav a.sf-admin-nav-item:hover:not([data-active="true"]) {
+  color: var(--foreground);
+  background: color-mix(in oklab, var(--foreground) 4%, transparent);
+}
+.sf-admin-main {
+  flex: 1;
+  min-width: 0;
+  padding: var(--sf-section-gap) var(--sf-shell-gutter);
+}
+.sf-admin-tabs-mobile {
+  display: block;
+  padding: 0.65rem var(--sf-shell-gutter) 0;
+}
+@media (min-width: 900px) {
+  .sf-admin-tabs-mobile { display: none; }
+}
+.sf-dense-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+}
+.sf-dense-table th {
+  padding: 0.45rem 0.65rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--muted);
+  text-align: start;
+  border-bottom: 1px solid color-mix(in oklab, var(--border) 90%, transparent);
+}
+.sf-dense-table td {
+  padding: 0.55rem 0.65rem;
+  border-bottom: 1px solid color-mix(in oklab, var(--border) 70%, transparent);
+  vertical-align: middle;
+}
+.sf-dense-table tr:hover td {
+  background: color-mix(in oklab, var(--foreground) 2.5%, transparent);
+}
+
+.sf-soft-card {
+  border-radius: var(--radius-card);
+  border: 1px solid color-mix(in oklab, var(--border) 88%, transparent);
+  background: var(--card);
+  color: var(--foreground);
+  box-shadow: var(--shadow-sm);
 }
 
 /* Metric / stat pill — card surface only, never gray fills in light mode */
 .sf-stat {
-  border-radius: var(--radius-2xl);
+  border-radius: var(--radius-xl);
   border: 1px solid color-mix(in oklab, var(--border) 88%, transparent);
   background: var(--stat-bg);
   color: var(--stat-fg);
   box-shadow: var(--shadow-xs);
-  padding: 0.875rem 1rem;
+  padding: var(--sf-stat-pad-y) var(--sf-stat-pad-x);
 }
 .sf-stat-label {
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 500;
   color: var(--muted);
   line-height: 1.3;
 }
 .sf-stat-value {
-  margin-top: 0.25rem;
-  font-size: 1.5rem;
+  margin-top: 0.2rem;
+  font-size: var(--sf-stat-value);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.02em;

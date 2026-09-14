@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
-import { AppCanvas, AppHeader, SoftCard, StatCard, Toolbar } from "@/components/ui/surface";
+import { AppCanvas, AppHeader, SoftCard, StatCard, Toolbar, Shell } from "@/components/ui/surface";
 import { SegmentedControl } from "@/components/ui/segmented";
 import { ThemeToggleButton } from "@/components/theme-provider";
 import { SignOutButton } from "@/components/sign-out-button";
@@ -105,10 +105,7 @@ export function DashboardClient({
   const [deleteTarget, setDeleteTarget] = useState<SiteRow | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState("");
   const [deleting, setDeleting] = useState(false);
-  const [templateDeleteTarget, setTemplateDeleteTarget] = useState<Template | null>(null);
-  const [templateConfirm, setTemplateConfirm] = useState("");
-  const [deletingTemplate, setDeletingTemplate] = useState(false);
-  const [templates, setTemplates] = useState(initialTemplates);
+  const [templates] = useState(initialTemplates);
 
   const filteredTemplates = useMemo(
     () => templates.filter((tpl) => (category === "all" ? true : tpl.category === category)),
@@ -120,10 +117,6 @@ export function DashboardClient({
     uiLang === "ar"
       ? deleteConfirm.trim() === siteConfirmWord
       : deleteConfirm.trim().toLowerCase() === siteConfirmWord;
-  const templateConfirmOk =
-    uiLang === "ar"
-      ? templateConfirm.trim() === siteConfirmWord
-      : templateConfirm.trim().toLowerCase() === siteConfirmWord;
 
   const loadSites = useCallback(async () => {
     setLoading(true);
@@ -208,27 +201,6 @@ export function DashboardClient({
     }
   }
 
-  async function confirmDeleteTemplate() {
-    if (!templateDeleteTarget?.id || !templateConfirmOk || deletingTemplate) return;
-    setDeletingTemplate(true);
-    setError("");
-    try {
-      const res = await fetch(`/api/templates/${templateDeleteTarget.id}`, { method: "DELETE" });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        setError(data.error || tp("deleteFailed"));
-        return;
-      }
-      setTemplates((prev) => prev.filter((t) => t.id !== templateDeleteTarget.id));
-      if (templateSlug === templateDeleteTarget.slug) {
-        setTemplateSlug("blank");
-      }
-      setTemplateDeleteTarget(null);
-      setTemplateConfirm("");
-    } finally {
-      setDeletingTemplate(false);
-    }
-  }
 
   async function importJson(file: File) {
     setImporting(true);
@@ -300,9 +272,9 @@ export function DashboardClient({
         {t.skipToContent}
       </a>
       <AppHeader>
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2 px-4 py-3.5 sm:gap-3 sm:px-6">
+        <Shell className="flex flex-wrap items-center justify-between gap-2 py-3 sm:gap-3">
           <div className="min-w-0 flex-1 basis-[12rem]">
-            <div className="truncate text-lg font-bold tracking-tight text-teal-900 dark:text-teal-300">
+            <div className="truncate text-base font-bold tracking-tight text-teal-900 dark:text-teal-300">
               SiteForge
             </div>
             <div className="truncate text-xs leading-5 text-[var(--muted)]">
@@ -336,11 +308,28 @@ export function DashboardClient({
             </Button>
             <SignOutButton />
           </div>
-        </div>
+        </Shell>
       </AppHeader>
 
-      <main id="sf-dash-main" className="mx-auto max-w-6xl space-y-7 px-4 py-7 sm:px-6 sm:py-9">
-        <section className="relative overflow-hidden rounded-[1.75rem] border border-[var(--border)] bg-[var(--card)] px-5 py-7 shadow-[var(--shadow-xs)] sm:px-8 sm:py-8">
+      <Shell
+        id="sf-dash-main"
+        className="space-y-[var(--sf-section-gap)] py-6 sm:py-8"
+      >
+        {isAdmin ? (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-xl)] border border-teal-800/15 bg-teal-50/60 px-4 py-3 dark:border-teal-400/20 dark:bg-teal-950/30">
+            <div className="min-w-0 text-sm text-[var(--foreground)]">
+              <span className="font-semibold">{tp("adminOpsStripTitle")}</span>
+              <span className="ms-2 text-[var(--muted)]">{tp("adminOpsStripBody")}</span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button asChild size="sm" className="rounded-full">
+                <Link href="/admin">{t.admin}</Link>
+              </Button>
+            </div>
+          </div>
+        ) : null}
+
+        <section className="relative overflow-hidden rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--card)] px-[var(--sf-card-pad)] py-6 shadow-[var(--shadow-xs)] sm:py-7">
           <div aria-hidden className="pointer-events-none absolute -end-10 -top-12 h-40 w-40 rounded-full bg-teal-500/10 blur-3xl" />
           <div className="relative flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
             <div className="min-w-0 max-w-2xl">
@@ -410,7 +399,7 @@ export function DashboardClient({
           </SoftCard>
         ) : null}
 
-        <SoftCard id="create" className="scroll-mt-24 border-stone-200/60 p-5 shadow-[var(--shadow-xs)] sm:p-6 dark:border-stone-800">
+        <SoftCard id="create" className="scroll-mt-24 border-[var(--border)] p-[var(--sf-card-pad)] shadow-[var(--shadow-xs)]">
           <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div className="min-w-0">
               <h2 className="text-lg font-semibold tracking-tight">{t.marketTitle}</h2>
@@ -458,7 +447,7 @@ export function DashboardClient({
                 required
               />
             </div>
-            <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {filteredTemplates.map((tpl) => (
                 <button
                   key={tpl.slug}
@@ -487,29 +476,7 @@ export function DashboardClient({
                   <div className="mt-1 line-clamp-2 text-xs leading-5 text-[var(--muted)]">
                     {tpl.descriptionAr}
                   </div>
-                  {isAdmin && tpl.id ? (
-                    <span
-                      role="button"
-                      tabIndex={0}
-                      className="mt-2 inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-bold text-rose-700 hover:bg-rose-50 dark:text-rose-300 dark:hover:bg-rose-950/40"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setTemplateDeleteTarget(tpl);
-                        setTemplateConfirm("");
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          setTemplateDeleteTarget(tpl);
-                          setTemplateConfirm("");
-                        }
-                      }}
-                    >
-                      <Trash2 className="h-3 w-3" />
-                      {tp("deleteTemplate")}
-                    </span>
-                  ) : null}
+                  
                 </button>
               ))}
             </div>
@@ -613,11 +580,11 @@ export function DashboardClient({
               </Button>
             </SoftCard>
           ) : (
-            <div className="grid gap-3.5 md:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {sites.map((site) => (
                 <SoftCard
                   key={site.id}
-                  className="flex min-w-0 flex-col border-stone-200/60 bg-[var(--card)]/90 p-5 shadow-[var(--shadow-xs)] transition hover:shadow-[var(--shadow-sm)] dark:border-stone-800"
+                  className="flex min-w-0 flex-col border-[var(--border)] bg-[var(--card)]/90 p-[var(--sf-card-pad)] shadow-[var(--shadow-xs)] transition hover:shadow-[var(--shadow-sm)]"
                 >
                   <div className="mb-4 min-w-0">
                     <div className="mb-2 flex items-center gap-2">
@@ -693,7 +660,7 @@ export function DashboardClient({
             </div>
           )}
         </section>
-      </main>
+      </Shell>
 
       {deleteTarget ? (
         <div
@@ -761,68 +728,6 @@ export function DashboardClient({
         </div>
       ) : null}
 
-      {templateDeleteTarget ? (
-        <div
-          className="fixed inset-0 z-[80] flex items-center justify-center bg-black/45 p-4"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="sf-delete-tpl-title"
-          onClick={() => {
-            if (!deletingTemplate) {
-              setTemplateDeleteTarget(null);
-              setTemplateConfirm("");
-            }
-          }}
-        >
-          <div
-            className="w-full max-w-md rounded-[1.5rem] border border-[var(--border)] bg-[var(--card)] p-5 text-[var(--foreground)] shadow-[var(--shadow-sm)]"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3 id="sf-delete-tpl-title" className="text-lg font-bold tracking-tight">
-              {tp("deleteTemplateTitle")}
-            </h3>
-            <p className="mt-2 text-sm leading-6 text-[var(--muted)]">{tp("deleteTemplateBody")}</p>
-            <p className="mt-3 text-sm font-semibold">{templateDeleteTarget.nameAr}</p>
-            <Label htmlFor="sf-delete-tpl-confirm" className="mt-4 block text-xs">
-              {tp("deleteConfirmPrompt")}{" "}
-              <span className="font-mono font-bold" dir="ltr">
-                {siteConfirmWord}
-              </span>
-            </Label>
-            <Input
-              id="sf-delete-tpl-confirm"
-              value={templateConfirm}
-              onChange={(e) => setTemplateConfirm(e.target.value)}
-              placeholder={tp("deleteConfirmPlaceholder")}
-              className="mt-1.5"
-              autoFocus
-              disabled={deletingTemplate}
-            />
-            <div className="mt-5 flex flex-wrap justify-end gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                className="rounded-full"
-                disabled={deletingTemplate}
-                onClick={() => {
-                  setTemplateDeleteTarget(null);
-                  setTemplateConfirm("");
-                }}
-              >
-                {tp("close")}
-              </Button>
-              <Button
-                type="button"
-                className="rounded-full bg-rose-700 text-white hover:bg-rose-800 disabled:opacity-40"
-                disabled={!templateConfirmOk || deletingTemplate}
-                onClick={confirmDeleteTemplate}
-              >
-                {deletingTemplate ? tp("deleting") : tp("deleteTemplate")}
-              </Button>
-            </div>
-          </div>
-        </div>
-      ) : null}
     </AppCanvas>
   );
 }

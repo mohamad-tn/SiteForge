@@ -1,14 +1,22 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { AppCanvas, AppHeader, SoftCard, Toolbar } from "@/components/ui/surface";
+import { SoftCard, Toolbar, StatCard, AdminShell } from "@/components/ui/surface";
 import { SegmentedControl } from "@/components/ui/segmented";
 import { ThemeToggleButton } from "@/components/theme-provider";
 import { PlatformLangSwitcher, usePlatformLang } from "@/components/platform-lang-provider";
-import { Trash2 } from "lucide-react";
+import {
+  Trash2,
+  LayoutDashboard,
+  Users,
+  Globe2,
+  Link2,
+  LayoutTemplate,
+  Sparkles,
+} from "lucide-react";
 import { SearchField } from "@/components/ui/search-field";
 import { AdminAiPanel } from "@/components/admin/admin-ai-panel";
 
@@ -31,6 +39,8 @@ type Overview = {
   }>;
 };
 
+type AdminTab = "overview" | "users" | "sites" | "domains" | "templates" | "ai";
+
 export default function AdminPage() {
   const { lang, dir, t } = usePlatformLang();
   const [overview, setOverview] = useState<Overview | null>(null);
@@ -38,7 +48,7 @@ export default function AdminPage() {
   const [sitesQ, setSitesQ] = useState("");
   const [users, setUsers] = useState<Array<Record<string, unknown>>>([]);
   const [sites, setSites] = useState<Array<Record<string, unknown>>>([]);
-  const [tab, setTab] = useState<"overview" | "users" | "sites" | "domains" | "templates" | "ai">("overview");
+  const [tab, setTab] = useState<AdminTab>("overview");
   const [domains, setDomains] = useState<Array<Record<string, unknown>>>([]);
   const [templates, setTemplates] = useState<Array<Record<string, unknown>>>([]);
   const [deleteSiteId, setDeleteSiteId] = useState<string | null>(null);
@@ -53,6 +63,19 @@ export default function AdminPage() {
     lang === "ar"
       ? confirmWord.trim() === confirmExpected
       : confirmWord.trim().toLowerCase() === confirmExpected;
+
+  const tabs = useMemo(
+    () =>
+      [
+        { id: "overview" as const, label: t("tabOverview"), icon: <LayoutDashboard className="h-3.5 w-3.5 shrink-0" /> },
+        { id: "users" as const, label: t("tabUsers"), icon: <Users className="h-3.5 w-3.5 shrink-0" /> },
+        { id: "sites" as const, label: t("tabSites"), icon: <Globe2 className="h-3.5 w-3.5 shrink-0" /> },
+        { id: "domains" as const, label: t("tabDomains"), icon: <Link2 className="h-3.5 w-3.5 shrink-0" /> },
+        { id: "templates" as const, label: t("tabTemplates"), icon: <LayoutTemplate className="h-3.5 w-3.5 shrink-0" /> },
+        { id: "ai" as const, label: t("tabAi"), icon: <Sparkles className="h-3.5 w-3.5 shrink-0" /> },
+      ] as const,
+    [t]
+  );
 
   useEffect(() => {
     fetch("/api/admin/overview")
@@ -118,7 +141,7 @@ export default function AdminPage() {
     try {
       const res = await fetch(`/api/templates/${deleteTplId}`, { method: "DELETE" });
       if (res.ok) {
-        setTemplates((prev) => prev.filter((t) => String(t.id) !== deleteTplId));
+        setTemplates((prev) => prev.filter((row) => String(row.id) !== deleteTplId));
         setDeleteTplId(null);
         setConfirmWord("");
       }
@@ -127,93 +150,85 @@ export default function AdminPage() {
     }
   }
 
+  const locale = lang === "ar" ? "ar" : "en";
+
   return (
-    <AppCanvas dir={dir} lang={lang}>
-      <AppHeader>
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3.5 sm:px-6">
-          <div className="min-w-0">
-            <div className="truncate text-lg font-bold text-teal-900 dark:text-teal-300">{t("adminTitle")}</div>
-            <div className="truncate text-xs text-[var(--muted)]">{t("adminSub")}</div>
-          </div>
-          <div className="flex shrink-0 items-center gap-2">
+    <>
+      <AdminShell
+        dir={dir}
+        lang={lang}
+        title={t("adminTitle")}
+        subtitle={t("adminSub")}
+        tabs={[...tabs]}
+        activeTab={tab}
+        onTabChange={(id) => setTab(id as AdminTab)}
+        actions={
+          <>
             <PlatformLangSwitcher size="compact" />
             <ThemeToggleButton />
             <Button asChild variant="outline" size="sm" className="rounded-full">
-              <Link href="/dashboard">{t("tenantDash")}</Link>
+              <Link href="/dashboard?tenant=1">{t("mySandboxSites")}</Link>
             </Button>
-          </div>
-        </div>
-      </AppHeader>
-
-      <main className="mx-auto max-w-6xl space-y-6 px-4 py-8 sm:px-6">
-        <SegmentedControl
-          aria-label="Admin tabs"
-          value={tab}
-          onChange={setTab}
-          items={[
-            { value: "overview", label: t("tabOverview") },
-            { value: "users", label: t("tabUsers") },
-            { value: "sites", label: t("tabSites") },
-            { value: "domains", label: t("tabDomains") },
-            { value: "templates", label: t("tabTemplates") },
-            { value: "ai", label: t("tabAi") },
-          ]}
-        />
-
+          </>
+        }
+        mobileTabs={
+          <SegmentedControl
+            aria-label="Admin tabs"
+            value={tab}
+            onChange={(v) => setTab(v as AdminTab)}
+            items={tabs.map((x) => ({ value: x.id, label: x.label }))}
+          />
+        }
+      >
         {tab === "overview" && overview ? (
           <>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              {[
-                ["مستخدمون", overview.metrics.users],
-                ["مواقع", overview.metrics.sites],
-                ["منشورة", overview.metrics.published],
-                ["مشاهدات 7 أيام", overview.metrics.views7d],
-              ].map(([l, v]) => (
-                <SoftCard key={String(l)} className="p-5">
-                  <div className="text-xs text-[var(--muted)]">{l}</div>
-                  <div className="mt-1 text-3xl font-bold tracking-tight">{v}</div>
-                </SoftCard>
-              ))}
+            <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
+              <StatCard label={t("adminMetricUsers")} value={overview.metrics.users} />
+              <StatCard label={t("adminMetricSites")} value={overview.metrics.sites} />
+              <StatCard label={t("adminMetricPublished")} value={overview.metrics.published} />
+              <StatCard label={t("adminMetricViews7d")} value={overview.metrics.views7d} />
             </div>
-            <div className="grid gap-4 lg:grid-cols-2">
-              <SoftCard className="p-5">
-                <h3 className="mb-3 font-semibold">أحدث الأحداث</h3>
-                <ul className="space-y-2 text-sm">
-                  {overview.recentEvents.map((e) => (
-                    <li
-                      key={e.id}
-                      className="flex items-start justify-between gap-3 border-b border-stone-100 py-2 dark:border-stone-800"
-                    >
-                      <span className="min-w-0">
-                        <span className="font-medium">{e.site.name}</span>
-                        <span className="text-[var(--muted)]">
-                          {" "}
-                          · {e.type} · {e.path}
+            <div className="grid gap-3 lg:grid-cols-2">
+              <SoftCard className="overflow-hidden p-0">
+                <div className="border-b border-[var(--border)] px-4 py-2.5 text-sm font-semibold">
+                  {t("adminRecentEvents")}
+                </div>
+                <ul className="divide-y divide-[color-mix(in_oklab,var(--border)_70%,transparent)]">
+                  {overview.recentEvents.length === 0 ? (
+                    <li className="px-4 py-5 text-center text-sm text-[var(--muted)]">—</li>
+                  ) : (
+                    overview.recentEvents.map((e) => (
+                      <li key={e.id} className="flex items-start justify-between gap-3 px-4 py-2.5 text-sm">
+                        <span className="min-w-0">
+                          <span className="font-medium">{e.site.name}</span>
+                          <span className="text-[var(--muted)]">
+                            {" "}
+                            · {e.type} · {e.path}
+                          </span>
                         </span>
-                      </span>
-                      <span className="shrink-0 whitespace-nowrap text-[11px] text-[var(--muted)]">
-                        {new Date(e.createdAt).toLocaleString(lang === "ar" ? "ar" : "en")}
-                      </span>
-                    </li>
-                  ))}
+                        <span className="shrink-0 whitespace-nowrap text-[11px] text-[var(--muted)]">
+                          {new Date(e.createdAt).toLocaleString(locale)}
+                        </span>
+                      </li>
+                    ))
+                  )}
                 </ul>
               </SoftCard>
-              <SoftCard className="p-5">
-                <h3 className="mb-3 font-semibold">أحدث المستخدمين</h3>
-                <ul className="space-y-2 text-sm">
+              <SoftCard className="overflow-hidden p-0">
+                <div className="border-b border-[var(--border)] px-4 py-2.5 text-sm font-semibold">
+                  {t("adminRecentUsers")}
+                </div>
+                <ul className="divide-y divide-[color-mix(in_oklab,var(--border)_70%,transparent)]">
                   {overview.recentUsers.map((u) => (
-                    <li
-                      key={u.id}
-                      className="flex items-start justify-between gap-3 border-b border-stone-100 py-2 dark:border-stone-800"
-                    >
+                    <li key={u.id} className="flex items-start justify-between gap-3 px-4 py-2.5 text-sm">
                       <span className="min-w-0">
-                        <span className="font-medium break-all">{u.email}</span>
-                        <span className="ms-2 inline-flex rounded-full bg-stone-100 px-2 py-0.5 text-[10px] text-stone-700 dark:bg-stone-800 dark:text-stone-200">
+                        <span className="break-all font-medium">{u.email}</span>
+                        <span className="ms-2 inline-flex rounded-full bg-[var(--surface)] px-2 py-0.5 text-[10px] font-semibold text-[var(--muted)]">
                           {u.role}
                         </span>
                       </span>
                       <span className="shrink-0 text-[11px] text-[var(--muted)]">
-                        {u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleString(lang === "ar" ? "ar" : "en") : "—"}
+                        {u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleString(locale) : "—"}
                       </span>
                     </li>
                   ))}
@@ -223,38 +238,48 @@ export default function AdminPage() {
           </>
         ) : null}
 
+        {tab === "overview" && !overview ? (
+          <SoftCard className="p-6 text-sm text-[var(--muted)]">{t("loading")}</SoftCard>
+        ) : null}
+
         {tab === "users" ? (
-          <SoftCard className="space-y-4 overflow-hidden p-0">
-            <Toolbar className="m-3 sm:m-4">
+          <SoftCard className="space-y-0 overflow-hidden p-0">
+            <Toolbar className="m-3">
               <SearchField
                 grow
                 value={usersQ}
                 onChange={(e) => setUsersQ(e.target.value)}
-                placeholder="بحث بالبريد أو الاسم"
-                aria-label="بحث المستخدمين"
+                placeholder={t("adminSearchUsers")}
+                aria-label={t("adminSearchUsers")}
               />
             </Toolbar>
-            <div className="overflow-x-auto px-4 pb-4 sm:px-5">
-              <table className="w-full min-w-[32rem] text-sm">
+            <div className="overflow-x-auto px-2 pb-3 sm:px-3">
+              <table className="sf-dense-table min-w-[36rem]">
                 <thead>
-                  <tr className="text-start text-xs text-[var(--muted)]">
-                    <th className="py-2 font-medium">المستخدم</th>
-                    <th className="font-medium">الدور</th>
-                    <th className="font-medium">مواقع</th>
-                    <th className="font-medium">آخر دخول</th>
+                  <tr>
+                    <th>{t("adminColUser")}</th>
+                    <th>{t("adminColRole")}</th>
+                    <th>{t("adminColSites")}</th>
+                    <th>{t("adminColLastLogin")}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {users.map((u) => (
-                    <tr key={String(u.id)} className="border-t border-stone-100 dark:border-stone-800">
-                      <td className="max-w-[16rem] py-2.5">
+                    <tr key={String(u.id)}>
+                      <td className="max-w-[16rem]">
                         <div className="truncate font-medium">{String(u.email)}</div>
                         <div className="truncate text-xs text-[var(--muted)]">{String(u.name || "")}</div>
                       </td>
-                      <td>{String(u.role)}</td>
-                      <td>{String((u._count as { sites: number } | undefined)?.sites ?? 0)}</td>
-                      <td className="text-xs text-stone-500">
-                        {u.lastLoginAt ? new Date(String(u.lastLoginAt)).toLocaleString(lang === "ar" ? "ar" : "en") : "—"}
+                      <td>
+                        <span className="rounded-full bg-[var(--surface)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[var(--muted)]">
+                          {String(u.role)}
+                        </span>
+                      </td>
+                      <td className="tabular-nums">{String((u._count as { sites: number } | undefined)?.sites ?? 0)}</td>
+                      <td className="text-xs text-[var(--muted)]">
+                        {u.lastLoginAt
+                          ? new Date(String(u.lastLoginAt)).toLocaleString(locale)
+                          : "—"}
                       </td>
                     </tr>
                   ))}
@@ -265,31 +290,31 @@ export default function AdminPage() {
         ) : null}
 
         {tab === "sites" ? (
-          <SoftCard className="space-y-4 overflow-hidden p-0">
-            <Toolbar className="m-3 sm:m-4">
+          <SoftCard className="space-y-0 overflow-hidden p-0">
+            <Toolbar className="m-3">
               <SearchField
                 grow
                 value={sitesQ}
                 onChange={(e) => setSitesQ(e.target.value)}
-                placeholder="بحث بالاسم أو المالك"
-                aria-label="بحث المواقع"
+                placeholder={t("adminSearchSites")}
+                aria-label={t("adminSearchSites")}
               />
             </Toolbar>
-            <div className="overflow-x-auto px-4 pb-4 sm:px-5">
-              <table className="w-full min-w-[32rem] text-sm">
+            <div className="overflow-x-auto px-2 pb-3 sm:px-3">
+              <table className="sf-dense-table min-w-[40rem]">
                 <thead>
-                  <tr className="text-start text-xs text-[var(--muted)]">
-                    <th className="py-2 font-medium">الموقع</th>
-                    <th className="font-medium">المالك</th>
-                    <th className="font-medium">الحالة</th>
-                    <th className="font-medium">أحداث</th>
-                    <th className="font-medium"></th>
+                  <tr>
+                    <th>{t("adminColSite")}</th>
+                    <th>{t("adminColOwner")}</th>
+                    <th>{t("adminColStatus")}</th>
+                    <th>{t("adminColEvents")}</th>
+                    <th></th>
                   </tr>
                 </thead>
                 <tbody>
                   {sites.map((s) => (
-                    <tr key={String(s.id)} className="border-t border-stone-100 dark:border-stone-800">
-                      <td className="max-w-[14rem] py-2.5">
+                    <tr key={String(s.id)}>
+                      <td className="max-w-[14rem]">
                         <div className="truncate font-medium">{String(s.name)}</div>
                         <div className="truncate font-mono text-xs text-[var(--muted)]" dir="ltr">
                           /s/{String(s.slug)}
@@ -298,8 +323,20 @@ export default function AdminPage() {
                       <td className="max-w-[12rem] truncate text-xs">
                         {String((s.owner as { email: string } | undefined)?.email || "")}
                       </td>
-                      <td>{s.publishedAt ? t("published") : t("draft")}</td>
-                      <td>{String((s._count as { events: number } | undefined)?.events ?? 0)}</td>
+                      <td>
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
+                            s.publishedAt
+                              ? "bg-teal-50 text-teal-800 dark:bg-teal-950/50 dark:text-teal-300"
+                              : "bg-[var(--surface)] text-[var(--muted)]"
+                          }`}
+                        >
+                          {s.publishedAt ? t("published") : t("draft")}
+                        </span>
+                      </td>
+                      <td className="tabular-nums">
+                        {String((s._count as { events: number } | undefined)?.events ?? 0)}
+                      </td>
                       <td>
                         <Button
                           size="sm"
@@ -325,21 +362,28 @@ export default function AdminPage() {
 
         {tab === "domains" ? (
           <SoftCard className="overflow-hidden p-0">
-            <div className="border-b border-[var(--border)] px-4 py-3 text-sm font-semibold">النطاقات المخصصة</div>
-            <div className="divide-y divide-[var(--border)]">
+            <div className="border-b border-[var(--border)] px-4 py-2.5 text-sm font-semibold">
+              {t("adminDomainsTitle")}
+            </div>
+            <div className="divide-y divide-[color-mix(in_oklab,var(--border)_70%,transparent)]">
               {domains.length === 0 ? (
-                <div className="px-4 py-5 text-center text-sm text-[var(--muted)]">لا نطاقات مسجّلة بعد</div>
+                <div className="px-4 py-6 text-center text-sm text-[var(--muted)]">{t("adminDomainsEmpty")}</div>
               ) : (
                 domains.map((d) => (
-                  <div key={String(d.id)} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm">
-                    <div>
-                      <div className="font-semibold" dir="ltr">{String(d.customDomain || "")}</div>
-                      <div className="text-xs text-[var(--muted)]">
+                  <div
+                    key={String(d.id)}
+                    className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5 text-sm"
+                  >
+                    <div className="min-w-0">
+                      <div className="font-semibold" dir="ltr">
+                        {String(d.customDomain || "")}
+                      </div>
+                      <div className="truncate text-xs text-[var(--muted)]">
                         {String((d as { name?: string }).name || "")} · /s/{String(d.slug)} ·{" "}
                         {String((d.owner as { email?: string } | undefined)?.email || "")}
                       </div>
                     </div>
-                    <span className="rounded-full bg-stone-100 px-2 py-0.5 text-[10px] font-bold dark:bg-stone-800">
+                    <span className="rounded-full bg-[var(--surface)] px-2 py-0.5 text-[10px] font-bold text-[var(--muted)]">
                       {String(d.domainStatus)}
                     </span>
                   </div>
@@ -351,43 +395,63 @@ export default function AdminPage() {
 
         {tab === "templates" ? (
           <SoftCard className="overflow-hidden p-0">
-            <div className="border-b border-[var(--border)] px-4 py-3 text-sm font-semibold">{t("tabTemplates")}</div>
-            <div className="divide-y divide-[var(--border)]">
-              {templates.length === 0 ? (
-                <div className="px-4 py-5 text-center text-sm text-[var(--muted)]">—</div>
-              ) : (
-                templates.map((tpl) => (
-                  <div key={String(tpl.id)} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm">
-                    <div className="min-w-0">
-                      <div className="truncate font-semibold">{String(tpl.nameAr || tpl.name || "")}</div>
-                      <div className="truncate text-xs text-[var(--muted)]" dir="ltr">
-                        {String(tpl.slug)} · {String(tpl.category || "")}
-                      </div>
-                    </div>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="rounded-full text-rose-700"
-                      onClick={() => {
-                        setDeleteTplId(String(tpl.id));
-                        setDeleteTplLabel(String(tpl.nameAr || tpl.name || ""));
-                        setDeleteSiteId(null);
-                        setConfirmWord("");
-                      }}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                      {t("deleteTemplate")}
-                    </Button>
-                  </div>
-                ))
-              )}
+            <div className="border-b border-[var(--border)] px-4 py-2.5">
+              <div className="text-sm font-semibold">{t("tabTemplates")}</div>
+              <p className="mt-0.5 text-xs text-[var(--muted)]">{t("adminTemplatesHint")}</p>
+            </div>
+            <div className="overflow-x-auto px-2 pb-3 sm:px-3">
+              <table className="sf-dense-table min-w-[32rem]">
+                <thead>
+                  <tr>
+                    <th>{t("adminColTemplate")}</th>
+                    <th>{t("adminColCategory")}</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {templates.length === 0 ? (
+                    <tr>
+                      <td colSpan={3} className="py-6 text-center text-[var(--muted)]">
+                        —
+                      </td>
+                    </tr>
+                  ) : (
+                    templates.map((tpl) => (
+                      <tr key={String(tpl.id)}>
+                        <td className="max-w-[18rem]">
+                          <div className="truncate font-medium">{String(tpl.nameAr || tpl.name || "")}</div>
+                          <div className="truncate font-mono text-xs text-[var(--muted)]" dir="ltr">
+                            {String(tpl.slug)}
+                          </div>
+                        </td>
+                        <td className="text-xs text-[var(--muted)]">{String(tpl.category || "")}</td>
+                        <td className="text-end">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="rounded-full text-rose-700"
+                            onClick={() => {
+                              setDeleteTplId(String(tpl.id));
+                              setDeleteTplLabel(String(tpl.nameAr || tpl.name || ""));
+                              setDeleteSiteId(null);
+                              setConfirmWord("");
+                            }}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                            {t("deleteTemplate")}
+                          </Button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
             </div>
           </SoftCard>
         ) : null}
 
         {tab === "ai" ? <AdminAiPanel /> : null}
-
-      </main>
+      </AdminShell>
 
       {deleteSiteId || deleteTplId ? (
         <div
@@ -403,7 +467,7 @@ export default function AdminPage() {
           }}
         >
           <div
-            className="w-full max-w-md rounded-[1.5rem] border border-[var(--border)] bg-[var(--card)] p-5 text-[var(--foreground)] shadow-[var(--shadow-sm)]"
+            className="w-full max-w-md rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--card)] p-5 text-[var(--foreground)] shadow-[var(--shadow-sm)]"
             onClick={(e) => e.stopPropagation()}
           >
             <h3 className="text-lg font-bold tracking-tight">
@@ -454,6 +518,6 @@ export default function AdminPage() {
           </div>
         </div>
       ) : null}
-    </AppCanvas>
+    </>
   );
 }

@@ -1,6 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
-import type { SiteContent } from "../src/lib/design";
+import type { DesignTokens, SiteContent } from "../src/lib/design";
 import {
   createBlankContent,
   defaultDarkColors,
@@ -10,7 +10,14 @@ import {
 
 const prisma = new PrismaClient();
 
-function tokens(partial: any = {}) {
+type TokenPartial = Partial<DesignTokens> & {
+  colors?: Partial<DesignTokens["colors"]>;
+  colorsDark?: Partial<NonNullable<DesignTokens["colorsDark"]>>;
+  fonts?: Partial<DesignTokens["fonts"]>;
+  spacing?: Partial<DesignTokens["spacing"]>;
+};
+
+function tokens(partial: TokenPartial = {}): DesignTokens {
   return {
     ...defaultTokens,
     ...partial,
@@ -30,7 +37,7 @@ const templates: {
   description: string;
   descriptionAr: string;
   category: string;
-  content: any;
+  content: SiteContent;
 }[] = [
   {
     slug: "blank",

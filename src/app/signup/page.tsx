@@ -1,13 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { signIn } from "next-auth/react";
+import { getSession, signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { SoftCard, AppCanvas } from "@/components/ui/surface";
+import { AuthAtmosphere, GlassCard } from "@/components/ui/surface";
 import { ThemeToggleButton } from "@/components/theme-provider";
 import { PlatformLangSwitcher, usePlatformLang } from "@/components/platform-lang-provider";
 
@@ -36,33 +36,48 @@ export default function SignupPage() {
       return;
     }
     const login = await signIn("credentials", { email, password, redirect: false });
-    setLoading(false);
     if (login?.error) {
+      setLoading(false);
       setError(t("signupLoginFailed"));
       return;
     }
-    router.push("/dashboard");
+    const session = await getSession();
+    const dest = session?.user?.role === "ADMIN" ? "/admin" : "/dashboard";
+    setLoading(false);
+    router.push(dest);
     router.refresh();
   }
 
   return (
-    <AppCanvas className="flex items-center justify-center px-4" dir={dir} lang={lang}>
-      <div className="absolute top-5 end-5 flex items-center gap-2">
+    <AuthAtmosphere className="px-4" dir={dir} lang={lang}>
+      <div className="absolute top-4 end-4 flex items-center gap-2 sm:top-5 sm:end-5">
         <PlatformLangSwitcher size="compact" />
         <ThemeToggleButton />
       </div>
-      <SoftCard className="w-full max-w-md p-8">
-        <div className="mb-6">
-          <div className="text-sm font-semibold text-teal-800 dark:text-teal-300">SiteForge</div>
-          <h1 className="mt-2 text-2xl font-bold tracking-tight">{t("signup")}</h1>
-          <p className="mt-1 text-sm text-[var(--muted)]">{t("signupSub")}</p>
-        </div>
-        <form onSubmit={onSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="name">{t("name")}</Label>
-            <Input id="name" value={name} onChange={(e) => setName(e.target.value)} required autoComplete="name" placeholder={t("placeholderName")} />
+      <GlassCard className="w-full max-w-md p-7 sm:p-8">
+        <div className="mb-6 flex items-center gap-2.5">
+          <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-teal-800 text-xs font-bold text-white dark:bg-teal-500 dark:text-teal-950">
+            SF
           </div>
-          <div className="space-y-2">
+          <div className="text-sm font-semibold tracking-tight text-teal-800 dark:text-teal-300">SiteForge</div>
+        </div>
+        <div className="mb-6">
+          <h1 className="text-xl font-bold tracking-tight sm:text-2xl">{t("signup")}</h1>
+          <p className="mt-1.5 text-sm text-[var(--muted)]">{t("signupSub")}</p>
+        </div>
+        <form onSubmit={onSubmit} className="space-y-3.5">
+          <div className="space-y-1.5">
+            <Label htmlFor="name">{t("name")}</Label>
+            <Input
+              id="name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              required
+              autoComplete="name"
+              placeholder={t("placeholderName")}
+            />
+          </div>
+          <div className="space-y-1.5">
             <Label htmlFor="email">{t("email")}</Label>
             <Input
               id="email"
@@ -75,7 +90,7 @@ export default function SignupPage() {
               placeholder={t("placeholderEmail")}
             />
           </div>
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             <Label htmlFor="password">{t("password")}</Label>
             <Input
               id="password"
@@ -100,7 +115,7 @@ export default function SignupPage() {
             {t("login")}
           </Link>
         </p>
-      </SoftCard>
-    </AppCanvas>
+      </GlassCard>
+    </AuthAtmosphere>
   );
 }
