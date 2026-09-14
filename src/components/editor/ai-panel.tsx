@@ -159,6 +159,9 @@ export function AiEditorPanel({
   const scroller = useRef<HTMLDivElement | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  /** True only when user pressed Cancel — tab hide / network abort must not use this. */
+  const userCancelRef = useRef(false);
+  const inFlightAssistantIdRef = useRef<string | null>(null);
   const contentRef = useRef(content);
   contentRef.current = content;
   const openRef = useRef(open);
@@ -264,11 +267,100 @@ export function AiEditorPanel({
     scroller.current?.scrollTo({ top: scroller.current.scrollHeight });
   }, [open, messages, steps]);
 
-  function cancelInFlight() {
+  async function cancelInFlight() {
+    userCancelRef.current = true;
+    const messageId = inFlightAssistantIdRef.current;
     if (abortRef.current) {
       abortRef.current.abort();
       abortRef.current = null;
     }
+    if (messageId) {
+      try {
+        await fetch("/api/ai/chat/cancel", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ siteId, messageId }),
+        });
+      } catch {
+        /* best-effort */
+      }
+    }
+  }
+
+  /** After unexpected disconnect: poll chat + reload draft instead of aiError. */
+  async function recoverAfterDisconnect(assistantId: string | null) {
+    setMessages((m) => [
+      ...m,
+      { role: "system", text: t("aiRecovering"), status: "partial" },
+    ]);
+    for (let i = 0; i < 20; i++) {
+      if (userCancelRef.current) return false;
+      await new Promise((r) => setTimeout(r, 1000));
+      try {
+        const res = await fetch(`/api/ai/chat?siteId=${encodeURIComponent(siteId)}`);
+        if (!res.ok) continue;
+        const data = await res.json();
+        const msgs = (data.messages || []) as {
+          id: string;
+          role: string;
+          text: string;
+          status?: string;
+          steps?: Step[];
+        }[];
+        const target =
+          (assistantId && msgs.find((m) => m.id === assistantId)) ||
+          [...msgs].reverse().find((m) => m.role === "assistant");
+        if (!target || target.status === "partial") continue;
+        // Reload draft from server (AI route persists when applied > 0)
+        try {
+          const siteRes = await fetch(`/api/sites/${encodeURIComponent(siteId)}`);
+          if (siteRes.ok) {
+            const siteData = await siteRes.json();
+            const draft = siteData.site?.draftContent;
+            if (draft) onApplyContent(draft as SiteContent);
+          }
+        } catch {
+          /* ignore */
+        }
+        if (target.status === "cancelled") {
+          setMessages((m) => [
+            ...m,
+            {
+              id: target.id,
+              role: "system",
+              text: t("aiCancelled"),
+              status: "cancelled",
+              steps: target.steps,
+            },
+          ]);
+        } else if (target.status === "error") {
+          setMessages((m) => [
+            ...m,
+            {
+              id: target.id,
+              role: "error",
+              text: target.text || t("aiError"),
+              steps: target.steps,
+            },
+          ]);
+        } else {
+          setMessages((m) => [
+            ...m,
+            {
+              id: target.id,
+              role: "assistant",
+              text: target.text || t("aiNoEdits"),
+              status: "ok",
+              steps: target.steps,
+            },
+          ]);
+        }
+        return true;
+      } catch {
+        /* retry */
+      }
+    }
+    return false;
   }
 
   async function loadOlder() {
@@ -441,6 +533,8 @@ export function AiEditorPanel({
 
     const ac = new AbortController();
     abortRef.current = ac;
+    userCancelRef.current = false;
+    inFlightAssistantIdRef.current = null;
 
     try {
       const res = await fetch("/api/ai/chat", {
@@ -505,29 +599,36 @@ export function AiEditorPanel({
               errors?: string[];
               content?: SiteContent;
               error?: string;
+              hint?: string;
+              rawSnippet?: string;
               messageId?: string;
               steps?: Step[];
               quota?: { remaining: number; dailyLimit: number; usedToday: number };
             };
-            if (evt.type === "step" && evt.step && evt.message) {
+            if (evt.type === "started" && evt.messageId) {
+              inFlightAssistantIdRef.current = evt.messageId;
+            } else if (evt.type === "step" && evt.step && evt.message) {
               const rec = { step: evt.step, message: evt.message, at: evt.at };
               liveSteps = [...liveSteps, rec];
               setSteps(liveSteps);
             } else if (evt.type === "result" && evt.content) {
               onApplyContent(evt.content);
+              const appliedN = evt.applied ?? 0;
               const summary =
-                evt.summary ||
-                (lang === "ar"
-                  ? `تم تطبيق ${evt.applied ?? 0} تعديلاً`
-                  : `Applied ${evt.applied ?? 0} patch(es)`);
+                appliedN === 0
+                  ? evt.summary || t("aiNoEdits")
+                  : evt.summary ||
+                    (lang === "ar"
+                      ? `تم تطبيق ${appliedN} تعديلاً`
+                      : `Applied ${appliedN} patch(es)`);
               const finalSteps = evt.steps?.length ? evt.steps : liveSteps;
               setMessages((m) => [
                 ...m,
                 {
                   id: evt.messageId,
-                  role: "assistant",
+                  role: appliedN === 0 ? "system" : "assistant",
                   text: summary,
-                  status: "ok",
+                  status: appliedN === 0 ? "error" : "ok",
                   steps: finalSteps,
                 },
               ]);
@@ -556,12 +657,15 @@ export function AiEditorPanel({
                 },
               ]);
             } else if (evt.type === "error") {
+              const detail = [evt.error || t("aiError"), evt.hint, evt.rawSnippet]
+                .filter(Boolean)
+                .join(" · ");
               setMessages((m) => [
                 ...m,
                 {
                   id: evt.messageId,
                   role: "error",
-                  text: evt.error || t("aiError"),
+                  text: detail,
                   steps: evt.steps || liveSteps,
                 },
               ]);
@@ -572,16 +676,24 @@ export function AiEditorPanel({
         }
       }
     } catch (e) {
-      if ((e as Error)?.name === "AbortError") {
+      const isAbort = (e as Error)?.name === "AbortError";
+      if (isAbort && userCancelRef.current) {
         setMessages((m) => [
           ...m,
           { role: "system", text: t("aiCancelled"), status: "cancelled" },
         ]);
+      } else if (isAbort || e instanceof TypeError) {
+        // Tab background / network abort — durable server run; poll for completion.
+        const recovered = await recoverAfterDisconnect(inFlightAssistantIdRef.current);
+        if (!recovered && !userCancelRef.current) {
+          setMessages((m) => [...m, { role: "error", text: t("aiError") }]);
+        }
       } else {
         setMessages((m) => [...m, { role: "error", text: t("aiError") }]);
       }
     } finally {
       abortRef.current = null;
+      inFlightAssistantIdRef.current = null;
       setBusy(false);
       // Keep last steps briefly visible until next send; clear after paint
       setTimeout(() => {

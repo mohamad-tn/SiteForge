@@ -578,16 +578,8 @@ input.font-mono::placeholder {
   direction: ltr;
   text-align: left;
 }
-/* Email/password/url values stay LTR; chrome/labels follow html[dir] */
-.sf-field[type="email"],
-.sf-field[type="password"],
-.sf-field[type="url"],
-.sf-field[type="tel"],
-.sf-field[type="number"] {
-  direction: ltr;
-  text-align: left;
-  unicode-bidi: isolate;
-}
+/* Field direction comes from .sf-field--rtl/ltr (Input/Textarea set from platformDir).
+   Do NOT force email/password/url to LTR — Arabic platform lang must type from the right. */
 .sf-text-field {
   text-align: start;
 }

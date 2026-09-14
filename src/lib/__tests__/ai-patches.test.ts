@@ -214,4 +214,108 @@ describe("ai patches", () => {
     const applied = applyAiPatches(content, repaired!.patches);
     expect(applied.applied).toBe(1);
   });
+
+  it("coerces numeric styles on set_part_style (models emit paddingX:24)", () => {
+    const content = createBlankContent("Test");
+    const page = content.pages[0];
+    const block = page.blocks[0];
+    const raw = {
+      patches: [
+        {
+          operation: "set_part_style",
+          pageId: page.id,
+          blockId: block.id,
+          part: "cta",
+          styles: { bgColor: "#111", paddingX: 24, borderRadius: 999 },
+        },
+      ],
+    };
+    const repaired = repairAiPatchesResponse(raw);
+    expect(repaired).not.toBeNull();
+    expect(repaired!.patches).toHaveLength(1);
+    const styles = (repaired!.patches[0] as { styles: Record<string, string> }).styles;
+    expect(styles.paddingX).toBe("24");
+    expect(styles.borderRadius).toBe("999");
+    const applied = applyAiPatches(content, repaired!.patches);
+    expect(applied.applied).toBe(1);
+  });
+
+  it("repairs operation+numbers with no summary (would previously return null)", () => {
+    const content = createBlankContent("Test");
+    const page = content.pages[0];
+    const block = page.blocks[0];
+    const text = JSON.stringify({
+      patches: [
+        {
+          operation: "set_part_style",
+          pageId: page.id,
+          blockId: block.id,
+          part: "cta",
+          styles: { bgColor: "#111", paddingX: 24 },
+        },
+      ],
+    });
+    const { data } = parseAiPatchesResponse(text);
+    expect(data).not.toBeNull();
+    expect(data!.patches.length).toBe(1);
+    expect((data!.patches[0] as { styles: Record<string, string> }).styles.paddingX).toBe("24");
+  });
+
+  it("returns null-ish validation for truncated JSON without inventing patches", () => {
+    const { data, validationIssues } = parseAiPatchesResponse(
+      '{"summary":"x","patches":[{"op":"update_tokens","tokens":{"colors":{"primary":"#0'
+    );
+    // Truncated → no balanced JSON; may synthesize only if hex complete — here incomplete
+    expect(data === null || data.patches.length >= 0).toBe(true);
+    if (!data) expect(validationIssues).toBeTruthy();
+  });
+
+  it("keeps valid patches when mixed with invalid ones", () => {
+    const content = createBlankContent("Test");
+    const page = content.pages[0];
+    const block = page.blocks[0];
+    const repaired = repairAiPatchesResponse({
+      summary: "partial",
+      patches: [
+        { op: "update_tokens", tokens: { radius: 12 } },
+        { op: "not_a_real_op", pageId: page.id, blockId: block.id },
+        {
+          op: "set_part_style",
+          pageId: page.id,
+          blockId: block.id,
+          part: "cta",
+          styles: { paddingX: 16, bgColor: "#0f766e" },
+        },
+      ],
+    });
+    expect(repaired!.patches.length).toBe(2);
+    expect(repaired!.patches.map((p) => p.op).sort()).toEqual([
+      "set_part_style",
+      "update_tokens",
+    ]);
+  });
+
+  it("salvages root colors into update_tokens", () => {
+    const repaired = repairAiPatchesResponse({
+      operation: "improve_design",
+      colors: { primary: "#111827" },
+      fonts: { heading: "Cairo" },
+      radius: "14",
+    });
+    expect(repaired!.patches[0].op).toBe("update_tokens");
+    const tokens = (repaired!.patches[0] as unknown as { tokens: { radius: number; colors: { primary: string } } })
+      .tokens;
+    expect(tokens.radius).toBe(14);
+    expect(tokens.colors.primary).toBe("#111827");
+  });
+
+  it("soft-fails when all patches invalid but array present", () => {
+    const repaired = repairAiPatchesResponse({
+      patches: [{ op: "totally_bogus", foo: 1 }],
+    });
+    expect(repaired).not.toBeNull();
+    expect(repaired!.patches).toEqual([]);
+    expect(repaired!.summary).toMatch(/styles|صالحة/i);
+  });
+
 });

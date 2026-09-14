@@ -1,13 +1,18 @@
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { jsonError, parseJsonBody, requireSession, requireSiteAccess } from "@/lib/api";
-import { siteContentSchema, type SiteContent } from "@/lib/design";
+import { ensureContentDefaults, siteContentSchema, type SiteContent } from "@/lib/design";
 import {
-  AI_REPAIR_PROMPT,
+  AI_EMPTY_PATCHES_HINT,
   AI_SYSTEM_PROMPT,
   applyAiPatches,
+  buildAiRepairUserPrompt,
   parseAiPatchesResponse,
 } from "@/lib/ai/patches";
+import {
+  clearAiChatCancelled,
+  isAiChatCancelled,
+} from "@/lib/ai/cancel-registry";
 import {
   getProviderAdapter,
   modelLikelySupportsVision,
@@ -158,22 +163,28 @@ export async function POST(req: Request) {
 
   const attParts = buildAttachmentPromptParts(attachments);
   const visionOk = modelLikelySupportsVision(resolved.model);
-  // Only treat abort as cancel when the client explicitly aborts the fetch
-  // (Cancel button). Closing the drawer must NOT abort — keep the socket open.
-  const abortSignal = req.signal;
+  /**
+   * Durable AI run:
+   * - req.signal abort (tab hide / SSE disconnect / fetch kill) ONLY stops writing SSE.
+   * - Model call + patch apply + draft persist + assistant message ALWAYS continue.
+   * - Explicit Cancel: Cancel button → POST /api/ai/chat/cancel → isAiChatCancelled(id).
+   * Do NOT wire req.signal into cancelled work flags.
+   */
+  const disconnectSignal = req.signal;
 
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
     async start(controller) {
+      let sseOpen = true;
       const send = (obj: unknown) => {
+        if (!sseOpen) return;
         try {
           controller.enqueue(encoder.encode(`data: ${JSON.stringify(obj)}\n\n`));
         } catch {
-          /* client may have gone; still finish server work */
+          sseOpen = false;
         }
       };
       const steps: StepRec[] = [];
-      let cancelled = false;
 
       const pushStep = (step: string, message: string) => {
         const rec = { step, message, at: new Date().toISOString() };
@@ -181,13 +192,14 @@ export async function POST(req: Request) {
         send({ type: "step", step, message, at: rec.at });
       };
 
-      const onAbort = () => {
-        cancelled = true;
+      // Disconnect ≠ cancel — only stop enqueueing SSE frames.
+      const onDisconnect = () => {
+        sseOpen = false;
       };
-      abortSignal.addEventListener("abort", onAbort);
+      disconnectSignal.addEventListener("abort", onDisconnect);
 
-      const throwIfCancelled = () => {
-        if (abortSignal.aborted || cancelled) {
+      const throwIfUserCancelled = () => {
+        if (isAiChatCancelled(assistantPartial.id)) {
           const err = new Error("Aborted");
           err.name = "AbortError";
           throw err;
@@ -195,13 +207,15 @@ export async function POST(req: Request) {
       };
 
       try {
+        // Tell client the assistant row id so Cancel can target it after disconnect.
+        send({ type: "started", messageId: assistantPartial.id, userMessageId: userMsg.id });
         pushStep("thinking", "Analyzing your request… / جاري تحليل طلبك…");
 
         if (resolved.usePlatformQuota) {
           await consumeQuota(auth.user.id);
         }
 
-        throwIfCancelled();
+        throwIfUserCancelled();
 
         pushStep(
           "planning",
@@ -251,7 +265,7 @@ export async function POST(req: Request) {
           `Calling ${resolved.provider} (${resolved.source})… / استدعاء النموذج…`
         );
 
-        throwIfCancelled();
+        throwIfUserCancelled();
 
         let result = await adapter.complete({
           apiKey: resolved.apiKey,
@@ -260,9 +274,7 @@ export async function POST(req: Request) {
           messages: baseMessages,
         });
 
-        // Persist even if client closed the drawer (socket may still be open,
-        // or write may fail — work continues).
-        const clientGone = abortSignal.aborted || cancelled;
+        const clientGone = !sseOpen || disconnectSignal.aborted;
 
         pushStep("parsing", "Parsing patches… / تحليل التعديلات…");
         let parsedPatches = parseAiPatchesResponse(result.text);
@@ -272,7 +284,7 @@ export async function POST(req: Request) {
             "repairing",
             "Repairing invalid patches… / إصلاح التعديلات غير الصالحة…"
           );
-          throwIfCancelled();
+          throwIfUserCancelled();
           try {
             const repairResult = await adapter.complete({
               apiKey: resolved.apiKey,
@@ -284,7 +296,10 @@ export async function POST(req: Request) {
                 { role: "assistant", content: result.text.slice(0, 6000) },
                 {
                   role: "user",
-                  content: `${AI_REPAIR_PROMPT}\n\nValidation hint: output must match {"summary":string,"patches":[{op:...}]}.`,
+                  content: buildAiRepairUserPrompt(
+                    result.text,
+                    parsedPatches.validationIssues
+                  ),
                 },
               ],
             });
@@ -306,6 +321,15 @@ export async function POST(req: Request) {
         }
 
         if (!parsedPatches.data) {
+          const rawSnippet = result.text.slice(0, 400).replace(/\s+/g, " ");
+          const hint =
+            parsedPatches.validationIssues ||
+            'styles values must be strings (paddingX:"24") / قيم styles يجب أن تكون نصوصاً';
+          steps.push({
+            step: "raw_snippet",
+            message: `Model raw (truncated): ${rawSnippet}`,
+            at: new Date().toISOString(),
+          });
           await prisma.aiUsageLog.create({
             data: {
               userId: auth.user.id,
@@ -320,20 +344,24 @@ export async function POST(req: Request) {
             },
           });
           const errText =
-            "Model returned invalid patches / النموذج أرجع تعديلات غير صالحة";
+            `Model returned invalid patches — ${hint} / النموذج أرجع تعديلات غير صالحة`;
           await prisma.aiChatMessage.update({
             where: { id: assistantPartial.id },
-            data: { text: errText, status: "error", steps },
+            data: { text: errText.slice(0, 16000), status: "error", steps },
           });
           send({
             type: "error",
-            error: errText,
+            error: errText.slice(0, 800),
             messageId: assistantPartial.id,
-            ...(process.env.NODE_ENV === "production"
-              ? {}
-              : { raw: result.text.slice(0, 1500) }),
+            hint,
+            rawSnippet,
+            steps,
           });
-          controller.close();
+          try {
+            controller.close();
+          } catch {
+            /* */
+          }
           return;
         }
 
@@ -344,12 +372,24 @@ export async function POST(req: Request) {
           );
         }
 
+        throwIfUserCancelled();
+
         const patchCount = parsedPatches.data.patches.length;
         pushStep(
           "applying",
           `Applying ${patchCount} patch(es)… / تطبيق ${patchCount} تعديلاً…`
         );
         const applied = applyAiPatches(content, parsedPatches.data.patches);
+
+        // Persist draft on server so tab-disconnect does not lose applied edits.
+        if (applied.applied > 0) {
+          await prisma.site
+            .update({
+              where: { id: parsed.data.siteId },
+              data: { draftContent: ensureContentDefaults(applied.content) as object },
+            })
+            .catch((e) => console.error("AI draft persist failed", e));
+        }
 
         await prisma.aiUsageLog.create({
           data: {
@@ -365,11 +405,15 @@ export async function POST(req: Request) {
           },
         });
 
-        const summary =
-          parsedPatches.data.summary ||
-          (applied.applied > 0
-            ? `Applied ${applied.applied} patch(es)`
-            : "No patches applied");
+        const emptySoft =
+          applied.applied === 0 &&
+          (patchCount === 0 || applied.errors.length > 0);
+        const summary = emptySoft
+          ? AI_EMPTY_PATCHES_HINT
+          : parsedPatches.data.summary ||
+            (applied.applied > 0
+              ? `Applied ${applied.applied} patch(es)`
+              : AI_EMPTY_PATCHES_HINT);
 
         pushStep(
           "done",
@@ -378,11 +422,18 @@ export async function POST(req: Request) {
             : "Done — nothing applied / تم — بلا تعديلات"
         );
 
+        const status =
+          isAiChatCancelled(assistantPartial.id)
+            ? "cancelled"
+            : emptySoft || (applied.errors.length && !applied.applied)
+              ? "error"
+              : "ok";
+
         await prisma.aiChatMessage.update({
           where: { id: assistantPartial.id },
           data: {
-            text: summary,
-            status: applied.errors.length && !applied.applied ? "error" : "ok",
+            text: summary.slice(0, 16000),
+            status,
             steps,
           },
         });
@@ -391,21 +442,40 @@ export async function POST(req: Request) {
           ? await getQuotaStatus(auth.user.id)
           : quota;
 
-        send({
-          type: "result",
-          summary,
-          applied: applied.applied,
-          errors: applied.errors,
-          content: applied.content,
-          quota: nextQuota,
-          messageId: assistantPartial.id,
-          userMessageId: userMsg.id,
-          keySource: resolved.source,
-          clientGone,
-          steps,
-        });
+        if (status === "cancelled") {
+          send({
+            type: "cancelled",
+            error: "أُلغي",
+            messageId: assistantPartial.id,
+            steps,
+          });
+        } else if (emptySoft) {
+          send({
+            type: "error",
+            error: summary.slice(0, 800),
+            messageId: assistantPartial.id,
+            applied: 0,
+            steps,
+          });
+        } else {
+          send({
+            type: "result",
+            summary,
+            applied: applied.applied,
+            errors: applied.errors,
+            content: applied.content,
+            quota: nextQuota,
+            messageId: assistantPartial.id,
+            userMessageId: userMsg.id,
+            keySource: resolved.source,
+            clientGone,
+            steps,
+          });
+        }
       } catch (e) {
-        const isAbort = e instanceof Error && e.name === "AbortError";
+        const isAbort =
+          (e instanceof Error && e.name === "AbortError") ||
+          isAiChatCancelled(assistantPartial.id);
         const msg = e instanceof Error ? e.message : "AI failed";
         if (!isAbort) console.error(e);
         await prisma.aiUsageLog
@@ -442,7 +512,8 @@ export async function POST(req: Request) {
           steps,
         });
       } finally {
-        abortSignal.removeEventListener("abort", onAbort);
+        clearAiChatCancelled(assistantPartial.id);
+        disconnectSignal.removeEventListener("abort", onDisconnect);
         try {
           controller.close();
         } catch {

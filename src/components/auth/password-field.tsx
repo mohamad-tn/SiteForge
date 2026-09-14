@@ -52,7 +52,6 @@ export function PasswordInput({
           onChange={(e) => onChange(e.target.value)}
           required={required}
           disabled={disabled}
-          dir="ltr"
           autoComplete={autoComplete}
           placeholder={placeholder}
           className="pe-10"

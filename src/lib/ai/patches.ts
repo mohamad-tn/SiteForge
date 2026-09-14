@@ -244,12 +244,22 @@ function mergeTokens(base: DesignTokens, patch: Record<string, unknown>): Design
         const prev = (next.spacing as Record<string, number>) || {};
         const merged = { ...prev };
         for (const [sk, sv] of Object.entries(v as Record<string, unknown>)) {
-          if (typeof sv === "number" && Number.isFinite(sv)) merged[sk] = sv;
+          const n =
+            typeof sv === "number" && Number.isFinite(sv)
+              ? sv
+              : typeof sv === "string" && sv.trim() && Number.isFinite(Number(sv))
+                ? Number(sv)
+                : null;
+          if (n != null) merged[sk] = n;
         }
         next.spacing = merged;
       }
-    } else if (k === "radius" && typeof v === "number" && Number.isFinite(v)) {
-      next.radius = Math.max(0, Math.min(48, v));
+    } else if (
+      k === "radius" &&
+      ((typeof v === "number" && Number.isFinite(v)) ||
+        (typeof v === "string" && v.trim() && Number.isFinite(Number(v))))
+    ) {
+      next.radius = Math.max(0, Math.min(48, typeof v === "number" ? v : Number(v)));
     } else if (k === "rtl" && typeof v === "boolean") {
       next.rtl = v;
     } else if (k === "themeMode" && (v === "light" || v === "dark" || v === "system")) {
@@ -775,10 +785,46 @@ function normalizeOpName(op: unknown): string | null {
   return KNOWN_OPS.has(raw) ? raw : null;
 }
 
+/** Coerce style map values to strings (models often emit numbers). */
+export function coerceStyleValues(styles: unknown): Record<string, string> | null {
+  if (!styles || typeof styles !== "object" || Array.isArray(styles)) return null;
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(styles as Record<string, unknown>)) {
+    if (typeof v === "string") out[k] = v.slice(0, 120);
+    else if (typeof v === "number" && Number.isFinite(v)) out[k] = String(v);
+    else if (typeof v === "boolean") out[k] = v ? "true" : "false";
+  }
+  return Object.keys(out).length ? out : null;
+}
+
+function coerceTokenBag(tokens: unknown): Record<string, unknown> | null {
+  if (!tokens || typeof tokens !== "object" || Array.isArray(tokens)) return null;
+  const t = { ...(tokens as Record<string, unknown>) };
+  if (typeof t.radius === "string" && t.radius.trim() && Number.isFinite(Number(t.radius))) {
+    t.radius = Number(t.radius);
+  }
+  if (t.spacing && typeof t.spacing === "object" && !Array.isArray(t.spacing)) {
+    const sp: Record<string, unknown> = {};
+    for (const [sk, sv] of Object.entries(t.spacing as Record<string, unknown>)) {
+      if (typeof sv === "number" && Number.isFinite(sv)) sp[sk] = sv;
+      else if (typeof sv === "string" && sv.trim() && Number.isFinite(Number(sv))) sp[sk] = Number(sv);
+    }
+    t.spacing = sp;
+  }
+  return t;
+}
+
 function coercePatch(raw: unknown): unknown | null {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
   const p = { ...(raw as Record<string, unknown>) };
-  const op = normalizeOpName(p.op ?? p.operation ?? p.type ?? p.action);
+  // Salvage root colors/fonts into update_tokens when op missing
+  let op = normalizeOpName(p.op ?? p.operation ?? p.type ?? p.action);
+  if (
+    !op &&
+    (p.colors || p.fonts || p.colorsDark || p.spacing || p.radius != null || p.tokens)
+  ) {
+    op = "update_tokens";
+  }
   if (!op) return null;
   p.op = op;
   delete p.operation;
@@ -788,13 +834,32 @@ function coercePatch(raw: unknown): unknown | null {
   // Common shape mistakes
   if (op === "update_tokens") {
     if (!p.tokens && p.value && typeof p.value === "object") p.tokens = p.value;
-    if (!p.tokens && p.colors) {
-      p.tokens = { colors: p.colors, ...(p.fonts ? { fonts: p.fonts } : {}) };
+    if (!p.tokens || typeof p.tokens !== "object" || Array.isArray(p.tokens)) {
+      const tokens: Record<string, unknown> = {};
+      if (p.colors) tokens.colors = p.colors;
+      if (p.colorsDark) tokens.colorsDark = p.colorsDark;
+      if (p.fonts) tokens.fonts = p.fonts;
+      if (p.spacing) tokens.spacing = p.spacing;
+      if (p.radius != null) tokens.radius = p.radius;
+      if (p.rtl != null) tokens.rtl = p.rtl;
+      if (p.themeMode != null) tokens.themeMode = p.themeMode;
+      if (Object.keys(tokens).length) p.tokens = tokens;
+    } else {
+      // Merge root aliases into tokens
+      const tokens = { ...(p.tokens as Record<string, unknown>) };
+      if (p.colors && !tokens.colors) tokens.colors = p.colors;
+      if (p.fonts && !tokens.fonts) tokens.fonts = p.fonts;
+      p.tokens = tokens;
     }
+    const coerced = coerceTokenBag(p.tokens);
+    if (coerced) p.tokens = coerced;
   }
   if (op === "set_part_style") {
     if (!p.styles && p.style && typeof p.style === "object") p.styles = p.style;
     if (!p.styles && p.props && typeof p.props === "object") p.styles = p.props;
+    if (!p.styles && p.css && typeof p.css === "object") p.styles = p.css;
+    const styles = coerceStyleValues(p.styles);
+    if (styles) p.styles = styles;
   }
   if (op === "update_props" && !p.props && p.changes && typeof p.changes === "object") {
     p.props = p.changes;
@@ -810,62 +875,177 @@ function coercePatch(raw: unknown): unknown | null {
 
 /**
  * Deterministic repair: coerce bare arrays, alias ops, drop invalid entries.
- * Returns null if nothing salvageable.
+ * Soft-fail: keep every patch that coerces; return summary-only when useful.
+ * Returns null only when nothing salvageable (no summary and 0 valid patches).
  */
 export function repairAiPatchesResponse(raw: unknown): AiPatchesResponse | null {
   if (raw == null) return null;
 
   let summary: string | undefined;
   let list: unknown[] = [];
+  let hadPatchArray = false;
 
   if (Array.isArray(raw)) {
     list = raw;
+    hadPatchArray = true;
   } else if (typeof raw === "object") {
     const obj = raw as Record<string, unknown>;
     if (typeof obj.summary === "string") summary = obj.summary.slice(0, 500);
-    if (Array.isArray(obj.patches)) list = obj.patches;
-    else if (Array.isArray(obj.edits)) list = obj.edits;
-    else if (Array.isArray(obj.changes)) list = obj.changes;
-    else if (Array.isArray(obj.operations)) list = obj.operations;
-    else if (obj.patch && typeof obj.patch === "object") list = [obj.patch];
+    if (Array.isArray(obj.patches)) {
+      list = obj.patches;
+      hadPatchArray = true;
+    } else if (Array.isArray(obj.edits)) {
+      list = obj.edits;
+      hadPatchArray = true;
+    } else if (Array.isArray(obj.changes)) {
+      list = obj.changes;
+      hadPatchArray = true;
+    } else if (Array.isArray(obj.operations)) {
+      list = obj.operations;
+      hadPatchArray = true;
+    } else if (obj.patch && typeof obj.patch === "object") list = [obj.patch];
     else if (typeof obj.op === "string" || obj.operation || obj.action) list = [obj];
+    else if (obj.colors || obj.fonts || obj.tokens) list = [obj];
   } else {
     return null;
   }
 
   const patches: AiPatch[] = [];
+  const dropNotes: string[] = [];
   for (const item of list.slice(0, 24)) {
     const coerced = coercePatch(item);
-    if (!coerced) continue;
+    if (!coerced) {
+      dropNotes.push("unrecognized op");
+      continue;
+    }
     const parsed = aiPatchSchema.safeParse(coerced);
     if (parsed.success) patches.push(parsed.data);
+    else {
+      const issue = parsed.error.issues[0];
+      dropNotes.push(
+        issue
+          ? `${issue.path.join(".") || "patch"}: ${issue.message}`
+          : "zod fail"
+      );
+    }
   }
 
-  if (!patches.length && !summary) return null;
+  // Soft-fail: patches array present but all invalid → still return empty+summary
+  // so callers can soft-error instead of hard "invalid patches".
+  if (!patches.length && !summary) {
+    if (hadPatchArray) {
+      return {
+        summary:
+          "No valid patches after coerce. Styles values must be strings (e.g. paddingX:\"24\"). / لا توجد تعديلات صالحة — قيم styles يجب أن تكون نصوصاً.",
+        patches: [],
+      };
+    }
+    return null;
+  }
+  if (!patches.length && summary && dropNotes.length) {
+    // Keep summary; empty patches — route surfaces soft retry message
+    return { summary, patches: [] };
+  }
   return { summary, patches };
 }
 
-/** Parse + validate model text; applies deterministic repair when needed. */
-export function parseAiPatchesResponse(text: string): {
+/** Last-resort: pull hex colors from prose into a safe update_tokens patch. */
+export function synthesizeTokensFromProse(text: string): AiPatchesResponse | null {
+  const hexes = text.match(/#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})\b/g);
+  if (!hexes?.length) return null;
+  const uniq = Array.from(new Set(hexes.map((h) => h.toLowerCase()))).slice(0, 6);
+  const colors: Record<string, string> = {};
+  if (uniq[0]) colors.primary = uniq[0];
+  if (uniq[1]) colors.accent = uniq[1];
+  if (uniq[2]) colors.background = uniq[2];
+  if (uniq[3]) colors.surface = uniq[3];
+  if (uniq[4]) colors.text = uniq[4];
+  if (uniq[5]) colors.muted = uniq[5];
+  return {
+    summary: "Extracted colors from reply / ألوان مستخرجة من الرد",
+    patches: [{ op: "update_tokens", tokens: { colors } }],
+  };
+}
+
+export type ParseAiPatchesResult = {
   data: AiPatchesResponse | null;
   repaired: boolean;
   raw: unknown | null;
-} {
+  /** Truncated zod / repair notes for repair prompt + UI */
+  validationIssues?: string;
+};
+
+/** Parse + validate model text; applies deterministic repair when needed. */
+export function parseAiPatchesResponse(text: string): ParseAiPatchesResult {
   const raw = extractJsonObject(text);
-  if (raw == null) return { data: null, repaired: false, raw: null };
+  if (raw == null) {
+    const synth = synthesizeTokensFromProse(text);
+    if (synth) return { data: synth, repaired: true, raw: null, validationIssues: "no JSON; synthesized colors" };
+    return {
+      data: null,
+      repaired: false,
+      raw: null,
+      validationIssues:
+        "No JSON object found. styles values must be strings; required pageId/blockId from draft. / لم يُعثر على JSON — قيم styles نصوص، وpageId/blockId من المسودة.",
+    };
+  }
   const direct = aiPatchesResponseSchema.safeParse(raw);
-  if (direct.success) return { data: direct.data, repaired: false, raw };
+  if (direct.success) {
+    // Still coerce numeric styles inside patches that somehow passed? They can't with strict schema.
+    // Re-run through repair to coerce numbers if direct failed partial — direct only succeeds if all string.
+    return { data: direct.data, repaired: false, raw };
+  }
+  const directIssues = JSON.stringify(direct.error.issues.slice(0, 8)).slice(0, 800);
   const repaired = repairAiPatchesResponse(raw);
   if (repaired) {
     const again = aiPatchesResponseSchema.safeParse(repaired);
-    if (again.success) return { data: again.data, repaired: true, raw };
+    if (again.success) {
+      return {
+        data: again.data,
+        repaired: true,
+        raw,
+        validationIssues: directIssues,
+      };
+    }
   }
-  return { data: null, repaired: false, raw };
+  const synth = synthesizeTokensFromProse(text);
+  if (synth) {
+    return { data: synth, repaired: true, raw, validationIssues: directIssues };
+  }
+  return { data: null, repaired: false, raw, validationIssues: directIssues };
 }
+
+export const AI_SCHEMA_RULES = `Concrete schema rules:
+- Return ONLY {"summary":"string","patches":[...]} max 24 patches. No markdown.
+- set_part_style.styles values MUST be strings (paddingX:"24", borderRadius:"999") — never bare numbers.
+- update_tokens.tokens.radius may be number; spacing values numbers; colors/fonts string maps.
+- Every page/block patch needs real pageId + blockId from the draft JSON (never invent except add_*).
+- Prefer op names: update_tokens, set_part_style, update_copy, update_prop, update_props.`;
 
 export const AI_REPAIR_PROMPT = `Your previous reply was not valid SiteForge patch JSON.
 Return ONLY a JSON object: {"summary":"...","patches":[...]} with allowlisted ops.
-No markdown fences, no commentary. Max 24 patches. Use real pageId/blockId from the draft.`;
+No markdown fences, no commentary. Max 24 patches. Use real pageId/blockId from the draft.
+${AI_SCHEMA_RULES}`;
+
+export function buildAiRepairUserPrompt(failedRaw: string, validationIssues?: string): string {
+  const snippet = failedRaw.slice(0, 3500);
+  const issues = (validationIssues || "").slice(0, 800);
+  return `${AI_REPAIR_PROMPT}
+
+Failed raw model text (fix):
+\`\`\`
+${snippet}
+\`\`\`
+
+Zod / validation issues:
+${issues || "(none captured)"}
+
+Fix and return valid JSON only.`;
+}
+
+/** Bilingual soft message when JSON ok but 0 patches applied / empty after coerce. */
+export const AI_EMPTY_PATCHES_HINT =
+  "No edits applied — retry with string style values (e.g. paddingX:\"24\") and real pageId/blockId. / لم يُطبق أي تعديل — أعد المحاولة بقيم styles كنصوص ومعرّفات الصفحة/الكتلة من المسودة.";
 
 export const AI_SYSTEM_PROMPT = `You are SiteForge's site-edit agent for the CURRENT TENANT DRAFT ONLY.
 Users may write Arabic or English — match their language in "summary".
@@ -899,7 +1079,7 @@ ONLY a JSON object (no markdown):
 ## Allowlisted ops
 1) update_prop — {op,pageId,blockId,key,value}
 2) update_props — {op,pageId,blockId,props:{...}}
-3) set_part_style — {op,pageId,blockId,part,styles:{bgColor,textColor,...}}
+3) set_part_style — {op,pageId,blockId,part,styles:{bgColor,textColor,paddingX,borderRadius,...}}  ← ALL style values MUST be strings
 4) add_block — {op,pageId,type,props?,afterBlockId?,id?}
 5) remove_block — {op,pageId,blockId}  (never empty a page)
 6) duplicate_block — {op,pageId,blockId,id?}
