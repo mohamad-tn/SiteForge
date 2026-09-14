@@ -76,33 +76,56 @@ export function AuthAtmosphere({
     >
       <svg
         aria-hidden
-        className="sf-auth-mesh opacity-[0.35] dark:opacity-[0.22]"
+        className="sf-auth-mesh"
         xmlns="http://www.w3.org/2000/svg"
-        preserveAspectRatio="none"
+        viewBox="0 0 1440 900"
+        width="100%"
+        height="100%"
+        preserveAspectRatio="xMidYMid slice"
       >
         <defs>
           <linearGradient id="sf-auth-mesh-a" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="var(--accent)" stopOpacity="0.22" />
-            <stop offset="55%" stopColor="transparent" stopOpacity="0" />
-            <stop offset="100%" stopColor="#d4a574" stopOpacity="0.14" />
+            <stop offset="0%" stopColor="var(--accent)" stopOpacity="0.45" />
+            <stop offset="40%" stopColor="#14b8a6" stopOpacity="0.18" />
+            <stop offset="70%" stopColor="transparent" stopOpacity="0" />
+            <stop offset="100%" stopColor="#d4a574" stopOpacity="0.28" />
           </linearGradient>
-          <pattern id="sf-auth-grid" width="48" height="48" patternUnits="userSpaceOnUse">
+          <linearGradient id="sf-auth-mesh-b" x1="100%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stopColor="#6366f1" stopOpacity="0.16" />
+            <stop offset="50%" stopColor="transparent" stopOpacity="0" />
+            <stop offset="100%" stopColor="var(--accent)" stopOpacity="0.22" />
+          </linearGradient>
+          <radialGradient id="sf-auth-orb-1" cx="20%" cy="20%" r="50%">
+            <stop offset="0%" stopColor="var(--accent)" stopOpacity="0.35" />
+            <stop offset="100%" stopColor="transparent" stopOpacity="0" />
+          </radialGradient>
+          <radialGradient id="sf-auth-orb-2" cx="85%" cy="75%" r="45%">
+            <stop offset="0%" stopColor="#d4a574" stopOpacity="0.28" />
+            <stop offset="100%" stopColor="transparent" stopOpacity="0" />
+          </radialGradient>
+          <pattern id="sf-auth-grid" width="56" height="56" patternUnits="userSpaceOnUse">
             <path
-              d="M48 0H0V48"
+              d="M56 0H0V56"
               fill="none"
               stroke="currentColor"
-              strokeOpacity="0.06"
+              strokeOpacity="0.09"
               strokeWidth="1"
             />
           </pattern>
         </defs>
-        <rect width="100%" height="100%" fill="url(#sf-auth-grid)" />
+        <rect width="1440" height="900" fill="url(#sf-auth-grid)" />
+        <rect width="1440" height="900" fill="url(#sf-auth-orb-1)" />
+        <rect width="1440" height="900" fill="url(#sf-auth-orb-2)" />
         <path
-          d="M0,80 Q180,20 360,90 T720,70 T1080,100 T1440,60 V0 H0 Z"
+          d="M0,120 C240,20 480,180 720,90 C960,0 1200,140 1440,60 L1440,0 L0,0 Z"
           fill="url(#sf-auth-mesh-a)"
         />
-        <circle cx="85%" cy="78%" r="18%" fill="var(--accent)" fillOpacity="0.06" />
-        <circle cx="8%" cy="70%" r="14%" fill="#d4a574" fillOpacity="0.07" />
+        <path
+          d="M0,900 C320,720 560,820 800,700 C1040,580 1240,780 1440,640 L1440,900 Z"
+          fill="url(#sf-auth-mesh-b)"
+        />
+        <circle cx="1180" cy="220" r="180" fill="var(--accent)" fillOpacity="0.08" />
+        <circle cx="160" cy="640" r="140" fill="#d4a574" fillOpacity="0.1" />
       </svg>
       {children}
     </div>

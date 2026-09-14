@@ -1,8 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
 import { usePlatformLang } from "@/components/platform-lang-provider";
 import type { SiteContent } from "@/lib/design";
 import {
@@ -13,13 +17,26 @@ import {
   AI_TEXT_MIMES,
   type AiAttachment,
 } from "@/lib/ai/attachments";
-import { Paperclip, Sparkles, X } from "lucide-react";
-import Link from "next/link";
+import { KeyRound, Paperclip, Sparkles, X } from "lucide-react";
 
 type Step = { step: string; message: string };
-type ChatMsg = { role: "user" | "assistant" | "system"; text: string };
+type AttMeta = {
+  type?: string;
+  name?: string;
+  mime?: string;
+  mediaUrl?: string | null;
+  previewUrl?: string | null;
+};
+type ChatMsg = {
+  id?: string;
+  role: "user" | "assistant" | "system" | "error";
+  text: string;
+  status?: string;
+  attachmentMeta?: AttMeta[] | null;
+  steps?: Step[] | null;
+};
 
-type LocalAttachment = AiAttachment & { id: string };
+type LocalAttachment = AiAttachment & { id: string; previewUrl?: string };
 
 function readFileAsText(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -37,6 +54,53 @@ function readFileAsDataUrl(file: File): Promise<string> {
     r.onerror = () => reject(new Error("read failed"));
     r.readAsDataURL(file);
   });
+}
+
+function AttChips({
+  items,
+  onOpen,
+  onRemove,
+}: {
+  items: { id?: string; name?: string; previewUrl?: string | null; type?: string }[];
+  onOpen?: (url: string) => void;
+  onRemove?: (id: string) => void;
+}) {
+  if (!items.length) return null;
+  return (
+    <div className="mt-1.5 flex flex-wrap gap-1.5">
+      {items.map((a, i) => {
+        const url = a.previewUrl || undefined;
+        return (
+          <button
+            key={a.id || `${a.name}-${i}`}
+            type="button"
+            className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-[var(--border)] bg-[var(--surface)] py-0.5 pe-1 ps-1 text-[10px] font-medium"
+            onClick={() => url && onOpen?.(url)}
+          >
+            {a.type === "image" && url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={url} alt="" className="h-6 w-6 rounded-full object-cover" />
+            ) : null}
+            <span className="truncate pe-1" dir="ltr">
+              {a.name || "file"}
+            </span>
+            {onRemove && a.id ? (
+              <span
+                role="button"
+                className="inline-flex h-5 w-5 items-center justify-center rounded-full hover:bg-[var(--card)]"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onRemove(a.id!);
+                }}
+              >
+                <X className="h-3 w-3" />
+              </span>
+            ) : null}
+          </button>
+        );
+      })}
+    </div>
+  );
 }
 
 export function AiEditorPanel({
@@ -59,17 +123,157 @@ export function AiEditorPanel({
   const [steps, setSteps] = useState<Step[]>([]);
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [disabledReason, setDisabledReason] = useState<string | null>(null);
+  const [aiAvailable, setAiAvailable] = useState(true);
   const [quotaLabel, setQuotaLabel] = useState("");
   const [attachments, setAttachments] = useState<LocalAttachment[]>([]);
-  const [howOpen, setHowOpen] = useState(false);
   const [attachError, setAttachError] = useState("");
+  const [lightbox, setLightbox] = useState<string | null>(null);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [keyOpen, setKeyOpen] = useState(false);
+  const [userKey, setUserKey] = useState("");
+  const [userProvider, setUserProvider] = useState("openai");
+  const [userModel, setUserModel] = useState("gpt-4o-mini");
+  const [userEnabled, setUserEnabled] = useState(false);
+  const [hasUserKey, setHasUserKey] = useState(false);
+  const [usageLabel, setUsageLabel] = useState("");
+  const [savingKey, setSavingKey] = useState(false);
   const scroller = useRef<HTMLDivElement | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+  const openRef = useRef(open);
+  openRef.current = open;
+
+  const loadStatus = useCallback(async () => {
+    try {
+      const res = await fetch("/api/ai/status");
+      if (!res.ok) return;
+      const data = await res.json();
+      setAiAvailable(Boolean(data.available));
+      setHasUserKey(Boolean(data.hasUserKey));
+      if (!data.available) {
+        setDisabledReason(
+          data.reason === "no_key" ? t("aiNeedKey") : t("aiDisabledTenant")
+        );
+      } else {
+        setDisabledReason(null);
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [t]);
+
+  const loadUserAi = useCallback(async () => {
+    try {
+      const res = await fetch("/api/account/ai");
+      if (!res.ok) return;
+      const data = await res.json();
+      setUserProvider(data.settings?.provider || "openai");
+      setUserModel(data.settings?.model || "gpt-4o-mini");
+      setUserEnabled(Boolean(data.settings?.enabled));
+      setHasUserKey(Boolean(data.settings?.hasApiKey));
+      setUsageLabel(
+        lang === "ar"
+          ? `اليوم ${data.usage?.today ?? 0} · الشهر ${data.usage?.month ?? 0}`
+          : `Today ${data.usage?.today ?? 0} · Month ${data.usage?.month ?? 0}`
+      );
+    } catch {
+      /* ignore */
+    }
+  }, [lang]);
+
+  const loadHistory = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/ai/chat?siteId=${encodeURIComponent(siteId)}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      setMessages(
+        (data.messages || []).map(
+          (m: {
+            id: string;
+            role: string;
+            text: string;
+            status?: string;
+            attachmentMeta?: AttMeta[];
+            steps?: Step[];
+          }) => ({
+            id: m.id,
+            role:
+              m.status === "error"
+                ? "error"
+                : m.role === "user"
+                  ? "user"
+                  : m.role === "assistant"
+                    ? "assistant"
+                    : "system",
+            text:
+              m.status === "cancelled"
+                ? `${m.text || ""}${m.text ? " · " : ""}${t("aiCancelled")}`
+                : m.text,
+            status: m.status,
+            attachmentMeta: m.attachmentMeta,
+            steps: m.steps as Step[] | null,
+          })
+        )
+      );
+      setNextCursor(data.nextCursor || null);
+    } catch {
+      /* ignore */
+    }
+  }, [siteId, t]);
+
+  useEffect(() => {
+    if (!open) {
+      // Abort in-flight when drawer closes
+      if (abortRef.current) {
+        abortRef.current.abort();
+        abortRef.current = null;
+      }
+      return;
+    }
+    void loadStatus();
+    void loadUserAi();
+    void loadHistory();
+  }, [open, loadStatus, loadUserAi, loadHistory]);
 
   useEffect(() => {
     if (!open) return;
     scroller.current?.scrollTo({ top: scroller.current.scrollHeight });
   }, [open, messages, steps]);
+
+  async function loadOlder() {
+    if (!nextCursor || loadingOlder) return;
+    setLoadingOlder(true);
+    try {
+      const res = await fetch(
+        `/api/ai/chat?siteId=${encodeURIComponent(siteId)}&cursor=${encodeURIComponent(nextCursor)}`
+      );
+      if (!res.ok) return;
+      const data = await res.json();
+      const older = (data.messages || []).map(
+        (m: {
+          id: string;
+          role: string;
+          text: string;
+          status?: string;
+          attachmentMeta?: AttMeta[];
+        }) => ({
+          id: m.id,
+          role: (m.status === "error" ? "error" : m.role) as ChatMsg["role"],
+          text:
+            m.status === "cancelled"
+              ? `${m.text || ""} · ${t("aiCancelled")}`
+              : m.text,
+          status: m.status,
+          attachmentMeta: m.attachmentMeta,
+        })
+      );
+      setMessages((prev) => [...older, ...prev]);
+      setNextCursor(data.nextCursor || null);
+    } finally {
+      setLoadingOlder(false);
+    }
+  }
 
   async function addFiles(files: FileList | null) {
     if (!files?.length) return;
@@ -100,7 +304,7 @@ export function AiEditorPanel({
               mediaUrl = data.url as string;
             }
           } catch {
-            /* fall through to dataUrl-only */
+            /* dataUrl only */
           }
           const dataUrl = await readFileAsDataUrl(file);
           next.push({
@@ -110,8 +314,13 @@ export function AiEditorPanel({
             mime,
             mediaUrl,
             dataUrl,
+            previewUrl: mediaUrl || dataUrl,
           });
-        } else if (AI_TEXT_MIMES.has(mime) || mime.startsWith("text/") || /\.(txt|md|json|css|html|js|ts)$/i.test(file.name)) {
+        } else if (
+          AI_TEXT_MIMES.has(mime) ||
+          mime.startsWith("text/") ||
+          /\.(txt|md|json|css|html|js|ts)$/i.test(file.name)
+        ) {
           if (file.size > AI_TEXT_MAX_BYTES) {
             setAttachError(t("aiAttachTooLarge"));
             continue;
@@ -135,24 +344,81 @@ export function AiEditorPanel({
     }
   }
 
+  async function savePersonalKey() {
+    setSavingKey(true);
+    try {
+      const body: Record<string, unknown> = {
+        provider: userProvider,
+        model: userModel,
+        enabled: true,
+      };
+      if (userKey.trim()) body.apiKey = userKey.trim();
+      const res = await fetch("/api/account/ai", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (res.ok) {
+        setUserKey("");
+        await loadUserAi();
+        await loadStatus();
+        setKeyOpen(false);
+      }
+    } finally {
+      setSavingKey(false);
+    }
+  }
+
+  async function clearPersonalKey() {
+    setSavingKey(true);
+    try {
+      await fetch("/api/account/ai", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clearKey: true }),
+      });
+      await loadUserAi();
+      await loadStatus();
+    } finally {
+      setSavingKey(false);
+    }
+  }
+
   async function send() {
     const message = input.trim();
     if ((!message && !attachments.length) || busy) return;
+    if (!aiAvailable) {
+      setKeyOpen(true);
+      return;
+    }
     setBusy(true);
     setDisabledReason(null);
     setSteps([]);
-    const label =
-      attachments.length > 0
-        ? `${message || "…"}${lang === "ar" ? " · مرفقات: " : " · attachments: "}${attachments.map((a) => a.name).join(", ")}`
-        : message;
-    setMessages((m) => [...m, { role: "user", text: label }]);
+    const localAtts = attachments.map((a) => ({
+      id: a.id,
+      name: a.name,
+      type: a.type,
+      previewUrl: a.previewUrl || a.mediaUrl || a.dataUrl || null,
+    }));
+    setMessages((m) => [
+      ...m,
+      {
+        role: "user",
+        text: message || (lang === "ar" ? "مرفقات" : "Attachments"),
+        attachmentMeta: localAtts,
+      },
+    ]);
     setInput("");
     const payloadAttachments = attachments.map((a) => {
-      const { id, ...rest } = a;
+      const { id, previewUrl, ...rest } = a;
       void id;
+      void previewUrl;
       return rest;
     });
     setAttachments([]);
+
+    const ac = new AbortController();
+    abortRef.current = ac;
 
     try {
       const res = await fetch("/api/ai/chat", {
@@ -160,16 +426,22 @@ export function AiEditorPanel({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           siteId,
-          message: message || (lang === "ar" ? "راجع المرفقات وطبق التعديلات المناسبة." : "Review attachments and apply suitable edits."),
+          message:
+            message ||
+            (lang === "ar"
+              ? "راجع المرفقات وطبق التعديلات المناسبة."
+              : "Review attachments and apply suitable edits."),
           content,
           locale: content.defaultLocale,
           attachments: payloadAttachments,
         }),
+        signal: ac.signal,
       });
 
       if (res.status === 503) {
         const data = await res.json().catch(() => ({}));
-        setDisabledReason(data.error === "AI_DISABLED" ? t("aiDisabledTenant") : t("aiError"));
+        setDisabledReason(data.error === "AI_DISABLED" ? t("aiNeedKey") : t("aiError"));
+        setAiAvailable(false);
         setBusy(false);
         return;
       }
@@ -177,7 +449,11 @@ export function AiEditorPanel({
         const data = await res.json().catch(() => ({}));
         setMessages((m) => [
           ...m,
-          { role: "assistant", text: data.error === "QUOTA_EXCEEDED" ? t("aiQuotaExceeded") : data.error || t("aiError") },
+          {
+            role: "error",
+            text:
+              data.error === "QUOTA_EXCEEDED" ? t("aiQuotaExceeded") : data.error || t("aiError"),
+          },
         ]);
         setBusy(false);
         return;
@@ -216,7 +492,9 @@ export function AiEditorPanel({
                 (lang === "ar"
                   ? `تم تطبيق ${evt.applied ?? 0} تعديلاً`
                   : `Applied ${evt.applied ?? 0} patch(es)`);
-              setMessages((m) => [...m, { role: "assistant", text: summary }]);
+              if (openRef.current) {
+                setMessages((m) => [...m, { role: "assistant", text: summary }]);
+              }
               if (evt.quota) {
                 setQuotaLabel(
                   lang === "ar"
@@ -230,25 +508,46 @@ export function AiEditorPanel({
                   { role: "system", text: evt.errors!.slice(0, 3).join(" · ") },
                 ]);
               }
+            } else if (evt.type === "cancelled") {
+              setMessages((m) => [
+                ...m,
+                { role: "system", text: t("aiCancelled"), status: "cancelled" },
+              ]);
             } else if (evt.type === "error") {
-              setMessages((m) => [...m, { role: "assistant", text: evt.error || t("aiError") }]);
+              setMessages((m) => [
+                ...m,
+                { role: "error", text: evt.error || t("aiError") },
+              ]);
             }
           } catch {
-            /* ignore bad SSE chunk */
+            /* ignore bad SSE */
           }
         }
       }
-    } catch {
-      setMessages((m) => [...m, { role: "assistant", text: t("aiError") }]);
+    } catch (e) {
+      if ((e as Error)?.name === "AbortError") {
+        setMessages((m) => [
+          ...m,
+          { role: "system", text: t("aiCancelled"), status: "cancelled" },
+        ]);
+      } else {
+        setMessages((m) => [...m, { role: "error", text: t("aiError") }]);
+      }
     } finally {
+      abortRef.current = null;
       setBusy(false);
+      setSteps([]);
     }
   }
 
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[85] flex justify-end bg-[color-mix(in_oklab,var(--foreground)_35%,transparent)] backdrop-blur-[2px]" dir={dir} onClick={() => onOpenChange(false)}>
+    <div
+      className="fixed inset-0 z-[85] flex justify-end bg-[color-mix(in_oklab,var(--foreground)_35%,transparent)] backdrop-blur-[2px]"
+      dir={dir}
+      onClick={() => onOpenChange(false)}
+    >
       <aside
         className="flex h-full w-full max-w-md flex-col border-s border-[var(--border)] bg-[var(--card)] shadow-2xl"
         onClick={(e) => e.stopPropagation()}
@@ -263,39 +562,54 @@ export function AiEditorPanel({
             </span>
             <div className="min-w-0">
               <div className="truncate text-sm font-bold">{t("aiAssistant")}</div>
-              <div className="truncate text-[10px] text-[var(--muted)]">{quotaLabel || t("aiAssistantHint")}</div>
+              <div className="truncate text-[10px] text-[var(--muted)]">
+                {quotaLabel || t("aiAssistantHint")}
+              </div>
             </div>
           </div>
-          <Button type="button" variant="ghost" size="icon" className="rounded-full" onClick={() => onOpenChange(false)} aria-label={t("close")}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="rounded-full"
+            onClick={() => onOpenChange(false)}
+            aria-label={t("close")}
+          >
             <X className="h-4 w-4" />
           </Button>
         </header>
 
-        <div ref={scroller} className="sf-scroll flex-1 space-y-3 overflow-y-auto px-4 py-4">
-          <details
-            open={howOpen}
-            onToggle={(e) => setHowOpen((e.target as HTMLDetailsElement).open)}
-            className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2"
-          >
-            <summary className="cursor-pointer text-xs font-semibold text-[var(--foreground)]">{t("aiHowItWorks")}</summary>
-            <ol className="mt-2 space-y-1.5 pb-1 text-[11px] leading-5 text-[var(--muted)]">
-              <li>{t("aiHowStep1")}</li>
-              <li>{t("aiHowStep2")}</li>
-              <li>{t("aiHowStep3")}</li>
-              <li>{t("aiHowStep4")}</li>
-              <li>{t("aiHowStep5")}</li>
-            </ol>
-          </details>
+        <div
+          ref={scroller}
+          className="sf-scroll flex-1 space-y-3 overflow-y-auto px-4 py-4"
+          onScroll={(e) => {
+            if (e.currentTarget.scrollTop < 40 && nextCursor) void loadOlder();
+          }}
+        >
+          {nextCursor ? (
+            <button
+              type="button"
+              className="mx-auto block text-[11px] font-semibold text-teal-800 dark:text-teal-300"
+              disabled={loadingOlder}
+              onClick={() => void loadOlder()}
+            >
+              {loadingOlder ? "…" : t("aiLoadOlder")}
+            </button>
+          ) : null}
 
           {disabledReason ? (
             <div className="rounded-2xl border border-dashed border-amber-500/40 bg-amber-50/70 p-4 text-sm leading-6 text-amber-950 dark:bg-amber-950/30 dark:text-amber-50">
               <p className="font-semibold">{t("aiDisabledTitle")}</p>
               <p className="mt-1 text-[13px] opacity-90">{disabledReason}</p>
-              <p className="mt-3 text-[11px] text-[var(--muted)]">
-                <Link href="/admin" className="font-semibold text-teal-800 underline-offset-2 hover:underline dark:text-teal-300">
-                  {t("aiAdminLink")}
-                </Link>
-              </p>
+              <Button
+                type="button"
+                size="sm"
+                className="mt-3 rounded-full"
+                onClick={() => setKeyOpen(true)}
+              >
+                <KeyRound className="h-3.5 w-3.5" />
+                {t("aiPersonalKey")}
+              </Button>
             </div>
           ) : null}
 
@@ -307,16 +621,29 @@ export function AiEditorPanel({
 
           {messages.map((m, i) => (
             <div
-              key={`${m.role}-${i}`}
+              key={m.id || `${m.role}-${i}`}
               className={`rounded-2xl px-3 py-2.5 text-sm leading-6 ${
                 m.role === "user"
                   ? "ms-6 bg-teal-800 text-white"
-                  : m.role === "system"
-                    ? "border border-amber-500/30 bg-amber-50/50 text-amber-950 dark:bg-amber-950/20 dark:text-amber-50"
-                    : "me-6 bg-[var(--surface)] text-[var(--foreground)]"
+                  : m.role === "error"
+                    ? "border border-rose-500/35 bg-rose-50/80 text-rose-900 dark:bg-rose-950/30 dark:text-rose-100"
+                    : m.role === "system"
+                      ? "border border-amber-500/30 bg-amber-50/50 text-amber-950 dark:bg-amber-950/20 dark:text-amber-50"
+                      : "me-6 bg-[var(--surface)] text-[var(--foreground)]"
               }`}
             >
               {m.text}
+              {m.attachmentMeta?.length ? (
+                <AttChips
+                  items={(m.attachmentMeta || []).map((a, idx) => ({
+                    id: `${i}-${idx}`,
+                    name: a.name || undefined,
+                    type: a.type || undefined,
+                    previewUrl: a.previewUrl || a.mediaUrl || null,
+                  }))}
+                  onOpen={(url) => setLightbox(url)}
+                />
+              ) : null}
             </div>
           ))}
 
@@ -337,29 +664,100 @@ export function AiEditorPanel({
         </div>
 
         <footer className="border-t border-[var(--border)] p-3">
-          {attachments.length ? (
-            <div className="mb-2 flex flex-wrap gap-1.5">
-              {attachments.map((a) => (
-                <span
-                  key={a.id}
-                  className="inline-flex max-w-full items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--surface)] py-0.5 pe-1 ps-2 text-[10px] font-medium"
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <button
+              type="button"
+              className="inline-flex items-center gap-1 text-[10px] font-semibold text-teal-800 dark:text-teal-300"
+              onClick={() => setKeyOpen((v) => !v)}
+            >
+              <KeyRound className="h-3 w-3" />
+              {t("aiPersonalKey")}
+            </button>
+            <span className="truncate text-[10px] text-[var(--muted)]">{usageLabel}</span>
+          </div>
+          {keyOpen ? (
+            <div className="mb-3 space-y-2 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3">
+              <p className="text-[11px] leading-5 text-[var(--muted)]">{t("aiPersonalKeyHint")}</p>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <Label className="text-[10px]">{t("aiProvider")}</Label>
+                  <Select
+                    value={userProvider}
+                    onValueChange={(v) => setUserProvider(v)}
+                    options={[
+                      { value: "openai", label: "OpenAI" },
+                      { value: "anthropic", label: "Anthropic" },
+                      { value: "google", label: "Google" },
+                      { value: "xai", label: "xAI" },
+                    ]}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-[10px]">{t("aiModel")}</Label>
+                  <Input
+                    value={userModel}
+                    onChange={(e) => setUserModel(e.target.value)}
+                    className="h-8 text-xs"
+                    dir="ltr"
+                  />
+                </div>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-[10px]">{t("aiApiKey")}</Label>
+                <Input
+                  type="password"
+                  value={userKey}
+                  onChange={(e) => setUserKey(e.target.value)}
+                  placeholder={hasUserKey ? t("aiApiKeySet") : "sk-…"}
+                  className="h-8 text-xs"
+                  dir="ltr"
+                  autoComplete="off"
+                />
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  className="rounded-full"
+                  disabled={savingKey || (!userKey.trim() && !hasUserKey)}
+                  onClick={() => void savePersonalKey()}
                 >
-                  <span className="truncate" dir="ltr">
-                    {a.name}
-                  </span>
-                  <button
+                  {t("aiSaveSettings")}
+                </Button>
+                {hasUserKey ? (
+                  <Button
                     type="button"
-                    className="inline-flex h-5 w-5 items-center justify-center rounded-full hover:bg-[var(--card)]"
-                    aria-label={t("aiAttachRemove")}
-                    onClick={() => setAttachments((list) => list.filter((x) => x.id !== a.id))}
+                    size="sm"
+                    variant="outline"
+                    className="rounded-full"
+                    disabled={savingKey}
+                    onClick={() => void clearPersonalKey()}
                   >
-                    <X className="h-3 w-3" />
-                  </button>
-                </span>
-              ))}
+                    {t("aiApiKeyClear")}
+                  </Button>
+                ) : null}
+              </div>
+              {userEnabled && hasUserKey ? (
+                <p className="text-[10px] text-teal-700 dark:text-teal-300">{t("aiUsingPersonalKey")}</p>
+              ) : null}
             </div>
           ) : null}
-          {attachError ? <p className="mb-1.5 text-[11px] text-rose-600 dark:text-rose-400">{attachError}</p> : null}
+
+          {attachments.length ? (
+            <AttChips
+              items={attachments.map((a) => ({
+                id: a.id,
+                name: a.name,
+                type: a.type,
+                previewUrl: a.previewUrl || null,
+              }))}
+              onOpen={(url) => setLightbox(url)}
+              onRemove={(id) => setAttachments((list) => list.filter((x) => x.id !== id))}
+            />
+          ) : null}
+          {attachError ? (
+            <p className="mb-1.5 text-[11px] text-rose-600 dark:text-rose-400">{attachError}</p>
+          ) : null}
           <Textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
@@ -402,8 +800,9 @@ export function AiEditorPanel({
             <Button
               type="button"
               className="rounded-full bg-teal-800 hover:bg-teal-700"
-              disabled={busy || (!input.trim() && !attachments.length)}
+              disabled={busy || (!input.trim() && !attachments.length) || !aiAvailable}
               onClick={() => void send()}
+              title={!aiAvailable ? t("aiNeedKey") : undefined}
             >
               <Sparkles className="h-3.5 w-3.5" aria-hidden />
               {busy ? t("aiWorking") : t("aiSend")}
@@ -411,6 +810,24 @@ export function AiEditorPanel({
           </div>
         </footer>
       </aside>
+
+      {lightbox
+        ? createPortal(
+            <div
+              className="fixed inset-0 z-[220] flex items-center justify-center bg-black/70 p-6"
+              onClick={() => setLightbox(null)}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={lightbox}
+                alt=""
+                className="max-h-full max-w-full rounded-2xl object-contain shadow-2xl"
+                onClick={(e) => e.stopPropagation()}
+              />
+            </div>,
+            document.body
+          )
+        : null}
     </div>
   );
 }

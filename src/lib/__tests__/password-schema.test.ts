@@ -1,41 +1,44 @@
 import { describe, expect, it } from "vitest";
-import { z } from "zod";
+import {
+  changePasswordBodySchema,
+  evaluatePasswordRules,
+  passwordMeetsPolicy,
+  strongPasswordZod,
+} from "@/lib/password-policy";
 
-/** Mirrors /api/account/password body schema for unit coverage without DB. */
-const schema = z
-  .object({
-    currentPassword: z.string().min(1).max(100),
-    newPassword: z.string().min(6).max(100),
-    confirmPassword: z.string().min(6).max(100),
-  })
-  .refine((d) => d.newPassword === d.confirmPassword, {
-    message: "Passwords do not match",
-    path: ["confirmPassword"],
+describe("password policy", () => {
+  it("accepts strong passwords", () => {
+    expect(passwordMeetsPolicy("Demo1234!")).toBe(true);
+    expect(strongPasswordZod.safeParse("Demo1234!").success).toBe(true);
   });
 
-describe("change-password zod", () => {
-  it("accepts matching passwords ≥6", () => {
-    const r = schema.safeParse({
-      currentPassword: "demo1234",
-      newPassword: "newpass1",
-      confirmPassword: "newpass1",
-    });
-    expect(r.success).toBe(true);
+  it("rejects weak passwords", () => {
+    expect(passwordMeetsPolicy("demo1234")).toBe(false);
+    expect(passwordMeetsPolicy("short1!")).toBe(false);
+    expect(passwordMeetsPolicy("NoNumber!")).toBe(false);
+    expect(strongPasswordZod.safeParse("demo1234").success).toBe(false);
   });
 
-  it("rejects mismatch and short passwords", () => {
+  it("live checklist tracks match", () => {
+    const rules = evaluatePasswordRules("Demo1234!", "Demo1234!");
+    expect(rules.every((r) => r.ok)).toBe(true);
+    const bad = evaluatePasswordRules("Demo1234!", "other");
+    expect(bad.find((r) => r.id === "match")?.ok).toBe(false);
+  });
+
+  it("change-password body schema", () => {
     expect(
-      schema.safeParse({
-        currentPassword: "x",
-        newPassword: "short",
-        confirmPassword: "short",
+      changePasswordBodySchema.safeParse({
+        currentPassword: "Demo1234!",
+        newPassword: "Newpass1!",
+        confirmPassword: "Newpass1!",
       }).success
-    ).toBe(false);
+    ).toBe(true);
     expect(
-      schema.safeParse({
-        currentPassword: "demo1234",
-        newPassword: "newpass1",
-        confirmPassword: "other",
+      changePasswordBodySchema.safeParse({
+        currentPassword: "x",
+        newPassword: "weak",
+        confirmPassword: "weak",
       }).success
     ).toBe(false);
   });

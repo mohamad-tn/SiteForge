@@ -4,11 +4,12 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { jsonError, parseJsonBody } from "@/lib/api";
 import { checkRateLimit, clientIpFromRequest } from "@/lib/rate-limit";
+import { strongPasswordZod } from "@/lib/password-policy";
 
 const schema = z.object({
   name: z.string().min(1).max(80),
   email: z.string().email().max(200),
-  password: z.string().min(6).max(100),
+  password: strongPasswordZod,
 });
 
 /** Generic message — avoids easy email enumeration. */
@@ -27,7 +28,6 @@ export async function POST(req: Request) {
     const email = data.email.toLowerCase().trim();
     const existing = await prisma.user.findUnique({ where: { email } });
     if (existing) {
-      // Same status/message as other failures — no enumeration
       return jsonError(GENERIC_FAIL, 400);
     }
     const passwordHash = await bcrypt.hash(data.password, 10);

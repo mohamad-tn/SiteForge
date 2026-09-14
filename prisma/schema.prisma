@@ -32,6 +32,8 @@ model User {
   sites        Site[]
   mediaAssets  MediaAsset[]
   aiQuota      TenantAiQuota?
+  aiSettings   UserAiSettings?
+  aiChatThreads AiChatThread[]
 
   @@index([role])
   @@index([createdAt])
@@ -76,6 +78,7 @@ model Site {
   formSubmissions  FormSubmission[]
   secrets          SiteSecret[]
   mediaAssets      MediaAsset[]
+  aiChatThreads    AiChatThread[]
 
   @@index([ownerId])
   @@index([customDomain])
@@ -221,9 +224,57 @@ model AiUsageLog {
   tokensOut Int      @default(0)
   ok        Boolean  @default(true)
   error     String?
+  /// platform | user — which API key was used
+  keySource String   @default("platform")
   createdAt DateTime @default(now())
 
   @@index([userId, createdAt])
   @@index([siteId, createdAt])
   @@index([createdAt])
+  @@index([keySource, createdAt])
+}
+
+model AiChatThread {
+  id        String          @id @default(cuid())
+  userId    String
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  siteId    String
+  site      Site            @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  deletedAt DateTime?
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+  messages  AiChatMessage[]
+
+  @@unique([userId, siteId])
+  @@index([siteId])
+  @@index([userId, updatedAt])
+}
+
+model AiChatMessage {
+  id             String       @id @default(cuid())
+  threadId       String
+  thread         AiChatThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  role           String
+  text           String
+  /// Attachment chips meta (no large dataUrls persisted)
+  attachmentMeta Json?
+  steps          Json?
+  /// ok | error | cancelled | partial
+  status         String       @default("ok")
+  createdAt      DateTime     @default(now())
+
+  @@index([threadId, createdAt])
+}
+
+/// Per-user BYOK AI settings (encrypted key). When enabled, bypasses platform quota.
+model UserAiSettings {
+  id              String     @id @default(cuid())
+  userId          String     @unique
+  user            User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider        AiProvider @default(openai)
+  encryptedApiKey String?
+  model           String     @default("gpt-4o-mini")
+  enabled         Boolean    @default(false)
+  updatedAt       DateTime   @updatedAt
+  createdAt       DateTime   @default(now())
 }

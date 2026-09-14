@@ -966,7 +966,7 @@ async function main() {
     });
   }
 
-  const passwordHash = await bcrypt.hash("demo1234", 10);
+  const passwordHash = await bcrypt.hash("Demo1234!", 10);
   const demo = await prisma.user.upsert({
     where: { email: "demo@siteforge.local" },
     update: { passwordHash, name: "Demo User" },
@@ -1068,9 +1068,9 @@ async function main() {
 
   console.log("Seeded templates:", templates.map((t) => t.slug).join(", "));
   console.log("Demo CMS collection: projects");
-  const adminHash = await bcrypt.hash("admin1234", 10);
+  const adminHash = await bcrypt.hash("Admin1234!", 10);
   await prisma.user.upsert({ where: { email: "admin@siteforge.local" }, update: { passwordHash: adminHash, name: "Platform Admin", role: "ADMIN" }, create: { email: "admin@siteforge.local", name: "Platform Admin", passwordHash: adminHash, role: "ADMIN" } });
-  console.log("Demo user: demo@siteforge.local / demo1234");
+  console.log("Demo user: demo@siteforge.local / Demo1234!");
   await prisma.platformAiSettings.upsert({
     where: { id: "default" },
     update: {},
@@ -1083,7 +1083,7 @@ async function main() {
       maxTokens: 4096,
     },
   });
-  console.log("Admin user: admin@siteforge.local / admin1234");
+  console.log("Admin user: admin@siteforge.local / Admin1234!  (prefer smaller model gpt-4o-mini until admin changes)");
   console.log("Platform AI: disabled until admin sets API key in /admin → AI");
   console.log("Demo public site: /s/demo-studio");
 }

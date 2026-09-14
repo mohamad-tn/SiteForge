@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { signOut, useSession } from "next-auth/react";
 import { KeyRound, LogOut, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { PasswordChecklist, PasswordInput, passwordRulesPass } from "@/components/auth/password-field";
 import { usePlatformLang } from "@/components/platform-lang-provider";
 import { cn } from "@/lib/utils";
 
@@ -32,6 +32,7 @@ export function AccountMenu({
   const name = nameProp ?? session?.user?.name ?? null;
   const [open, setOpen] = useState(false);
   const [pwOpen, setPwOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -39,6 +40,8 @@ export function AccountMenu({
   const [saving, setSaving] = useState(false);
   const [okMsg, setOkMsg] = useState("");
   const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => setMounted(true), []);
 
   useEffect(() => {
     if (!open) return;
@@ -49,16 +52,15 @@ export function AccountMenu({
     return () => document.removeEventListener("mousedown", onDoc);
   }, [open]);
 
+  const canSubmit =
+    currentPassword.length > 0 && passwordRulesPass(newPassword, confirmPassword) && !saving;
+
   async function submitPassword(e: React.FormEvent) {
     e.preventDefault();
     setError("");
     setOkMsg("");
-    if (newPassword.length < 6) {
+    if (!passwordRulesPass(newPassword, confirmPassword)) {
       setError(t("changePasswordTooShort"));
-      return;
-    }
-    if (newPassword !== confirmPassword) {
-      setError(t("changePasswordMismatch"));
       return;
     }
     setSaving(true);
@@ -70,12 +72,17 @@ export function AccountMenu({
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        if (res.status === 400 && String(data.error || "").toLowerCase().includes("current")) {
+        const err = String(data.error || "");
+        if (res.status === 400 && err.toLowerCase().includes("current")) {
           setError(t("changePasswordWrongCurrent"));
-        } else if (String(data.error || "").toLowerCase().includes("match")) {
+        } else if (err.toLowerCase().includes("match")) {
           setError(t("changePasswordMismatch"));
+        } else if (err.toLowerCase().includes("differ")) {
+          setError(t("changePasswordSameAsOld"));
+        } else if (err.toLowerCase().includes("password") || res.status === 400) {
+          setError(err || t("changePasswordFailed"));
         } else {
-          setError(data.error || t("changePasswordFailed"));
+          setError(err || t("changePasswordFailed"));
         }
         return;
       }
@@ -86,11 +93,97 @@ export function AccountMenu({
       setTimeout(() => {
         setPwOpen(false);
         setOkMsg("");
-      }, 900);
+      }, 1100);
+    } catch {
+      setError(t("changePasswordFailed"));
     } finally {
       setSaving(false);
     }
   }
+
+  const modal =
+    pwOpen && mounted
+      ? createPortal(
+          <div
+            className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 p-4 backdrop-blur-[2px]"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="sf-change-pw-title"
+            onClick={() => {
+              if (!saving) setPwOpen(false);
+            }}
+          >
+            <form
+              className="w-full max-w-md rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--card)] p-5 shadow-[var(--shadow-md)]"
+              dir={dir}
+              lang={lang}
+              onClick={(e) => e.stopPropagation()}
+              onSubmit={(e) => void submitPassword(e)}
+            >
+              <h3 id="sf-change-pw-title" className="text-lg font-bold tracking-tight">
+                {t("changePassword")}
+              </h3>
+              <p className="mt-1 text-xs text-[var(--muted)]">{t("changePasswordHint")}</p>
+              <div className="mt-4 space-y-3">
+                <PasswordInput
+                  id="sf-pw-current"
+                  label={t("currentPassword")}
+                  value={currentPassword}
+                  onChange={setCurrentPassword}
+                  required
+                  autoComplete="current-password"
+                />
+                <PasswordInput
+                  id="sf-pw-new"
+                  label={t("newPassword")}
+                  value={newPassword}
+                  onChange={setNewPassword}
+                  required
+                  autoComplete="new-password"
+                />
+                <PasswordInput
+                  id="sf-pw-confirm"
+                  label={t("confirmPassword")}
+                  value={confirmPassword}
+                  onChange={setConfirmPassword}
+                  required
+                  autoComplete="new-password"
+                />
+                <PasswordChecklist
+                  password={newPassword}
+                  confirm={confirmPassword}
+                  lang={lang === "en" ? "en" : "ar"}
+                />
+                {error ? (
+                  <p className="rounded-xl border border-rose-500/30 bg-rose-50/80 px-3 py-2 text-sm text-rose-700 dark:bg-rose-950/40 dark:text-rose-300" role="alert">
+                    {error}
+                  </p>
+                ) : null}
+                {okMsg ? (
+                  <p className="rounded-xl border border-teal-500/30 bg-teal-50/80 px-3 py-2 text-sm text-teal-800 dark:bg-teal-950/40 dark:text-teal-200" role="status">
+                    {okMsg}
+                  </p>
+                ) : null}
+              </div>
+              <div className="mt-5 flex flex-wrap justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="rounded-full"
+                  disabled={saving}
+                  onClick={() => setPwOpen(false)}
+                >
+                  {t("close")}
+                </Button>
+                <Button type="submit" className="rounded-full" disabled={!canSubmit}>
+                  {saving ? t("saving") : t("changePasswordSave")}
+                </Button>
+              </div>
+            </form>
+          </div>,
+          document.body
+        )
+      : null;
 
   return (
     <>
@@ -160,90 +253,7 @@ export function AccountMenu({
           </div>
         ) : null}
       </div>
-
-      {pwOpen ? (
-        <div
-          className="fixed inset-0 z-[90] flex items-center justify-center bg-black/45 p-4"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="sf-change-pw-title"
-          onClick={() => {
-            if (!saving) setPwOpen(false);
-          }}
-        >
-          <form
-            className="w-full max-w-md rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--card)] p-5 shadow-[var(--shadow-sm)]"
-            dir={dir}
-            lang={lang}
-            onClick={(e) => e.stopPropagation()}
-            onSubmit={(e) => void submitPassword(e)}
-          >
-            <h3 id="sf-change-pw-title" className="text-lg font-bold tracking-tight">
-              {t("changePassword")}
-            </h3>
-            <p className="mt-1 text-xs text-[var(--muted)]">{t("changePasswordHint")}</p>
-            <div className="mt-4 space-y-3">
-              <div className="space-y-1.5">
-                <Label htmlFor="sf-pw-current">{t("currentPassword")}</Label>
-                <Input
-                  id="sf-pw-current"
-                  type="password"
-                  value={currentPassword}
-                  onChange={(e) => setCurrentPassword(e.target.value)}
-                  required
-                  dir="ltr"
-                  autoComplete="current-password"
-                  className="sf-field"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="sf-pw-new">{t("newPassword")}</Label>
-                <Input
-                  id="sf-pw-new"
-                  type="password"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  required
-                  minLength={6}
-                  dir="ltr"
-                  autoComplete="new-password"
-                  className="sf-field"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="sf-pw-confirm">{t("confirmPassword")}</Label>
-                <Input
-                  id="sf-pw-confirm"
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  required
-                  minLength={6}
-                  dir="ltr"
-                  autoComplete="new-password"
-                  className="sf-field"
-                />
-              </div>
-              {error ? <p className="text-sm text-rose-600 dark:text-rose-400">{error}</p> : null}
-              {okMsg ? <p className="text-sm text-teal-700 dark:text-teal-300">{okMsg}</p> : null}
-            </div>
-            <div className="mt-5 flex flex-wrap justify-end gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                className="rounded-full"
-                disabled={saving}
-                onClick={() => setPwOpen(false)}
-              >
-                {t("close")}
-              </Button>
-              <Button type="submit" className="rounded-full" disabled={saving}>
-                {saving ? t("saving") : t("changePasswordSave")}
-              </Button>
-            </div>
-          </form>
-        </div>
-      ) : null}
+      {modal}
     </>
   );
 }

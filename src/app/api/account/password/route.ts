@@ -1,28 +1,17 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
-import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { jsonError, parseJsonBody, requireSession } from "@/lib/api";
+import { changePasswordBodySchema } from "@/lib/password-policy";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-const schema = z
-  .object({
-    currentPassword: z.string().min(1).max(100),
-    newPassword: z.string().min(6).max(100),
-    confirmPassword: z.string().min(6).max(100),
-  })
-  .refine((d) => d.newPassword === d.confirmPassword, {
-    message: "Passwords do not match",
-    path: ["confirmPassword"],
-  });
 
 export async function POST(req: Request) {
   const auth = await requireSession();
   if ("response" in auth) return auth.response;
 
-  const parsed = await parseJsonBody(req, schema);
+  const parsed = await parseJsonBody(req, changePasswordBodySchema);
   if ("response" in parsed) return parsed.response;
 
   const user = await prisma.user.findUnique({

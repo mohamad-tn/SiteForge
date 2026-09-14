@@ -96,6 +96,13 @@ export const siteContentSchema = z.object({
   defaultLocale: z.string().min(2).max(12).default("ar"),
   pages: z.array(pageSchema).min(1),
   components: z.array(savedComponentSchema).optional(),
+  /** Soft site notes (AI drafts, domain suggestions) — never binding DNS. */
+  meta: z
+    .object({
+      domainProposal: z.string().max(255).optional(),
+      notes: z.string().max(2000).optional(),
+    })
+    .optional(),
 });
 
 export type ColorPalette = z.infer<typeof colorPaletteSchema>;

@@ -7,6 +7,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PasswordInput } from "@/components/auth/password-field";
 import { AuthAtmosphere, GlassCard } from "@/components/ui/surface";
 import { ThemeToggleButton } from "@/components/theme-provider";
 import { PlatformLangSwitcher, usePlatformLang } from "@/components/platform-lang-provider";
@@ -15,7 +16,7 @@ export default function LoginPage() {
   const router = useRouter();
   const { lang, dir, t } = usePlatformLang();
   const [email, setEmail] = useState("demo@siteforge.local");
-  const [password, setPassword] = useState("demo1234");
+  const [password, setPassword] = useState("Demo1234!");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -79,19 +80,15 @@ export default function LoginPage() {
                   placeholder={t("placeholderEmail")}
                 />
               </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="password">{t("password")}</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  dir="ltr"
-                  autoComplete="current-password"
-                  placeholder={t("placeholderPassword")}
-                />
-              </div>
+              <PasswordInput
+                id="password"
+                label={t("password")}
+                value={password}
+                onChange={setPassword}
+                required
+                autoComplete="current-password"
+                placeholder={t("placeholderPassword")}
+              />
               {error ? <p className="text-sm text-rose-600 dark:text-rose-400">{error}</p> : null}
               <Button type="submit" className="w-full rounded-full" disabled={loading}>
                 {loading ? t("signingIn") : t("enter")}
@@ -103,8 +100,8 @@ export default function LoginPage() {
                 {t("createAccount")}
               </Link>
             </p>
-            <p className="mt-2 text-center text-xs text-[var(--muted)]" dir="ltr">
-              demo@siteforge.local / demo1234
+            <p className="mt-2 text-center text-[11px] text-[var(--muted)]" dir="ltr">
+              demo@siteforge.local / Demo1234!
             </p>
           </GlassCard>
         </div>

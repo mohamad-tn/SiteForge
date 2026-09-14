@@ -7,6 +7,11 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  PasswordChecklist,
+  PasswordInput,
+  passwordRulesPass,
+} from "@/components/auth/password-field";
 import { AuthAtmosphere, GlassCard } from "@/components/ui/surface";
 import { ThemeToggleButton } from "@/components/theme-provider";
 import { PlatformLangSwitcher, usePlatformLang } from "@/components/platform-lang-provider";
@@ -22,6 +27,10 @@ export default function SignupPage() {
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (!passwordRulesPass(password)) {
+      setError(t("changePasswordTooShort"));
+      return;
+    }
     setLoading(true);
     setError("");
     const res = await fetch("/api/auth/signup", {
@@ -102,22 +111,22 @@ export default function SignupPage() {
                   placeholder={t("placeholderEmail")}
                 />
               </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="password">{t("password")}</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  minLength={6}
-                  dir="ltr"
-                  autoComplete="new-password"
-                  placeholder={t("placeholderPassword")}
-                />
-              </div>
+              <PasswordInput
+                id="password"
+                label={t("password")}
+                value={password}
+                onChange={setPassword}
+                required
+                autoComplete="new-password"
+                placeholder={t("placeholderPassword")}
+              />
+              <PasswordChecklist password={password} lang={lang === "en" ? "en" : "ar"} />
               {error ? <p className="text-sm text-rose-600 dark:text-rose-400">{error}</p> : null}
-              <Button type="submit" className="w-full rounded-full" disabled={loading}>
+              <Button
+                type="submit"
+                className="w-full rounded-full"
+                disabled={loading || !passwordRulesPass(password)}
+              >
                 {loading ? t("creatingAccount") : t("createAccountBtn")}
               </Button>
             </form>

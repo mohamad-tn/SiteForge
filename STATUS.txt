@@ -1,3 +1,20 @@
+## Auth polish + password policy + AI chat persistence (2026-09-14)
+
+### Shipped
+1) Auth mesh SVG fills viewport (absolute inset-0, slice) + stronger Linear/Grok-style atmosphere; GlassCard + brand type polish; RTL/controls unchanged
+2) Shared `passwordPolicy` (min 8 + upper/lower/number/special); change-password portal modal + live checklist + eye toggles; signup/API zod aligned
+3) AI chat persisted per (userId, siteId) with prune N=40; GET cursor history; AbortController cancel; attachments thumbs + lightbox; hide «كيف يعمل» from tenants (admin tip only)
+4) Compact model context + last ~6 turns; expanded allowlisted ops (pages/SEO/reorder/propose_domain draft note only)
+5) UserAiSettings BYOK + keySource on usage logs; GET /api/ai/status; editor tooltip when no key; admin missing-key banner
+6) Demo creds: demo@siteforge.local / Demo1234! · admin@siteforge.local / Admin1234!
+
+### QA
+- tsc --noEmit clean; vitest 210 passed; eslint 0 errors; NEXT_DIST_DIR=/tmp/sf-next-build next build 0
+- Migration `20260914180000_ai_chat_user_keys` (db push + migrate resolve on this env)
+- No commit/push
+
+---
+
 ## Security + AI polish + models dropdown (2026-09-14)
 
 ### Honest security stance
@@ -31,8 +48,8 @@ Nobody can claim “immune to every vulnerability worldwide.” SiteForge harden
 SiteForge STATUS
 Updated: 2026-09-09 18:49 Asia/Damascus (UTC+3)
 Dev: http://localhost:3000
-Tenant: demo@siteforge.local / demo1234
-Admin: admin@siteforge.local / admin1234 (/admin)
+Tenant: demo@siteforge.local / Demo1234!
+Admin: admin@siteforge.local / Admin1234! (/admin)
 Public: http://localhost:3000/s/demo-studio (published only)
 
 Readiness: ~9.2 / 10 editor chrome + motion polish (NOT Framer freeform canvas)
@@ -102,7 +119,7 @@ Readiness: ~9.2 / 10 editor chrome + motion polish (NOT Framer freeform canvas)
 - Do NOT run next build while pnpm dev on :3000
 
 ### How to test (AR)
-1) سجّل demo@siteforge.local / demo1234 → افتح محرر demo-studio
+1) سجّل demo@siteforge.local / Demo1234! → افتح محرر demo-studio
 2) على شاشة واسعة: اطوِ اللوحات من حبوب الحافة وسط الحد بين اللوحة والكانفس — ليس من الهيدر
 3) عند الطي: شريط جانبي رفيع يعيد الفتح؛ التفضيل يبقى بعد إعادة التحميل
 4) لغة المحتوى في الشريط العلوي = قائمة Radix أنيقة (وليست قائمة أصلية)
@@ -112,7 +129,7 @@ Readiness: ~9.2 / 10 editor chrome + motion polish (NOT Framer freeform canvas)
 ## Admin gate + AI + atomic parts (2026-09-14)
 
 ### Admin auth (honest)
-- `/admin` is for ADMIN role only (`admin@siteforge.local` / `admin1234` from seed).
+- `/admin` is for ADMIN role only (`admin@siteforge.local` / `Admin1234!` from seed).
 - Bug/UX: middleware used to silently redirect tenants to `/dashboard` (felt like admin "leaked" the marketplace).
 - Fix: middleware no longer silent-redirects tenants to dashboard; `src/app/admin/layout.tsx` DB-checks role and shows clear 403 «غير مصرح — لوحة الإدارة للمنصة فقط».
 - APIs: every `/api/admin/*` uses `requireAdminSession` with DB role refresh; JWT role refreshed ~5min.

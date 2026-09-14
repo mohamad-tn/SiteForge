@@ -201,6 +201,26 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
   const [siteMenuOpen, setSiteMenuOpen] = useState(false);
   const [chromeMenuOpen, setChromeMenuOpen] = useState(false);
   const [aiOpen, setAiOpen] = useState(false);
+  const [aiAvailable, setAiAvailable] = useState(true);
+  const [, setAiStatusReason] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch("/api/ai/status");
+        if (!res.ok || cancelled) return;
+        const data = await res.json();
+        if (cancelled) return;
+        setAiAvailable(Boolean(data.available));
+        setAiStatusReason(data.available ? null : data.reason || "no_key");
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   const [publishedAt, setPublishedAt] = useState<string | null>(site.publishedAt);
   const [saveState, setSaveState] = useState<"saved" |"saving" |"dirty">("saved");
   const autosaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1344,9 +1364,9 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
               type="button"
               variant="ghost"
               size="icon"
-              className="h-8 w-8 rounded-full text-teal-800 dark:text-teal-300"
-              title={t("aiAssistant")}
-              aria-label={t("aiAssistant")}
+              className="h-8 w-8 rounded-full text-teal-800 dark:text-teal-300 disabled:opacity-50"
+              title={aiAvailable ? t("aiAssistant") : t("aiNeedKey")}
+              aria-label={aiAvailable ? t("aiAssistant") : t("aiNeedKey")}
               onClick={() => setAiOpen(true)}
             >
               <Sparkles className="h-3.5 w-3.5" aria-hidden />

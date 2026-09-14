@@ -224,9 +224,25 @@ export function AdminAiPanel() {
         <div>
           <h2 className="text-base font-bold">{t("aiAdminTitle")}</h2>
           <p className="mt-1 text-xs leading-5 text-[var(--muted)]">{t("aiAdminHint")}</p>
+          {!settings.hasApiKey ? (
+            <p className="mt-2 rounded-xl border border-amber-500/40 bg-amber-50/80 px-3 py-2 text-[11px] leading-5 text-amber-950 dark:bg-amber-950/30 dark:text-amber-50">
+              {t("aiPlatformKeyMissing")}
+            </p>
+          ) : null}
           <p className="mt-2 rounded-xl border border-dashed border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-[11px] leading-5 text-[var(--muted)]">
             {t("aiSecurityTip")}
           </p>
+          <p className="mt-2 text-[11px] leading-5 text-[var(--muted)]">{t("aiAdminDefaultModelNote")}</p>
+          <details className="mt-2 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2">
+            <summary className="cursor-pointer text-xs font-semibold">{t("aiAdminHowTitle")}</summary>
+            <ol className="mt-2 space-y-1 pb-1 text-[11px] leading-5 text-[var(--muted)]">
+              <li>{t("aiHowStep1")}</li>
+              <li>{t("aiHowStep2")}</li>
+              <li>{t("aiHowStep3")}</li>
+              <li>{t("aiHowStep4")}</li>
+              <li>{t("aiHowStep5")}</li>
+            </ol>
+          </details>
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-1.5">
