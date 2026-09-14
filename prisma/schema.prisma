@@ -31,6 +31,7 @@ model User {
   updatedAt    DateTime  @updatedAt
   sites        Site[]
   mediaAssets  MediaAsset[]
+  aiQuota      TenantAiQuota?
 
   @@index([role])
   @@index([createdAt])
@@ -175,3 +176,54 @@ model MediaAsset {
   @@index([createdAt])
 }
 
+
+
+enum AiProvider {
+  openai
+  anthropic
+  google
+  xai
+}
+
+/// Singleton platform AI config (id = "default"). API key encrypted at rest (AES-256-GCM).
+model PlatformAiSettings {
+  id                 String     @id @default("default")
+  provider           AiProvider @default(openai)
+  /// AES-256-GCM ciphertext via encryptSecret — never returned plaintext to clients
+  encryptedApiKey    String?
+  model              String     @default("gpt-4o-mini")
+  enabled            Boolean    @default(false)
+  defaultDailyLimit  Int        @default(20)
+  maxTokens          Int        @default(4096)
+  updatedAt          DateTime   @updatedAt
+}
+
+model TenantAiQuota {
+  id         String   @id @default(cuid())
+  userId     String   @unique
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// null = use PlatformAiSettings.defaultDailyLimit
+  dailyLimit Int?
+  usedToday  Int      @default(0)
+  resetDate  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([resetDate])
+}
+
+model AiUsageLog {
+  id        String   @id @default(cuid())
+  userId    String
+  siteId    String?
+  provider  String
+  model     String
+  tokensIn  Int      @default(0)
+  tokensOut Int      @default(0)
+  ok        Boolean  @default(true)
+  error     String?
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([siteId, createdAt])
+  @@index([createdAt])
+}

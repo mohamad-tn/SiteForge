@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { usePlatformLangOptional } from "@/components/platform-lang-provider";
 
@@ -11,10 +11,43 @@ export type CommandItem = {
   action: () => void;
 };
 
-export function CommandPalette({ items }: { items: CommandItem[] }) {
-  const [open, setOpen] = useState(false);
+export const SF_OPEN_COMMANDS_EVENT = "sf-open-command-palette";
+
+/** Imperative open for chrome buttons (dashboard / editor). */
+export function openCommandPalette() {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent(SF_OPEN_COMMANDS_EVENT));
+}
+
+export function commandShortcutLabel(): string {
+  if (typeof navigator === "undefined") return "⌘K";
+  const isApple = /Mac|iPhone|iPad|iPod/i.test(navigator.platform || navigator.userAgent || "");
+  return isApple ? "⌘K" : "Ctrl+K";
+}
+
+export function CommandPalette({
+  items,
+  open: controlledOpen,
+  onOpenChange,
+}: {
+  items: CommandItem[];
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+}) {
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
   const [q, setQ] = useState("");
   const { dir, t } = usePlatformLangOptional();
+  const isControlled = controlledOpen !== undefined;
+  const open = isControlled ? Boolean(controlledOpen) : uncontrolledOpen;
+
+  const setOpen = useCallback(
+    (next: boolean | ((v: boolean) => boolean)) => {
+      const value = typeof next === "function" ? next(open) : next;
+      if (!isControlled) setUncontrolledOpen(value);
+      onOpenChange?.(value);
+    },
+    [isControlled, onOpenChange, open]
+  );
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -25,9 +58,17 @@ export function CommandPalette({ items }: { items: CommandItem[] }) {
       }
       if (e.key === "Escape") setOpen(false);
     }
+    function onOpenEvent() {
+      setOpen(true);
+      setQ("");
+    }
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
+    window.addEventListener(SF_OPEN_COMMANDS_EVENT, onOpenEvent);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener(SF_OPEN_COMMANDS_EVENT, onOpenEvent);
+    };
+  }, [setOpen]);
 
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -38,11 +79,17 @@ export function CommandPalette({ items }: { items: CommandItem[] }) {
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-start justify-center bg-stone-950/40 p-4 pt-[12vh] backdrop-blur-sm" onClick={() => setOpen(false)}>
+    <div
+      className="fixed inset-0 z-[100] flex items-start justify-center bg-stone-950/40 p-4 pt-[12vh] backdrop-blur-sm"
+      onClick={() => setOpen(false)}
+    >
       <div
         className="w-full max-w-lg overflow-hidden rounded-[1.5rem] border border-[var(--border)] bg-[var(--card)] shadow-[var(--shadow-md)]"
         onClick={(e) => e.stopPropagation()}
         dir={dir}
+        role="dialog"
+        aria-modal="true"
+        aria-label={t("commandPaletteTitle")}
       >
         <input
           autoFocus
@@ -66,7 +113,9 @@ export function CommandPalette({ items }: { items: CommandItem[] }) {
               {item.hint ? <span className="text-[11px] text-[var(--muted)]">{item.hint}</span> : null}
             </button>
           ))}
-          {filtered.length === 0 ? <p className="p-4 text-center text-xs text-[var(--muted)]">{t("noResults")}</p> : null}
+          {filtered.length === 0 ? (
+            <p className="p-4 text-center text-xs text-[var(--muted)]">{t("noResults")}</p>
+          ) : null}
         </div>
       </div>
     </div>

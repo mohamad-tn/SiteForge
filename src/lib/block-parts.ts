@@ -57,11 +57,100 @@ export type NavbarPart = BlockPart;
 
 export type PartStyle = {
   textColor?: string;
+  bgColor?: string;
+  borderColor?: string;
+  borderWidth?: string;
+  borderRadius?: string;
+  paddingX?: string;
+  paddingY?: string;
+  maxWidth?: string;
+  width?: string;
   fontSize?: string;
+  fontWeight?: string;
+  opacity?: string;
+  boxShadow?: string;
   hoverBg?: string;
   hoverText?: string;
   focusRing?: string;
 };
+
+/** Keys editable via inspector layout/look/colors when a part is selected. */
+export const PART_STYLE_KEYS = [
+  "textColor",
+  "bgColor",
+  "borderColor",
+  "borderWidth",
+  "borderRadius",
+  "paddingX",
+  "paddingY",
+  "maxWidth",
+  "width",
+  "fontSize",
+  "fontWeight",
+  "opacity",
+  "boxShadow",
+  "hoverBg",
+  "hoverText",
+  "focusRing",
+] as const;
+
+export type PartStyleKey = (typeof PART_STYLE_KEYS)[number];
+
+const SHADOW_PRESETS: Record<string, string> = {
+  sm: "0 4px 14px rgba(28,25,23,0.08)",
+  md: "0 12px 40px rgba(28,25,23,0.12)",
+  lg: "0 24px 60px rgba(28,25,23,0.18)",
+  xl: "0 32px 80px rgba(28,25,23,0.22)",
+  soft: "0 8px 30px rgba(13,148,136,0.12)",
+  glow: "0 0 0 1px rgba(13,148,136,0.2), 0 12px 40px rgba(13,148,136,0.18)",
+};
+
+function pxUnit(v: string): string {
+  if (!v) return "";
+  if (/^\d+(\.\d+)?$/.test(v.trim())) return `${v.trim()}px`;
+  return v.trim();
+}
+
+/** Resolve partStyles entry into inline CSS for SiteRenderer / preview. */
+export function partStyleToCss(ps: PartStyle | undefined | null): Record<string, string | number> {
+  if (!ps) return {};
+  const s: Record<string, string | number> = {};
+  if (ps.textColor) s.color = ps.textColor;
+  if (ps.bgColor) s.background = ps.bgColor;
+  if (ps.fontSize) s.fontSize = pxUnit(ps.fontSize);
+  if (ps.fontWeight) s.fontWeight = Number(ps.fontWeight) || ps.fontWeight;
+  if (ps.width) s.width = pxUnit(ps.width);
+  if (ps.maxWidth) s.maxWidth = pxUnit(ps.maxWidth);
+  if (ps.paddingX || ps.paddingY) {
+    const py = ps.paddingY ? pxUnit(ps.paddingY) : undefined;
+    const pxv = ps.paddingX ? pxUnit(ps.paddingX) : undefined;
+    if (py) {
+      s.paddingTop = py;
+      s.paddingBottom = py;
+    }
+    if (pxv) {
+      s.paddingLeft = pxv;
+      s.paddingRight = pxv;
+    }
+  }
+  if (ps.borderRadius) s.borderRadius = pxUnit(ps.borderRadius);
+  if (ps.borderWidth) {
+    s.borderWidth = pxUnit(ps.borderWidth);
+    s.borderStyle = "solid";
+    s.borderColor = ps.borderColor || "transparent";
+  } else if (ps.borderColor) {
+    s.borderColor = ps.borderColor;
+  }
+  if (ps.boxShadow) s.boxShadow = SHADOW_PRESETS[ps.boxShadow] || ps.boxShadow;
+  if (ps.opacity) {
+    const op = Number(ps.opacity);
+    if (!Number.isNaN(op)) s.opacity = op > 1 ? op / 100 : op;
+  }
+  if (ps.hoverBg) s["--sf-part-hover-bg"] = ps.hoverBg;
+  if (ps.hoverText) s["--sf-part-hover-text"] = ps.hoverText;
+  if (ps.focusRing) s["--sf-part-focus-ring"] = ps.focusRing;
+  return s;
+}
 
 export type FeatureItem = {
   id: string;
@@ -114,6 +203,12 @@ function asLocalized(v: unknown, fallback: LocalizedString = ""): LocalizedStrin
   return fallback;
 }
 
+export function editingTargetLabel(part: BlockPart | null | undefined, lang: "ar" | "en" = "ar"): string {
+  const name = partLabel(part, lang);
+  if (!part) return lang === "ar" ? `تحرير القسم بالكامل` : `Editing whole section`;
+  return lang === "ar" ? `تحرير: ${name}` : `Editing: ${name}`;
+}
+
 export function partLabel(part: BlockPart | null | undefined, lang: "ar" | "en" = "ar"): string {
   if (!part) return lang === "ar" ? "القسم بالكامل" : "Whole block";
   if (part.startsWith("link:")) return lang === "ar" ? "رابط تنقل" : "Nav link";
@@ -154,16 +249,13 @@ export function getPartStyles(props: Record<string, unknown>, part: string): Par
   const entry = (raw as Record<string, unknown>)[part];
   if (!entry || typeof entry !== "object" || Array.isArray(entry)) return {};
   const o = entry as Record<string, unknown>;
-  return {
-    textColor: typeof o.textColor === "string" ? o.textColor : undefined,
-    fontSize: typeof o.fontSize === "string" ? o.fontSize : undefined,
-    hoverBg: typeof o.hoverBg === "string" ? o.hoverBg : undefined,
-    hoverText: typeof o.hoverText === "string" ? o.hoverText : undefined,
-    focusRing: typeof o.focusRing === "string" ? o.focusRing : undefined,
-  };
+  const out: PartStyle = {};
+  for (const key of PART_STYLE_KEYS) {
+    const v = o[key];
+    if (typeof v === "string" && v) out[key] = v;
+  }
+  return out;
 }
-
-const PART_STYLE_KEYS = ["textColor", "fontSize", "hoverBg", "hoverText", "focusRing"] as const;
 
 export function setPartStyles(
   props: Record<string, unknown>,

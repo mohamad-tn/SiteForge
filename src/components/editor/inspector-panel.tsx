@@ -41,6 +41,12 @@ import {
   SelectedPartChip,
 } from "@/components/editor/atomic-inspector";
 import {
+  getPartStyles,
+  setPartStyles,
+  editingTargetLabel,
+  type PartStyle,
+} from "@/lib/block-parts";
+import {
   ApiActionEditor,
   blockShowsClickBehavior,
   blockSupportsHttpAction,
@@ -354,6 +360,48 @@ export function InspectorPanel({
     (LINK_KEYS.find((k) => k in selected.props) ||
       (selected.type === "button" ? "href" : selected.type === "cta" ? "buttonHref" : selected.type === "hero" ? "ctaHref" : "href"));
 
+  const isAtomic = Boolean(selected && ATOMIC_BLOCK_TYPES.has(selected.type));
+  const editingPart = Boolean(isAtomic && selectedPart);
+  /** Styles that route to partStyles when a nested part is selected. */
+  const PART_ROUTE_KEYS = new Set<string>([
+    "width",
+    "maxWidth",
+    "paddingX",
+    "paddingY",
+    "bgColor",
+    "textColor",
+    "borderColor",
+    "borderWidth",
+    "borderRadius",
+    "fontSize",
+    "fontWeight",
+    "opacity",
+    "boxShadow",
+  ]);
+
+  function styleValue(key: string): string {
+    if (!selected) return "";
+    if (editingPart && selectedPart && PART_ROUTE_KEYS.has(key)) {
+      const ps = getPartStyles(selected.props as Record<string, unknown>, selectedPart);
+      return String((ps as Record<string, string | undefined>)[key] ?? "");
+    }
+    return String(selected.props[key] ?? "");
+  }
+
+  function updateStyle(key: string, v: string) {
+    if (!selected) return;
+    if (editingPart && selectedPart && PART_ROUTE_KEYS.has(key) && onUpdatePropsObject) {
+      // Nav link parts store styles on the item when AtomicContentEditor handles them;
+      // layout/look/colors still write to partStyles[link:id] which renderer also reads.
+      onUpdatePropsObject(
+        selected.id,
+        setPartStyles(selected.props as Record<string, unknown>, selectedPart, { [key]: v } as PartStyle)
+      );
+      return;
+    }
+    onUpdateProp(selected.id, key, v);
+  }
+
   return (
     <div className="space-y-5" data-sf-inspector="">
       {selected && String(selected.props.locked ?? "false") === "true" ? (
@@ -392,12 +440,27 @@ export function InspectorPanel({
             </span>
           </div>
 
-          {ATOMIC_BLOCK_TYPES.has(selected.type) ? (
-            <SelectedPartChip
-              part={selectedPart}
-              lang={uiLang}
-              onClear={() => onSelectPart?.(null)}
-            />
+          {isAtomic ? (
+            <>
+              <SelectedPartChip
+                part={selectedPart}
+                lang={uiLang}
+                onClear={() => onSelectPart?.(null)}
+              />
+              {!selectedPart ? (
+                <p className="rounded-xl border border-dashed border-teal-700/25 bg-teal-50/50 px-3 py-2 text-[11px] leading-5 text-teal-950 dark:bg-teal-950/30 dark:text-teal-100">
+                  {t("atomicPartHint")}
+                </p>
+              ) : (
+                <p className="rounded-xl bg-[var(--surface)] px-2.5 py-1.5 text-[10px] font-semibold text-[var(--muted)]">
+                  {editingTargetLabel(selectedPart, uiLang)}
+                  {" — "}
+                  {uiLang === "ar"
+                    ? "الألوان والأبعاد والتنسيق تطبّق على هذا الجزء فقط"
+                    : "Colors, size & look apply to this part only"}
+                </p>
+              )}
+            </>
           ) : null}
 
           {typeof selected.props.instanceOf === "string" && selected.props.instanceOf ? (
@@ -514,19 +577,34 @@ export function InspectorPanel({
           {tab === "layout" ? (
             <div className="space-y-4">
               <p className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-2.5 py-2 text-[10px] leading-5 text-[var(--muted)]">{t("tipLayout")}</p>
+              {editingPart ? (
+                <p className="rounded-xl border border-teal-700/20 bg-teal-50/60 px-2.5 py-2 text-[10px] font-semibold text-teal-950 dark:bg-teal-950/40 dark:text-teal-100">
+                  {editingTargetLabel(selectedPart, uiLang)}
+                </p>
+              ) : isAtomic ? (
+                <p className="text-[10px] text-[var(--muted)]">{t("atomicPartHint")}</p>
+              ) : null}
               <SectionTitle>{uiLang === "ar" ? "الأبعاد" : "Size"}</SectionTitle>
               <div className="grid grid-cols-2 gap-2.5">
-                <NumField label={t("widthLabel")} value={String(selected.props.width ?? "")} onChange={(v) => onUpdateProp(selected.id, "width", v)} hint="px/%" />
-                <NumField label="الارتفاع" value={String(selected.props.height ?? "")} onChange={(v) => onUpdateProp(selected.id, "height", v)} hint="px" />
-                <NumField label="أقصى عرض" value={String(selected.props.maxWidth ?? "")} onChange={(v) => onUpdateProp(selected.id, "maxWidth", v)} min={200} max={1400} />
-                <NumField label="أدنى ارتفاع" value={String(selected.props.minHeight ?? "")} onChange={(v) => onUpdateProp(selected.id, "minHeight", v)} min={0} max={800} />
+                <NumField label={t("widthLabel")} value={styleValue("width")} onChange={(v) => updateStyle("width", v)} hint="px/%" />
+                {!editingPart ? (
+                  <NumField label="الارتفاع" value={String(selected.props.height ?? "")} onChange={(v) => onUpdateProp(selected.id, "height", v)} hint="px" />
+                ) : null}
+                <NumField label="أقصى عرض" value={styleValue("maxWidth")} onChange={(v) => updateStyle("maxWidth", v)} min={200} max={1400} />
+                {!editingPart ? (
+                  <NumField label="أدنى ارتفاع" value={String(selected.props.minHeight ?? "")} onChange={(v) => onUpdateProp(selected.id, "minHeight", v)} min={0} max={800} />
+                ) : null}
               </div>
               <SectionTitle>الحشو والهامش</SectionTitle>
               <div className="grid grid-cols-2 gap-2.5">
-                <NumField label="حشو عمودي" value={String(selected.props.paddingY ?? "")} onChange={(v) => onUpdateProp(selected.id, "paddingY", v)} min={0} max={120} />
-                <NumField label="حشو أفقي" value={String(selected.props.paddingX ?? "")} onChange={(v) => onUpdateProp(selected.id, "paddingX", v)} min={0} max={120} />
-                <NumField label="هامش عمودي" value={String(selected.props.marginY ?? "")} onChange={(v) => onUpdateProp(selected.id, "marginY", v)} min={0} max={120} />
-                <NumField label="هامش أفقي" value={String(selected.props.marginX ?? "")} onChange={(v) => onUpdateProp(selected.id, "marginX", v)} min={0} max={120} />
+                <NumField label="حشو عمودي" value={styleValue("paddingY")} onChange={(v) => updateStyle("paddingY", v)} min={0} max={120} />
+                <NumField label="حشو أفقي" value={styleValue("paddingX")} onChange={(v) => updateStyle("paddingX", v)} min={0} max={120} />
+                {!editingPart ? (
+                  <>
+                    <NumField label="هامش عمودي" value={String(selected.props.marginY ?? "")} onChange={(v) => onUpdateProp(selected.id, "marginY", v)} min={0} max={120} />
+                    <NumField label="هامش أفقي" value={String(selected.props.marginX ?? "")} onChange={(v) => onUpdateProp(selected.id, "marginX", v)} min={0} max={120} />
+                  </>
+                ) : null}
               </div>
               <button
                 type="button"
@@ -560,6 +638,7 @@ export function InspectorPanel({
                   ))}
                 </div>
               ) : null}
+              {!editingPart ? (
               <div className="grid grid-cols-2 gap-2.5">
                 <div className="space-y-1.5">
                   <Label className="text-[11px] text-[var(--muted)]">{t("hideBlock")}</Label>
@@ -584,6 +663,7 @@ export function InspectorPanel({
                   />
                 </div>
               </div>
+              ) : null}
             </div>
           ) : null}
 
@@ -593,12 +673,12 @@ export function InspectorPanel({
                 {t("tipLook")}
               </p>
               <SectionTitle>{uiLang === "ar" ? "الخط والنص" : "Type"}</SectionTitle>
-              <NumField label={styleLabel("fontSize", uiLang)} value={String(selected.props.fontSize ?? "")} onChange={(v) => onUpdateProp(selected.id, "fontSize", v)} min={10} max={96} />
+              <NumField label={styleLabel("fontSize", uiLang)} value={styleValue("fontSize")} onChange={(v) => updateStyle("fontSize", v)} min={10} max={96} />
               <div className="space-y-1.5">
                 <Label className="text-[11px] text-[var(--muted)]">{styleLabel("fontWeight", uiLang)}</Label>
                 <Select
-                  value={String(selected.props.fontWeight ?? "")}
-                  onValueChange={(v) => onUpdateProp(selected.id, "fontWeight", v)}
+                  value={styleValue("fontWeight")}
+                  onValueChange={(v) => updateStyle("fontWeight", v)}
                   options={[
                     { value: "", label: uiLang === "ar" ? "افتراضي" : "Default" },
                     { value: "400", label: uiLang === "ar" ? "عادي" : "Regular" },
@@ -625,13 +705,13 @@ export function InspectorPanel({
                 />
               </div>
               <SectionTitle>{uiLang === "ar" ? "الإطار والظل" : "Border & shadow"}</SectionTitle>
-              <NumField label={styleLabel("borderWidth", uiLang)} value={String(selected.props.borderWidth ?? "")} onChange={(v) => onUpdateProp(selected.id, "borderWidth", v)} min={0} max={16} />
-              <NumField label={styleLabel("borderRadius", uiLang)} value={String(selected.props.borderRadius ?? "")} onChange={(v) => onUpdateProp(selected.id, "borderRadius", v)} min={0} max={64} />
+              <NumField label={styleLabel("borderWidth", uiLang)} value={styleValue("borderWidth")} onChange={(v) => updateStyle("borderWidth", v)} min={0} max={16} />
+              <NumField label={styleLabel("borderRadius", uiLang)} value={styleValue("borderRadius")} onChange={(v) => updateStyle("borderRadius", v)} min={0} max={64} />
               <div className="space-y-1.5">
                 <Label className="text-[11px] text-[var(--muted)]">{styleLabel("boxShadow", uiLang)}</Label>
                 <Select
-                  value={String(selected.props.boxShadow ?? "")}
-                  onValueChange={(v) => onUpdateProp(selected.id, "boxShadow", v)}
+                  value={styleValue("boxShadow")}
+                  onValueChange={(v) => updateStyle("boxShadow", v)}
                   options={[
                     { value: "", label: uiLang === "ar" ? "بدون" : "None" },
                     { value: "sm", label: uiLang === "ar" ? "خفيف" : "Soft" },
@@ -642,7 +722,7 @@ export function InspectorPanel({
                   ]}
                 />
               </div>
-              <NumField label={styleLabel("opacity", uiLang)} value={String(selected.props.opacity ?? "")} onChange={(v) => onUpdateProp(selected.id, "opacity", v)} hint="0–1" min={0} max={1} step={0.05} />
+              <NumField label={styleLabel("opacity", uiLang)} value={styleValue("opacity")} onChange={(v) => updateStyle("opacity", v)} hint="0–1" min={0} max={1} step={0.05} />
             </div>
           ) : null}
 
@@ -651,9 +731,9 @@ export function InspectorPanel({
               <p className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-2.5 py-2 text-[10px] leading-5 text-[var(--muted)]">
                 {t("tipColors")}
               </p>
-              <ColorField label={styleLabel("textColor", uiLang)} value={String(selected.props.textColor ?? "")} onChange={(v) => onUpdateProp(selected.id, "textColor", v)} />
-              <ColorField label={styleLabel("bgColor", uiLang)} value={String(selected.props.bgColor ?? "")} onChange={(v) => onUpdateProp(selected.id, "bgColor", v)} />
-              <ColorField label={styleLabel("borderColor", uiLang)} value={String(selected.props.borderColor ?? "")} onChange={(v) => onUpdateProp(selected.id, "borderColor", v)} />
+              <ColorField label={styleLabel("textColor", uiLang)} value={styleValue("textColor")} onChange={(v) => updateStyle("textColor", v)} />
+              <ColorField label={styleLabel("bgColor", uiLang)} value={styleValue("bgColor")} onChange={(v) => updateStyle("bgColor", v)} />
+              <ColorField label={styleLabel("borderColor", uiLang)} value={styleValue("borderColor")} onChange={(v) => updateStyle("borderColor", v)} />
             </div>
           ) : null}
 

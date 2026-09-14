@@ -762,10 +762,10 @@ html[data-theme="dark"] .sf-device-screen {
 }
 
 
-/* —— Editor top bar: wrapping flex, no overlapping dropdowns, inherit Cairo —— */
+/* —— Editor top bar: desktop zones + <lg hamburger sheet (Linear/Notion) —— */
 .sf-editor-topbar {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   column-gap: 0.55rem;
   row-gap: 0.4rem;
@@ -778,7 +778,7 @@ html[data-theme="dark"] .sf-device-screen {
   position: relative;
   isolation: isolate;
   overflow: visible;
-  unicode-bidi: isolate; /* never bidi-override — AR reads naturally, Latin stays Latin */
+  unicode-bidi: isolate;
 }
 .sf-editor-topbar-start,
 .sf-editor-topbar-end {
@@ -792,14 +792,17 @@ html[data-theme="dark"] .sf-device-screen {
 .sf-editor-topbar-end {
   margin-inline-start: auto;
   z-index: 2;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  max-width: min(100%, 42rem);
 }
 .sf-editor-topbar-mid {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 0.4rem;
-  min-width: 8rem;
-  flex: 1 1 12rem;
+  min-width: 0;
+  flex: 1 1 auto;
   overflow: visible;
   position: relative;
   z-index: 1;
@@ -807,9 +810,15 @@ html[data-theme="dark"] .sf-device-screen {
 .sf-editor-topbar-mid > .sf-toolbar-group {
   max-width: 100%;
   position: static;
+  flex-wrap: wrap;
 }
 .sf-editor-topbar .sf-toolbar-group {
   position: static;
+}
+.sf-editor-topbar .sf-toolbar-group [data-radix-select-trigger],
+.sf-editor-topbar .sf-toolbar-group button {
+  position: relative;
+  z-index: 1;
 }
 .sf-publish-clock {
   display: inline-flex;
@@ -832,23 +841,67 @@ html[data-theme="dark"] .sf-device-screen {
 .sf-publish-clock:focus-visible {
   box-shadow: 0 0 0 3px var(--ring);
 }
-@media (max-width: 767px) {
-  .sf-editor-topbar-mid {
-    display: none;
+.sf-editor-topbar-burger {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  margin-inline-start: auto;
+}
+.sf-editor-chrome-sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  justify-content: flex-end;
+  background: color-mix(in oklab, var(--foreground) 42%, transparent);
+  backdrop-filter: blur(6px);
+}
+.sf-editor-chrome-sheet-panel {
+  width: min(22rem, 100%);
+  height: 100%;
+  overflow-y: auto;
+  background: var(--card);
+  color: var(--foreground);
+  border-inline-start: 1px solid var(--border);
+  box-shadow: -18px 0 50px -24px rgba(28, 25, 23, 0.4);
+  padding: 1rem 1rem 2rem;
+}
+[dir="rtl"] .sf-editor-chrome-sheet {
+  justify-content: flex-start;
+}
+[dir="rtl"] .sf-editor-chrome-sheet-panel {
+  border-inline-start: 0;
+  border-inline-end: 1px solid var(--border);
+  box-shadow: 18px 0 50px -24px rgba(28, 25, 23, 0.4);
+}
+/* Below Tailwind lg (1024): identity + hamburger only — no squeezed mid/end */
+@media (max-width: 1023px) {
+  .sf-editor-topbar {
+    flex-wrap: nowrap;
   }
+  .sf-editor-topbar-mid,
   .sf-editor-topbar-end {
-    margin-inline-start: auto;
+    display: none !important;
+  }
+  .sf-editor-topbar-burger {
+    display: inline-flex !important;
+  }
+  .sf-editor-topbar-start {
+    flex: 1 1 auto;
+    min-width: 0;
   }
 }
-@media (min-width: 768px) and (max-width: 1199px) {
-  .sf-editor-topbar-mid {
-    flex: 1 1 100%;
-    justify-content: flex-start;
-    order: 3;
+@media (min-width: 1024px) {
+  .sf-editor-topbar-burger {
+    display: none !important;
   }
-  .sf-editor-topbar-mid .sf-hide-until-lg,
   .sf-editor-topbar-mid .sf-hide-until-xl {
     display: none !important;
+  }
+}
+@media (min-width: 1280px) {
+  .sf-editor-topbar-mid .sf-hide-until-xl {
+    display: inline-flex !important;
   }
 }
 

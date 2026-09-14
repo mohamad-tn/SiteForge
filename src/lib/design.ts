@@ -1052,7 +1052,24 @@ export type NavItem = {
   /** Target for scrollTo / openModal (block id or element id). */
   actionTarget?: string;
   /** Optional per-link style overrides (textColor / fontSize). */
-  styles?: { textColor?: string; fontSize?: string; hoverBg?: string; hoverText?: string; focusRing?: string };
+  styles?: {
+    textColor?: string;
+    bgColor?: string;
+    borderColor?: string;
+    borderWidth?: string;
+    borderRadius?: string;
+    paddingX?: string;
+    paddingY?: string;
+    maxWidth?: string;
+    width?: string;
+    fontSize?: string;
+    fontWeight?: string;
+    opacity?: string;
+    boxShadow?: string;
+    hoverBg?: string;
+    hoverText?: string;
+    focusRing?: string;
+  };
 };
 
 export type ResolvedNavItem = {
@@ -1067,7 +1084,24 @@ export type ResolvedNavItem = {
   openInNewTab?: string;
   actionType?: ButtonActionType;
   actionTarget?: string;
-  styles?: { textColor?: string; fontSize?: string; hoverBg?: string; hoverText?: string; focusRing?: string };
+  styles?: {
+    textColor?: string;
+    bgColor?: string;
+    borderColor?: string;
+    borderWidth?: string;
+    borderRadius?: string;
+    paddingX?: string;
+    paddingY?: string;
+    maxWidth?: string;
+    width?: string;
+    fontSize?: string;
+    fontWeight?: string;
+    opacity?: string;
+    boxShadow?: string;
+    hoverBg?: string;
+    hoverText?: string;
+    focusRing?: string;
+  };
 };
 
 /** Atomic edit target inside a composite block (navbar/hero/features/…). */

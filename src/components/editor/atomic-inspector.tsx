@@ -9,7 +9,6 @@ import {
   ensureTestimonials,
   ensureFaqItems,
   ensureFormFields,
-  partLabel,
   writeFeatureItems,
   writeFooterColumns,
   writeNavItems,
@@ -24,6 +23,8 @@ import {
   createFormField,
   getPartStyles,
   setPartStyles,
+  editingTargetLabel,
+  type PartStyle,
   type FeatureItem,
   type FooterColumnItem,
   type PricingPlanItem,
@@ -61,7 +62,7 @@ function Field({
   );
 }
 
-/** Per-part text / hover / focus styles persisted in partStyles (or nav item.styles). */
+/** Per-part styles persisted in partStyles (or nav item.styles). */
 function PartStyleFields({
   props,
   partKey,
@@ -76,39 +77,18 @@ function PartStyleFields({
   blockId: string;
   uiLang: "ar" | "en";
   onUpdatePropsObject: (blockId: string, patch: Record<string, unknown>) => void;
-  /** When set, write styles onto the nav item instead of partStyles map. */
-  onNavItemStyles?: (patch: {
-    textColor?: string;
-    fontSize?: string;
-    hoverBg?: string;
-    hoverText?: string;
-    focusRing?: string;
-  }) => void;
-  value?: {
-    textColor?: string;
-    fontSize?: string;
-    hoverBg?: string;
-    hoverText?: string;
-    focusRing?: string;
-  };
+  onNavItemStyles?: (patch: PartStyle) => void;
+  value?: PartStyle;
 }) {
   const ps = value || getPartStyles(props, partKey);
-  const color = ps.textColor || "";
-  const size = ps.fontSize || "";
-  const hoverBg = ps.hoverBg || "";
-  const hoverText = ps.hoverText || "";
-  const focusRing = ps.focusRing || "";
 
-  function patch(next: {
-    textColor?: string;
-    fontSize?: string;
-    hoverBg?: string;
-    hoverText?: string;
-    focusRing?: string;
-  }) {
-    if (onNavItemStyles) onNavItemStyles({ textColor: color, fontSize: size, hoverBg, hoverText, focusRing, ...next });
+  function patch(next: PartStyle) {
+    if (onNavItemStyles) onNavItemStyles({ ...ps, ...next });
     else onUpdatePropsObject(blockId, setPartStyles(props, partKey, next));
   }
+
+  const color = ps.textColor || "";
+  const bg = ps.bgColor || "";
 
   return (
     <div className="space-y-2 rounded-2xl border border-dashed border-stone-200/90 p-2.5 dark:border-stone-700">
@@ -132,41 +112,75 @@ function PartStyleFields({
           />
         </div>
       </Field>
-      <Field label={uiLang === "ar" ? "حجم الخط (px)" : "Font size (px)"}>
-        <Input
-          className="h-10 rounded-2xl font-mono text-xs"
-          dir="ltr"
-          placeholder="16"
-          value={size}
-          onChange={(e) => patch({ fontSize: e.target.value })}
+      <Field label={uiLang === "ar" ? "خلفية" : "Background"}>
+        <div className="flex gap-1.5">
+          <Input
+            type="color"
+            className="h-10 w-12 rounded-xl p-1"
+            value={bg && bg.startsWith("#") ? bg : "#ffffff"}
+            onChange={(e) => patch({ bgColor: e.target.value })}
+          />
+          <Input
+            className="h-10 flex-1 rounded-2xl font-mono text-xs"
+            dir="ltr"
+            placeholder="#0d9488"
+            value={bg}
+            onChange={(e) => patch({ bgColor: e.target.value })}
+          />
+        </div>
+      </Field>
+      <div className="grid grid-cols-2 gap-2">
+        <Field label={uiLang === "ar" ? "حجم الخط" : "Font size"}>
+          <Input className="h-10 rounded-2xl font-mono text-xs" dir="ltr" placeholder="16" value={ps.fontSize || ""} onChange={(e) => patch({ fontSize: e.target.value })} />
+        </Field>
+        <Field label={uiLang === "ar" ? "وزن الخط" : "Font weight"}>
+          <Input className="h-10 rounded-2xl font-mono text-xs" dir="ltr" placeholder="600" value={ps.fontWeight || ""} onChange={(e) => patch({ fontWeight: e.target.value })} />
+        </Field>
+        <Field label={uiLang === "ar" ? "أقصى عرض" : "Max width"}>
+          <Input className="h-10 rounded-2xl font-mono text-xs" dir="ltr" placeholder="280" value={ps.maxWidth || ""} onChange={(e) => patch({ maxWidth: e.target.value })} />
+        </Field>
+        <Field label={uiLang === "ar" ? "العرض" : "Width"}>
+          <Input className="h-10 rounded-2xl font-mono text-xs" dir="ltr" placeholder="auto" value={ps.width || ""} onChange={(e) => patch({ width: e.target.value })} />
+        </Field>
+        <Field label={uiLang === "ar" ? "حشو أفقي" : "Padding X"}>
+          <Input className="h-10 rounded-2xl font-mono text-xs" dir="ltr" placeholder="16" value={ps.paddingX || ""} onChange={(e) => patch({ paddingX: e.target.value })} />
+        </Field>
+        <Field label={uiLang === "ar" ? "حشو عمودي" : "Padding Y"}>
+          <Input className="h-10 rounded-2xl font-mono text-xs" dir="ltr" placeholder="10" value={ps.paddingY || ""} onChange={(e) => patch({ paddingY: e.target.value })} />
+        </Field>
+        <Field label={uiLang === "ar" ? "استدارة" : "Radius"}>
+          <Input className="h-10 rounded-2xl font-mono text-xs" dir="ltr" placeholder="12" value={ps.borderRadius || ""} onChange={(e) => patch({ borderRadius: e.target.value })} />
+        </Field>
+        <Field label={uiLang === "ar" ? "سمك الإطار" : "Border"}>
+          <Input className="h-10 rounded-2xl font-mono text-xs" dir="ltr" placeholder="1" value={ps.borderWidth || ""} onChange={(e) => patch({ borderWidth: e.target.value })} />
+        </Field>
+      </div>
+      <Field label={uiLang === "ar" ? "لون الإطار" : "Border color"}>
+        <Input className="h-10 rounded-2xl font-mono text-xs" dir="ltr" placeholder="#0f766e" value={ps.borderColor || ""} onChange={(e) => patch({ borderColor: e.target.value })} />
+      </Field>
+      <Field label={uiLang === "ar" ? "ظل" : "Shadow"}>
+        <Select
+          value={ps.boxShadow || ""}
+          onValueChange={(v) => patch({ boxShadow: v })}
+          options={[
+            { value: "", label: uiLang === "ar" ? "بدون" : "None" },
+            { value: "sm", label: uiLang === "ar" ? "خفيف" : "Soft" },
+            { value: "md", label: uiLang === "ar" ? "متوسط" : "Medium" },
+            { value: "lg", label: uiLang === "ar" ? "قوي" : "Strong" },
+          ]}
         />
+      </Field>
+      <Field label={uiLang === "ar" ? "الشفافية" : "Opacity"}>
+        <Input className="h-10 rounded-2xl font-mono text-xs" dir="ltr" placeholder="1" value={ps.opacity || ""} onChange={(e) => patch({ opacity: e.target.value })} />
       </Field>
       <Field label={uiLang === "ar" ? "خلفية عند المرور" : "Hover background"}>
-        <Input
-          className="h-10 rounded-2xl font-mono text-xs"
-          dir="ltr"
-          placeholder="#f5f5f4"
-          value={hoverBg}
-          onChange={(e) => patch({ hoverBg: e.target.value })}
-        />
+        <Input className="h-10 rounded-2xl font-mono text-xs" dir="ltr" placeholder="#f5f5f4" value={ps.hoverBg || ""} onChange={(e) => patch({ hoverBg: e.target.value })} />
       </Field>
       <Field label={uiLang === "ar" ? "نص عند المرور" : "Hover text"}>
-        <Input
-          className="h-10 rounded-2xl font-mono text-xs"
-          dir="ltr"
-          placeholder="#0f766e"
-          value={hoverText}
-          onChange={(e) => patch({ hoverText: e.target.value })}
-        />
+        <Input className="h-10 rounded-2xl font-mono text-xs" dir="ltr" placeholder="#0f766e" value={ps.hoverText || ""} onChange={(e) => patch({ hoverText: e.target.value })} />
       </Field>
       <Field label={uiLang === "ar" ? "حلقة التركيز" : "Focus ring"}>
-        <Input
-          className="h-10 rounded-2xl font-mono text-xs"
-          dir="ltr"
-          placeholder="#0f766e"
-          value={focusRing}
-          onChange={(e) => patch({ focusRing: e.target.value })}
-        />
+        <Input className="h-10 rounded-2xl font-mono text-xs" dir="ltr" placeholder="#0f766e" value={ps.focusRing || ""} onChange={(e) => patch({ focusRing: e.target.value })} />
       </Field>
     </div>
   );
@@ -185,10 +199,10 @@ export function SelectedPartChip({
     <div className="flex items-center justify-between gap-2 rounded-2xl border border-teal-700/25 bg-teal-50/80 px-3 py-2 dark:border-teal-400/20 dark:bg-teal-950/40">
       <div className="min-w-0">
         <div className="text-[9px] font-bold uppercase tracking-[0.12em] text-teal-800/70 dark:text-teal-300/80">
-          {lang === "ar" ? "تعديل الجزء" : "Editing part"}
+          {part ? (lang === "ar" ? "جزء محدد" : "Part selected") : (lang === "ar" ? "نطاق التحرير" : "Edit scope")}
         </div>
         <div className="truncate text-xs font-semibold text-teal-950 dark:text-teal-50">
-          {partLabel(part, lang)}
+          {editingTargetLabel(part, lang)}
         </div>
       </div>
       {part && onClear ? (
@@ -197,7 +211,7 @@ export function SelectedPartChip({
           onClick={onClear}
           className="shrink-0 rounded-full px-2 py-1 text-[10px] font-semibold text-teal-800 hover:bg-white/70 dark:text-teal-200 dark:hover:bg-teal-900"
         >
-          {lang === "ar" ? "القسم كاملاً" : "Whole block"}
+          {lang === "ar" ? "القسم بالكامل" : "Whole section"}
         </button>
       ) : null}
     </div>

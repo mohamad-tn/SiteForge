@@ -71,7 +71,8 @@ import { SiteSettingsPanel, type SiteSettings, type SiteSettingsFocus } from "@/
 import { CollectionsPanel } from "@/components/editor/collections-panel";
 import { SubmissionsPanel } from "@/components/editor/submissions-panel";
 import { MediaField } from "@/components/editor/media-field";
-import { CommandPalette, type CommandItem } from "@/components/command-palette";
+import { CommandPalette, openCommandPalette, type CommandItem } from "@/components/command-palette";
+import { AiEditorPanel } from "@/components/editor/ai-panel";
 import { useEditorHistory } from "@/hooks/use-editor-history";
 import { ThemeToggleButton } from "@/components/theme-provider";
 import { PlatformLangSwitcher, usePlatformLang } from "@/components/platform-lang-provider";
@@ -84,6 +85,9 @@ import {
 } from "@/lib/editor-prefs";
 import {
   ChevronDown,
+  Menu,
+  Sparkles,
+  Command,
   ChevronLeft,
   ChevronRight,
   ChevronUp,
@@ -194,6 +198,8 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
   const [rightCollapsed, setRightCollapsed] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const [siteMenuOpen, setSiteMenuOpen] = useState(false);
+  const [chromeMenuOpen, setChromeMenuOpen] = useState(false);
+  const [aiOpen, setAiOpen] = useState(false);
   const [publishedAt, setPublishedAt] = useState<string | null>(site.publishedAt);
   const [saveState, setSaveState] = useState<"saved" |"saving" |"dirty">("saved");
   const autosaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -938,7 +944,120 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
       >
         {t("skipToContent")}
       </a>
-      <CommandPalette items={commands} />
+            <CommandPalette items={commands} />
+      {chromeMenuOpen ? (
+        <div className="sf-editor-chrome-sheet" role="presentation" onClick={() => setChromeMenuOpen(false)}>
+          <div
+            className="sf-editor-chrome-sheet-panel sf-scroll"
+            role="dialog"
+            aria-modal="true"
+            aria-label={t("chromeMenu")}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <div className="text-sm font-bold">{t("chromeMenu")}</div>
+              <Button type="button" variant="ghost" size="sm" className="rounded-full" onClick={() => setChromeMenuOpen(false)}>
+                {t("close")}
+              </Button>
+            </div>
+            <div className="space-y-4">
+              <section className="space-y-2">
+                <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--muted)]">{t("toolbarContent")}</div>
+                <Select
+                  value={pageId}
+                  onValueChange={(id) => { setPageId(id); setSelectedId(null); setSelectedPart(null); }}
+                  aria-label={t("pageSelect")}
+                  triggerClassName="h-10 w-full rounded-xl text-xs font-bold"
+                  options={content.pages.map((p) => ({ value: p.id, label: p.title }))}
+                />
+                <Select
+                  value={editLocale}
+                  onValueChange={setEditLocale}
+                  aria-label={t("contentLang")}
+                  triggerClassName="h-10 w-full rounded-xl text-xs font-bold"
+                  options={locales.map((code) => ({
+                    value: code,
+                    label: isLocaleCode(code) ? LOCALE_META[code].nativeLabel : code,
+                  }))}
+                />
+                <div className="flex gap-1" role="group" aria-label={t("helpViewport")}>
+                  {([
+                    ["mobile", Smartphone, t("viewportMobile")],
+                    ["tablet", Tablet, t("viewportTablet")],
+                    ["laptop", Monitor, t("viewportLaptop")],
+                  ] as const).map(([key, Icon, label]) => (
+                    <button
+                      key={key}
+                      type="button"
+                      title={label}
+                      aria-pressed={viewport === key}
+                      onClick={() => setViewport(key)}
+                      className={`inline-flex flex-1 flex-col items-center gap-0.5 rounded-xl px-1 py-2 text-[10px] font-semibold ${
+                        viewport === key ? "bg-[var(--foreground)] text-[var(--card)]" : "bg-[var(--surface)] text-[var(--muted)]"
+                      }`}
+                    >
+                      <Icon className="h-3.5 w-3.5" aria-hidden />
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex gap-2">
+                  <Button type="button" variant="outline" className="min-h-11 flex-1 rounded-full" onClick={() => undo()} disabled={!canUndo}>
+                    <Undo2 className="h-4 w-4" aria-hidden /> {t("undo")}
+                  </Button>
+                  <Button type="button" variant="outline" className="min-h-11 flex-1 rounded-full" onClick={() => redo()} disabled={!canRedo}>
+                    <Redo2 className="h-4 w-4" aria-hidden /> {t("redo")}
+                  </Button>
+                </div>
+              </section>
+              <section className="space-y-1">
+                <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--muted)]">{t("toolbarSite")}</div>
+                <button type="button" className="flex min-h-[44px] w-full items-center gap-2 rounded-xl px-3 py-2.5 text-start text-xs font-semibold hover:bg-[var(--surface)]" onClick={() => { openSiteSection(null); setChromeMenuOpen(false); }}>
+                  <Settings2 className="h-3.5 w-3.5" aria-hidden /> {t("openSiteSettings")}
+                </button>
+                <button type="button" className="flex min-h-[44px] w-full items-center gap-2 rounded-xl px-3 py-2.5 text-start text-xs font-semibold hover:bg-[var(--surface)]" onClick={() => { openCmsPanel(); setChromeMenuOpen(false); }}>
+                  <Library className="h-3.5 w-3.5" aria-hidden /> {t("openCms")}
+                </button>
+                <div className="flex items-center justify-between gap-2 rounded-xl px-3 py-2">
+                  <span className="text-xs font-semibold">{t("chromeTheme")}</span>
+                  <ThemeToggleButton />
+                </div>
+                <div className="flex items-center justify-between gap-2 rounded-xl px-3 py-2">
+                  <span className="text-xs font-semibold">{t("appUiLang")}</span>
+                  <PlatformLangSwitcher size="compact" />
+                </div>
+              </section>
+              <section className="space-y-2">
+                <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--muted)]">{t("toolbarActions")}</div>
+                <Button type="button" variant="outline" className="min-h-11 w-full rounded-full" onClick={() => { openCommandPalette(); setChromeMenuOpen(false); }}>
+                  <Command className="h-4 w-4" aria-hidden /> {t("commands")} · ⌘K
+                </Button>
+                <Button type="button" variant="outline" className="min-h-11 w-full rounded-full" onClick={() => { setAiOpen(true); setChromeMenuOpen(false); }}>
+                  <Sparkles className="h-4 w-4" aria-hidden /> {t("aiAssistant")}
+                </Button>
+                <Button type="button" variant="outline" className="min-h-11 w-full rounded-full" onClick={() => { void save(false); setChromeMenuOpen(false); }} disabled={saving || publishing}>
+                  <Save className="h-4 w-4" aria-hidden /> {saving ? t("saving") : t("save")}
+                </Button>
+                <Button asChild variant="outline" className="min-h-11 w-full rounded-full">
+                  <Link href={`/editor/${site.id}/preview`} target="_blank" onClick={() => setChromeMenuOpen(false)}>
+                    <Eye className="h-4 w-4" aria-hidden /> {t("preview")}
+                  </Link>
+                </Button>
+                <Button type="button" className="min-h-11 w-full rounded-full bg-teal-800 hover:bg-teal-700" onClick={() => { setPublishConfirmOpen(true); setChromeMenuOpen(false); }} disabled={publishing || saving}>
+                  <Upload className="h-4 w-4" aria-hidden /> {publishing ? t("publishing") : t("publish")}
+                </Button>
+              </section>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      <AiEditorPanel
+        open={aiOpen}
+        onOpenChange={setAiOpen}
+        siteId={site.id}
+        content={content}
+        onApplyContent={(next) => commit(() => next)}
+      />
       {publishConfirmOpen ? (
         <div
           className="fixed inset-0 z-[70] flex items-end justify-center bg-[color-mix(in_oklab,var(--foreground)_40%,transparent)] p-4 sm:items-center"
@@ -1004,6 +1123,21 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
               <div className="hidden truncate font-mono text-[10px] text-[var(--muted)] sm:block dark:text-[var(--muted)]" dir="ltr">/s/{site.slug}</div>
             </div>
           </div>
+        </div>
+
+        <div className="sf-editor-topbar-burger">
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            className="sf-touch-target h-10 w-10 rounded-full"
+            title={t("chromeMenu")}
+            aria-label={t("chromeMenu")}
+            aria-expanded={chromeMenuOpen}
+            onClick={() => setChromeMenuOpen(true)}
+          >
+            <Menu className="h-4 w-4" aria-hidden />
+          </Button>
         </div>
 
         {/* Zone B — Content essentials (never competes with Site icons) */}
@@ -1193,6 +1327,31 @@ export function EditorShell({ site, initialContent }: { site: SiteMeta; initialC
 
           <div className="sf-toolbar-group" data-tone="actions" title={t("toolbarActionsHint")}>
             <span className="sf-toolbar-label">{t("toolbarActions")}</span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-8 rounded-full px-2.5 text-[11px] font-bold"
+              title={t("commandPaletteTitle")}
+              aria-label={t("commandPaletteTitle")}
+              onClick={() => openCommandPalette()}
+            >
+              <Command className="h-3.5 w-3.5" aria-hidden />
+              <span className="hidden xl:inline">{t("commands")}</span>
+              <kbd className="sf-latin ms-0.5 hidden rounded bg-[var(--surface)] px-1 py-0.5 font-mono text-[9px] lg:inline" dir="ltr">⌘K</kbd>
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-8 rounded-full px-2.5 text-[11px] font-bold text-teal-800 dark:text-teal-300"
+              title={t("aiAssistant")}
+              aria-label={t("aiAssistant")}
+              onClick={() => setAiOpen(true)}
+            >
+              <Sparkles className="h-3.5 w-3.5" aria-hidden />
+              <span className="hidden xl:inline">{t("aiAssistant")}</span>
+            </Button>
             <span
               className="sf-save-pill hidden sm:inline-flex"
               data-state={saveState === "saving" || saving ? "saving" : saveState}

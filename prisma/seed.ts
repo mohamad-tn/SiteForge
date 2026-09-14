@@ -1064,7 +1064,20 @@ async function main() {
   const adminHash = await bcrypt.hash("admin1234", 10);
   await prisma.user.upsert({ where: { email: "admin@siteforge.local" }, update: { passwordHash: adminHash, name: "Platform Admin", role: "ADMIN" }, create: { email: "admin@siteforge.local", name: "Platform Admin", passwordHash: adminHash, role: "ADMIN" } });
   console.log("Demo user: demo@siteforge.local / demo1234");
+  await prisma.platformAiSettings.upsert({
+    where: { id: "default" },
+    update: {},
+    create: {
+      id: "default",
+      provider: "openai",
+      model: "gpt-4o-mini",
+      enabled: false,
+      defaultDailyLimit: 20,
+      maxTokens: 4096,
+    },
+  });
   console.log("Admin user: admin@siteforge.local / admin1234");
+  console.log("Platform AI: disabled until admin sets API key in /admin → AI");
   console.log("Demo public site: /s/demo-studio");
 }
 

@@ -11,7 +11,7 @@ import { AppCanvas, AppHeader, SoftCard, StatCard, Toolbar } from "@/components/
 import { SegmentedControl } from "@/components/ui/segmented";
 import { ThemeToggleButton } from "@/components/theme-provider";
 import { SignOutButton } from "@/components/sign-out-button";
-import { CommandPalette, type CommandItem } from "@/components/command-palette";
+import { CommandPalette, openCommandPalette, type CommandItem } from "@/components/command-palette";
 import { PlatformLangSwitcher, usePlatformLang } from "@/components/platform-lang-provider";
 import { CATEGORY_LABELS } from "@/lib/platform-i18n";
 import { Copy, Download, Upload, Plus, LayoutTemplate, ArrowRight, Trash2 } from "lucide-react";
@@ -311,7 +311,18 @@ export function DashboardClient({
           </div>
           <div className="sf-header-actions flex min-w-0 max-w-full flex-wrap items-center justify-end gap-1.5 sm:gap-2">
             <PlatformLangSwitcher size="compact" />
-            <span className="hidden text-[11px] text-[var(--muted)] lg:inline">{t.cmd}</span>
+            <button
+              type="button"
+              onClick={() => openCommandPalette()}
+              title={tp("commandPaletteTitle")}
+              aria-label={tp("commandPaletteTitle")}
+              className="inline-flex items-center gap-1.5 rounded-full border border-[var(--border)] bg-[var(--card)] px-2.5 py-1.5 text-[11px] font-semibold text-[var(--muted)] transition hover:border-teal-700/30 hover:text-[var(--foreground)]"
+            >
+              <span className="hidden sm:inline">{tp("commands")}</span>
+              <kbd className="sf-latin rounded-md bg-[var(--surface)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--foreground)]" dir="ltr">
+                ⌘K
+              </kbd>
+            </button>
             <ThemeToggleButton />
             {isAdmin ? (
               <Button asChild variant="outline" size="sm" className="rounded-full">

@@ -78,3 +78,20 @@ Readiness: ~9.2 / 10 editor chrome + motion polish (NOT Framer freeform canvas)
 4) لغة المحتوى في الشريط العلوي = قائمة Radix أنيقة (وليست قائمة أصلية)
 5) الخصائص → تأثيرات: اختر مسبقاً جاهزاً + «عند التمرير للعنصر» ثم انشر وجرّب /s/demo-studio
 6) لوحة التحكم → قوالب جديدة: سيرة / معرض / هبوط / أعمال / مطعم بمظهر أعمق
+
+## Admin gate + AI + atomic parts (2026-09-14)
+
+### Admin auth (honest)
+- `/admin` is for ADMIN role only (`admin@siteforge.local` / `admin1234` from seed).
+- Bug/UX: middleware used to silently redirect tenants to `/dashboard` (felt like admin "leaked" the marketplace).
+- Fix: middleware no longer silent-redirects tenants to dashboard; `src/app/admin/layout.tsx` DB-checks role and shows clear 403 «غير مصرح — لوحة الإدارة للمنصة فقط».
+- APIs: every `/api/admin/*` uses `requireAdminSession` with DB role refresh; JWT role refreshed ~5min.
+- SQL injection: Prisma parameterized queries — no raw string SQL for user input. XSS: React escaping + CSS sanitize. Not a full pentest.
+
+### Atomic editing
+- Layout/look/colors write to `partStyles[part]` when a nested part is selected.
+- Renderer applies expanded part styles (bg, padding, maxWidth, shadow, …).
+
+### AI site-edit agent
+- PlatformAiSettings + TenantAiQuota migration; admin AI tab; editor floating panel; `POST /api/ai/chat` SSE with allowlisted patches.
+

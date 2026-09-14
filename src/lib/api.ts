@@ -4,6 +4,7 @@ import { z } from "zod";
 import type { Site } from "@prisma/client";
 import { authOptions } from "@/lib/auth";
 import { assertAccessibleSite } from "@/lib/site-access";
+import { prisma } from "@/lib/prisma";
 
 export type SessionUser = {
   id: string;
@@ -39,10 +40,15 @@ export async function requireAdminSession(): Promise<
 > {
   const auth = await requireSession();
   if ("response" in auth) return auth;
-  if (auth.user.role !== "ADMIN") {
+  // Never trust JWT alone for admin — refresh role from DB.
+  const db = await prisma.user.findUnique({
+    where: { id: auth.user.id },
+    select: { role: true },
+  });
+  if (!db || db.role !== "ADMIN") {
     return { response: jsonError("Forbidden", 403) };
   }
-  return auth;
+  return { user: { ...auth.user, role: "ADMIN" } };
 }
 
 /** Owner or platform admin may access the site row. */

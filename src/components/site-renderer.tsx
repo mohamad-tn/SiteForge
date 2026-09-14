@@ -22,6 +22,7 @@ import {
   ensureFaqItems,
   ensureFormFields,
   getPartStyles,
+  partStyleToCss,
 } from "@/lib/block-parts";
 import { blockFrameStyle, blockMotionAttrs, resolveBlockHref, strProp, sanitizeBlockCss } from "@/lib/block-style";
 import { artboardHeightFromBlocks, pageUsesCanvas } from "@/lib/editor-canvas";
@@ -149,17 +150,8 @@ function pickPart(editable: boolean | undefined, onSelectPart: ((part: BlockPart
   };
 }
 
-function partStyleCSS(
-  ps: { textColor?: string; fontSize?: string; hoverBg?: string; hoverText?: string; focusRing?: string } | undefined
-): CSSProperties {
-  if (!ps) return {};
-  const s: CSSProperties & Record<string, string> = {};
-  if (ps.textColor) s.color = ps.textColor;
-  if (ps.fontSize) s.fontSize = /px|rem|em|%/.test(ps.fontSize) ? ps.fontSize : `${ps.fontSize}px`;
-  if (ps.hoverBg) s["--sf-part-hover-bg"] = ps.hoverBg;
-  if (ps.hoverText) s["--sf-part-hover-text"] = ps.hoverText;
-  if (ps.focusRing) s["--sf-part-focus-ring"] = ps.focusRing;
-  return s;
+function partStyleCSS(ps: Parameters<typeof partStyleToCss>[0]): CSSProperties {
+  return partStyleToCss(ps) as CSSProperties;
 }
 
 function BlockView({
@@ -347,8 +339,14 @@ function BlockView({
                 <button
                   type="button"
                   onClick={selectPart("cta")}
+                  data-sf-part="cta"
                   className={`inline-flex items-center px-3.5 py-1.5 text-white text-xs font-semibold ${partRing(selectedPart === "cta")}`}
-                  style={{ background: primary, borderRadius: radius, color: "#fff" }}
+                  style={{
+                    background: getPartStyles(source, "cta").bgColor || primary,
+                    borderRadius: getPartStyles(source, "cta").borderRadius ? undefined : radius,
+                    color: getPartStyles(source, "cta").textColor || "#fff",
+                    ...partStyleCSS(getPartStyles(source, "cta")),
+                  }}
                 >
                   {ctaLabel}
                 </button>
@@ -405,12 +403,14 @@ function BlockView({
                 role={editable ? "button" : undefined}
                 tabIndex={editable ? 0 : undefined}
                 onClick={pick("eyebrow")}
+                data-sf-part="eyebrow"
                 className={`inline-flex mb-5 px-3 py-1 text-xs font-semibold tracking-wide ${mx} ${editable ? `cursor-pointer ${partRing(selectedPart === "eyebrow")}` : ""}`}
                 style={{
-                  color: primary,
-                  background: `${primary}14`,
+                  color: getPartStyles(source, "eyebrow").textColor || primary,
+                  background: getPartStyles(source, "eyebrow").bgColor || `${primary}14`,
                   borderRadius: 999,
                   border: `1px solid ${primary}22`,
+                  ...partStyleCSS(getPartStyles(source, "eyebrow")),
                 }}
               >
                 {str(p, "eyebrow")}
@@ -434,8 +434,12 @@ function BlockView({
               role={editable ? "button" : undefined}
               tabIndex={editable ? 0 : undefined}
               onClick={pick("subheadline")}
+              data-sf-part="subheadline"
               className={`text-lg md:text-xl mb-9 max-w-2xl leading-8 ${mx} ${editable ? `cursor-pointer ${partRing(selectedPart === "subheadline")}` : ""}`}
-              style={{ color: userText ? `${userText}cc` : muted }}
+              style={{
+                color: getPartStyles(source, "subheadline").textColor || (userText ? `${userText}cc` : muted),
+                ...partStyleCSS(getPartStyles(source, "subheadline")),
+              }}
             >
               {str(p, "subheadline")}
             </p>
@@ -445,8 +449,16 @@ function BlockView({
                   <button
                     type="button"
                     onClick={pick("cta")}
+                    data-sf-part="cta"
                     className={`inline-flex items-center px-6 py-3 text-white font-semibold shadow-lg shadow-black/10 ${partRing(selectedPart === "cta")}`}
-                    style={{ background: primary, borderRadius: radius }}
+                    style={{
+                      background: getPartStyles(source, "cta").bgColor || primary,
+                      color: getPartStyles(source, "cta").textColor || undefined,
+                      borderRadius: getPartStyles(source, "cta").borderRadius
+                        ? undefined
+                        : radius,
+                      ...partStyleCSS(getPartStyles(source, "cta")),
+                    }}
                   >
                     {str(p, "ctaLabel")}
                   </button>
@@ -457,7 +469,12 @@ function BlockView({
                     props={source}
                     hrefKey="ctaHref"
                     className="inline-flex items-center px-6 py-3 text-white font-semibold shadow-lg shadow-black/10"
-                    style={{ background: primary, borderRadius: radius }}
+                    style={{
+                      background: getPartStyles(source, "cta").bgColor || primary,
+                      color: getPartStyles(source, "cta").textColor || undefined,
+                      borderRadius: getPartStyles(source, "cta").borderRadius ? undefined : radius,
+                      ...partStyleCSS(getPartStyles(source, "cta")),
+                    }}
                   >
                     {str(p, "ctaLabel")}
                   </ActionableControl>
@@ -468,12 +485,14 @@ function BlockView({
                   <button
                     type="button"
                     onClick={pick("secondary")}
+                    data-sf-part="secondary"
                     className={`inline-flex items-center px-6 py-3 font-semibold border ${partRing(selectedPart === "secondary")}`}
                     style={{
-                      color: userText || secondary,
-                      borderColor: `${secondary}22`,
-                      background: bg,
-                      borderRadius: radius,
+                      color: getPartStyles(source, "secondary").textColor || userText || secondary,
+                      borderColor: getPartStyles(source, "secondary").borderColor || `${secondary}22`,
+                      background: getPartStyles(source, "secondary").bgColor || bg,
+                      borderRadius: getPartStyles(source, "secondary").borderRadius ? undefined : radius,
+                      ...partStyleCSS(getPartStyles(source, "secondary")),
                     }}
                   >
                     {str(p, "secondaryLabel")}
@@ -481,12 +500,14 @@ function BlockView({
                 ) : (
                   <a
                     {...linkFor("secondaryHref")}
+                    data-sf-part="secondary"
                     className="inline-flex items-center px-6 py-3 font-semibold border"
                     style={{
-                      color: secondary,
-                      borderColor: `${secondary}22`,
-                      background: bg,
-                      borderRadius: radius,
+                      color: getPartStyles(source, "secondary").textColor || secondary,
+                      borderColor: getPartStyles(source, "secondary").borderColor || `${secondary}22`,
+                      background: getPartStyles(source, "secondary").bgColor || bg,
+                      borderRadius: getPartStyles(source, "secondary").borderRadius ? undefined : radius,
+                      ...partStyleCSS(getPartStyles(source, "secondary")),
                     }}
                   >
                     {str(p, "secondaryLabel")}

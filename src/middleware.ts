@@ -44,9 +44,9 @@ export default async function middleware(req: NextRequest) {
       login.searchParams.set("callbackUrl", path);
       return NextResponse.redirect(login);
     }
-    if (path.startsWith("/admin") && token.role !== "ADMIN") {
-      return NextResponse.redirect(new URL("/dashboard", req.url));
-    }
+    // Do NOT silent-redirect non-admins /admin → /dashboard (that felt like an admin leak).
+    // Authenticated tenants hit admin/layout.tsx which DB-checks role and renders a clear 403.
+    // Missing/invalid JWT role is treated as non-admin by the layout.
     return NextResponse.next();
   }
 

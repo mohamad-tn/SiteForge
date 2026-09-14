@@ -10,6 +10,7 @@ import { ThemeToggleButton } from "@/components/theme-provider";
 import { PlatformLangSwitcher, usePlatformLang } from "@/components/platform-lang-provider";
 import { Trash2 } from "lucide-react";
 import { SearchField } from "@/components/ui/search-field";
+import { AdminAiPanel } from "@/components/admin/admin-ai-panel";
 
 type Overview = {
   metrics: { users: number; sites: number; published: number; views7d: number };
@@ -37,7 +38,7 @@ export default function AdminPage() {
   const [sitesQ, setSitesQ] = useState("");
   const [users, setUsers] = useState<Array<Record<string, unknown>>>([]);
   const [sites, setSites] = useState<Array<Record<string, unknown>>>([]);
-  const [tab, setTab] = useState<"overview" | "users" | "sites" | "domains" | "templates">("overview");
+  const [tab, setTab] = useState<"overview" | "users" | "sites" | "domains" | "templates" | "ai">("overview");
   const [domains, setDomains] = useState<Array<Record<string, unknown>>>([]);
   const [templates, setTemplates] = useState<Array<Record<string, unknown>>>([]);
   const [deleteSiteId, setDeleteSiteId] = useState<string | null>(null);
@@ -155,6 +156,7 @@ export default function AdminPage() {
             { value: "sites", label: t("tabSites") },
             { value: "domains", label: t("tabDomains") },
             { value: "templates", label: t("tabTemplates") },
+            { value: "ai", label: t("tabAi") },
           ]}
         />
 
@@ -382,6 +384,8 @@ export default function AdminPage() {
             </div>
           </SoftCard>
         ) : null}
+
+        {tab === "ai" ? <AdminAiPanel /> : null}
 
       </main>
 
