@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { SoftCard } from "@/components/ui/surface";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,6 +25,10 @@ type QuotaRow = {
   usedToday: number;
 };
 
+type CatalogModel = { id: string; label: string; vision?: boolean };
+
+const OTHER = "__other__";
+
 export function AdminAiPanel() {
   const { t, lang } = usePlatformLang();
   const [settings, setSettings] = useState<Settings | null>(null);
@@ -35,6 +39,10 @@ export function AdminAiPanel() {
   const [msg, setMsg] = useState("");
   const [quotaUserId, setQuotaUserId] = useState("");
   const [quotaLimit, setQuotaLimit] = useState("20");
+  const [models, setModels] = useState<CatalogModel[]>([]);
+  const [modelsSource, setModelsSource] = useState<"live" | "fallback" | null>(null);
+  const [modelsLoading, setModelsLoading] = useState(false);
+  const [customModel, setCustomModel] = useState(false);
 
   async function load() {
     const res = await fetch("/api/admin/ai");
@@ -44,9 +52,42 @@ export function AdminAiPanel() {
     setQuotas(data.quotas || []);
   }
 
+  const loadModels = useCallback(async (provider: string, currentModel?: string) => {
+    setModelsLoading(true);
+    try {
+      const res = await fetch(`/api/admin/ai/models?provider=${encodeURIComponent(provider)}`);
+      if (!res.ok) {
+        setModels([]);
+        setModelsSource("fallback");
+        setCustomModel(true);
+        return;
+      }
+      const data = await res.json();
+      const list = (data.models || []) as CatalogModel[];
+      setModels(list);
+      setModelsSource(data.source === "live" ? "live" : "fallback");
+      if (currentModel && list.length && !list.some((m) => m.id === currentModel)) {
+        setCustomModel(true);
+      } else {
+        setCustomModel(false);
+      }
+    } catch {
+      setModels([]);
+      setModelsSource("fallback");
+      setCustomModel(true);
+    } finally {
+      setModelsLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     void load();
   }, []);
+
+  useEffect(() => {
+    if (!settings?.provider) return;
+    void loadModels(settings.provider, settings.model);
+  }, [settings?.provider, loadModels]); // eslint-disable-line react-hooks/exhaustive-deps -- reload on provider change only
 
   async function save() {
     if (!settings || saving) return;
@@ -76,6 +117,7 @@ export function AdminAiPanel() {
       setApiKey("");
       setClearKey(false);
       setMsg(lang === "ar" ? "تم الحفظ" : "Saved");
+      void loadModels(data.settings.provider, data.settings.model);
     } finally {
       setSaving(false);
     }
@@ -99,19 +141,35 @@ export function AdminAiPanel() {
     return <SoftCard className="p-5 text-sm text-[var(--muted)]">{t("loading")}</SoftCard>;
   }
 
+  const modelOptions = [
+    ...models.map((m) => ({
+      value: m.id,
+      label: m.vision ? `${m.label} · vision` : m.label,
+    })),
+    { value: OTHER, label: t("aiModelOther") },
+  ];
+
+  const selectValue = customModel || !models.some((m) => m.id === settings.model) ? OTHER : settings.model;
+
   return (
     <div className="space-y-4">
       <SoftCard className="space-y-4 p-5">
         <div>
           <h2 className="text-base font-bold">{t("aiAdminTitle")}</h2>
           <p className="mt-1 text-xs leading-5 text-[var(--muted)]">{t("aiAdminHint")}</p>
+          <p className="mt-2 rounded-xl border border-dashed border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-[11px] leading-5 text-[var(--muted)]">
+            {t("aiSecurityTip")}
+          </p>
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-1.5">
             <Label>{t("aiProvider")}</Label>
             <Select
               value={settings.provider}
-              onValueChange={(v) => setSettings({ ...settings, provider: v })}
+              onValueChange={(v) => {
+                setSettings({ ...settings, provider: v });
+                setCustomModel(false);
+              }}
               options={[
                 { value: "openai", label: "OpenAI" },
                 { value: "anthropic", label: "Anthropic" },
@@ -121,13 +179,41 @@ export function AdminAiPanel() {
             />
           </div>
           <div className="space-y-1.5">
-            <Label>{t("aiModel")}</Label>
-            <Input
-              value={settings.model}
-              onChange={(e) => setSettings({ ...settings, model: e.target.value })}
-              className="h-10 rounded-2xl font-mono text-xs"
-              dir="ltr"
+            <div className="flex items-center justify-between gap-2">
+              <Label>{t("aiModel")}</Label>
+              {modelsSource ? (
+                <span className="text-[10px] text-[var(--muted)]">
+                  {modelsLoading
+                    ? t("aiModelsLoading")
+                    : modelsSource === "live"
+                      ? t("aiModelsLive")
+                      : t("aiModelsFallback")}
+                </span>
+              ) : null}
+            </div>
+            <Select
+              value={selectValue}
+              onValueChange={(v) => {
+                if (v === OTHER) {
+                  setCustomModel(true);
+                  return;
+                }
+                setCustomModel(false);
+                setSettings({ ...settings, model: v });
+              }}
+              options={modelOptions}
+              disabled={modelsLoading && models.length === 0}
+              placeholder={modelsLoading ? t("aiModelsLoading") : "—"}
             />
+            {customModel || selectValue === OTHER ? (
+              <Input
+                value={settings.model}
+                onChange={(e) => setSettings({ ...settings, model: e.target.value })}
+                className="mt-1.5 h-10 rounded-2xl font-mono text-xs"
+                dir="ltr"
+                placeholder="model-id"
+              />
+            ) : null}
           </div>
           <div className="space-y-1.5 sm:col-span-2">
             <Label>{t("aiApiKey")}</Label>
@@ -163,6 +249,7 @@ export function AdminAiPanel() {
               className="h-10 rounded-2xl"
               dir="ltr"
             />
+            <p className="text-[11px] leading-5 text-[var(--muted)]">{t("aiDefaultQuotaHelp")}</p>
           </div>
           <div className="space-y-1.5">
             <Label>{t("aiMaxTokens")}</Label>
@@ -175,6 +262,7 @@ export function AdminAiPanel() {
               className="h-10 rounded-2xl"
               dir="ltr"
             />
+            <p className="text-[11px] leading-5 text-[var(--muted)]">{t("aiMaxTokensHelp")}</p>
           </div>
         </div>
         <label className="flex items-center gap-2 text-sm font-semibold">

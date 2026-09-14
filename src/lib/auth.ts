@@ -1,7 +1,14 @@
 import type { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
+import { z } from "zod";
 import { prisma } from "@/lib/prisma";
+import { checkRateLimit } from "@/lib/rate-limit";
+
+const credentialsSchema = z.object({
+  email: z.string().email().max(200),
+  password: z.string().min(1).max(100),
+});
 
 export const authOptions: NextAuthOptions = {
   session: {
@@ -17,11 +24,19 @@ export const authOptions: NextAuthOptions = {
         password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
-        if (!credentials?.email || !credentials.password) return null;
-        const email = credentials.email.toLowerCase().trim();
+        const parsed = credentialsSchema.safeParse({
+          email: credentials?.email,
+          password: credentials?.password,
+        });
+        if (!parsed.success) return null;
+
+        const email = parsed.data.email.toLowerCase().trim();
+        const rl = checkRateLimit(`login:${email}`, 12, 60_000);
+        if (!rl.ok) return null;
+
         const user = await prisma.user.findUnique({ where: { email } });
         if (!user) return null;
-        const ok = await bcrypt.compare(credentials.password, user.passwordHash);
+        const ok = await bcrypt.compare(parsed.data.password, user.passwordHash);
         if (!ok) return null;
         await prisma.user.update({
           where: { id: user.id },

@@ -23,6 +23,7 @@ describe("admin gate hardening", () => {
       "src/app/api/admin/sites/route.ts",
       "src/app/api/admin/domains/route.ts",
       "src/app/api/admin/ai/route.ts",
+      "src/app/api/admin/ai/models/route.ts",
     ];
     for (const f of files) {
       const src = readFileSync(join(process.cwd(), f), "utf8");

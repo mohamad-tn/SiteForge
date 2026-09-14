@@ -1,3 +1,33 @@
+## Security + AI polish + models dropdown (2026-09-14)
+
+### Honest security stance
+Nobody can claim “immune to every vulnerability worldwide.” SiteForge hardens a professional baseline; a full pentest / bug bounty is still separate.
+
+### Hardened this pass
+1) HTTP security headers via `next.config.ts` → `getSecurityHeaders()` (HSTS, nosniff, Referrer-Policy, X-Frame-Options, Permissions-Policy, CSP, COOP)
+2) Shared in-memory rate-limit helper on login (email), signup (IP), AI chat, uploads
+3) Signup: zod + generic “Could not create account” (no easy email enumeration); bcrypt kept
+4) Uploads: SVG sanitize kept; reject HTML-as-image; JPEG EXIF APP1 strip (best-effort)
+5) Production JSON/SSE errors never return stack traces
+6) Admin APIs: DB-backed `requireAdminSession` (incl. new models route); API keys stay server-side encrypted
+
+### Still not a pentest
+- Single-process rate limits (not Redis/WAF)
+- CSP allows unsafe-inline/eval for Next + editor styles — tradeoff, not zero-XSS
+- Tenant CSS can still restyle published pages (documented)
+- No claim of immunity to 0-days, misconfig, or social engineering
+
+### AI polish
+- Admin: clear AR/EN help for **20** (daily requests/user) and **4096** (max output tokens/completion)
+- Editor: collapsible «كيف يعمل» / How it works (5 steps); paperclip attachments (images via `/api/uploads` + vision dataUrl; text truncated into prompt)
+- `GET /api/admin/ai/models?provider=` live list when key matches provider (OpenAI/xAI/Google); Anthropic curated fallback; 10m cache; UI Select + “قائمة احتياطية” vs “من واجهة المزود”
+
+### QA notes
+- Use `NEXT_DIST_DIR=/tmp/sf-next-build` when `:3000` is busy — do not overwrite running `.next`
+- No commit/push this pass
+
+---
+
 SiteForge STATUS
 Updated: 2026-09-09 18:49 Asia/Damascus (UTC+3)
 Dev: http://localhost:3000

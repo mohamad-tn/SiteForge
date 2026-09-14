@@ -13,9 +13,26 @@ export type SessionUser = {
   name?: string | null;
 };
 
-/** Consistent JSON error shape for mutating/auth APIs. */
+/**
+ * Consistent JSON error shape for mutating/auth APIs.
+ * Never attach stack traces — log server-side only.
+ */
 export function jsonError(error: string, status: number, extra?: Record<string, unknown>) {
-  return NextResponse.json({ error, ...(extra || {}) }, { status });
+  const safe: Record<string, unknown> = { error };
+  if (extra) {
+    for (const [k, v] of Object.entries(extra)) {
+      if (k === "stack" || k === "cause") continue;
+      if (process.env.NODE_ENV === "production" && (k === "details" || k === "raw")) continue;
+      safe[k] = v;
+    }
+  }
+  return NextResponse.json(safe, { status });
+}
+
+/** Production-safe catch: log full error, return generic message (no stack in JSON). */
+export function jsonServerError(e: unknown, publicMessage = "Server error") {
+  console.error(e);
+  return jsonError(publicMessage, 500);
 }
 
 export async function requireSession(): Promise<

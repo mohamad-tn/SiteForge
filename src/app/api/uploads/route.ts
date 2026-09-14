@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { nanoid } from "nanoid";
 import { prisma } from "@/lib/prisma";
 import { jsonError, requireSession } from "@/lib/api";
+import { checkRateLimit, clientIpFromRequest } from "@/lib/rate-limit";
+import { looksLikeHtmlImage, stripJpegExif } from "@/lib/upload-guards";
 
 export const runtime = "nodejs";
 
@@ -39,6 +41,10 @@ export async function POST(req: Request) {
   const auth = await requireSession();
   if ("response" in auth) return auth.response;
 
+  const ip = clientIpFromRequest(req);
+  const rl = checkRateLimit(`upload:${auth.user.id}:${ip}`, 40, 60_000);
+  if (!rl.ok) return jsonError("Too many requests", 429);
+
   try {
     const form = await req.formData();
     const file = form.get("file");
@@ -55,14 +61,23 @@ export async function POST(req: Request) {
         400
       );
     }
+    // Never treat HTML as an image
+    if (mime === "text/html" || mime === "application/xhtml+xml") {
+      return jsonError("HTML is not allowed as an image upload", 400);
+    }
 
-    const bytes = Buffer.from(await file.arrayBuffer());
+    const raw = Buffer.from(await file.arrayBuffer());
+    if (looksLikeHtmlImage(mime, raw)) {
+      return jsonError("HTML content rejected as image", 400);
+    }
     if (mime === "image/svg+xml") {
-      const text = bytes.toString("utf8");
+      const text = raw.toString("utf8");
       if (/<script|on\w+\s*=|javascript:|data:\s*text\/html|<foreignObject/i.test(text)) {
         return jsonError("Unsafe SVG rejected", 400);
       }
     }
+    const bytes =
+      mime === "image/jpeg" ? Buffer.from(stripJpegExif(raw)) : raw;
 
     const siteIdRaw = form.get("siteId");
     let siteId: string | null = null;
@@ -84,7 +99,7 @@ export async function POST(req: Request) {
         siteId,
         name,
         mime,
-        size: file.size,
+        size: bytes.length,
         bytes,
       },
     });
@@ -95,7 +110,7 @@ export async function POST(req: Request) {
       url,
       kind,
       mime,
-      size: file.size,
+      size: bytes.length,
       name: asset.name,
       id: asset.id,
     });

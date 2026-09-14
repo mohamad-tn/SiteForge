@@ -1,9 +1,17 @@
 /**
  * Provider adapters for the site-edit agent.
  * Keys stay server-side only. OpenAI-compatible covers openai + xAI (+ many proxies).
+ * Multimodal user content supported when the model/provider accepts vision.
  */
 
-export type AiChatMessage = { role: "system" | "user" | "assistant"; content: string };
+export type AiTextPart = { type: "text"; text: string };
+export type AiImagePart = { type: "image_url"; image_url: { url: string } };
+export type AiContentPart = AiTextPart | AiImagePart;
+
+export type AiChatMessage = {
+  role: "system" | "user" | "assistant";
+  content: string | AiContentPart[];
+};
 
 export type AiProviderId = "openai" | "anthropic" | "google" | "xai";
 
@@ -23,10 +31,21 @@ export interface AiProviderAdapter {
   }): Promise<AiCompletionResult>;
 }
 
+function asPlainText(content: string | AiContentPart[]): string {
+  if (typeof content === "string") return content;
+  return content
+    .map((p) => (p.type === "text" ? p.text : "[image]"))
+    .join("\n");
+}
+
 async function openaiCompatibleComplete(
   baseUrl: string,
   opts: { apiKey: string; model: string; messages: AiChatMessage[]; maxTokens: number }
 ): Promise<AiCompletionResult> {
+  const messages = opts.messages.map((m) => ({
+    role: m.role,
+    content: m.content,
+  }));
   const res = await fetch(`${baseUrl.replace(/\/$/, "")}/chat/completions`, {
     method: "POST",
     headers: {
@@ -35,7 +54,7 @@ async function openaiCompatibleComplete(
     },
     body: JSON.stringify({
       model: opts.model,
-      messages: opts.messages,
+      messages,
       max_tokens: opts.maxTokens,
       temperature: 0.2,
     }),
@@ -69,10 +88,42 @@ export const xaiAdapter: AiProviderAdapter = {
 export const anthropicAdapter: AiProviderAdapter = {
   id: "anthropic",
   async complete(opts) {
-    const system = opts.messages.filter((m) => m.role === "system").map((m) => m.content).join("\n\n");
+    const system = opts.messages
+      .filter((m) => m.role === "system")
+      .map((m) => asPlainText(m.content))
+      .join("\n\n");
     const msgs = opts.messages
       .filter((m) => m.role !== "system")
-      .map((m) => ({ role: m.role === "assistant" ? "assistant" : "user", content: m.content }));
+      .map((m) => {
+        if (typeof m.content === "string") {
+          return {
+            role: m.role === "assistant" ? "assistant" : "user",
+            content: m.content,
+          };
+        }
+        const parts = m.content.map((p) => {
+          if (p.type === "text") return { type: "text" as const, text: p.text };
+          const url = p.image_url.url;
+          if (url.startsWith("data:")) {
+            const match = /^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/i.exec(url);
+            if (match) {
+              return {
+                type: "image" as const,
+                source: {
+                  type: "base64" as const,
+                  media_type: match[1],
+                  data: match[2],
+                },
+              };
+            }
+          }
+          return { type: "text" as const, text: `[image url: ${url}]` };
+        });
+        return {
+          role: m.role === "assistant" ? "assistant" : "user",
+          content: parts,
+        };
+      });
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -107,7 +158,7 @@ export const anthropicAdapter: AiProviderAdapter = {
   },
 };
 
-/** Google Gemini stub via Generative Language API (OpenAI-like when key present). */
+/** Google Gemini via Generative Language API — multimodal parts when present. */
 export const googleAdapter: AiProviderAdapter = {
   id: "google",
   async complete(opts) {
@@ -115,11 +166,32 @@ export const googleAdapter: AiProviderAdapter = {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(opts.apiKey)}`;
     const contents = opts.messages
       .filter((m) => m.role !== "system")
-      .map((m) => ({
-        role: m.role === "assistant" ? "model" : "user",
-        parts: [{ text: m.content }],
-      }));
-    const system = opts.messages.filter((m) => m.role === "system").map((m) => m.content).join("\n");
+      .map((m) => {
+        const parts: Array<{ text?: string; inlineData?: { mimeType: string; data: string } }> = [];
+        if (typeof m.content === "string") {
+          parts.push({ text: m.content });
+        } else {
+          for (const p of m.content) {
+            if (p.type === "text") parts.push({ text: p.text });
+            else {
+              const match = /^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/i.exec(p.image_url.url);
+              if (match) {
+                parts.push({ inlineData: { mimeType: match[1], data: match[2] } });
+              } else {
+                parts.push({ text: `[image: ${p.image_url.url}]` });
+              }
+            }
+          }
+        }
+        return {
+          role: m.role === "assistant" ? "model" : "user",
+          parts,
+        };
+      });
+    const system = opts.messages
+      .filter((m) => m.role === "system")
+      .map((m) => asPlainText(m.content))
+      .join("\n");
     const res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -159,4 +231,9 @@ export function getProviderAdapter(id: AiProviderId): AiProviderAdapter {
     default:
       return openaiAdapter;
   }
+}
+
+/** Heuristic: model id likely accepts vision / image parts. */
+export function modelLikelySupportsVision(model: string): boolean {
+  return /gpt-4o|gpt-4\.1|vision|gemini|claude|grok-2-vision/i.test(model);
 }

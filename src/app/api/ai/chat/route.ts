@@ -8,9 +8,22 @@ import {
   aiPatchesResponseSchema,
   extractJsonObject,
 } from "@/lib/ai/patches";
-import { getProviderAdapter, type AiProviderId } from "@/lib/ai/providers";
+import {
+  getProviderAdapter,
+  modelLikelySupportsVision,
+  type AiChatMessage,
+  type AiContentPart,
+  type AiProviderId,
+} from "@/lib/ai/providers";
 import { consumeQuota, getQuotaStatus } from "@/lib/ai/quota";
 import { ensurePlatformAiSettings, getDecryptedPlatformApiKey } from "@/lib/ai/settings";
+import {
+  aiAttachmentsField,
+  buildAttachmentPromptParts,
+  validateAttachmentLimits,
+  type AiAttachment,
+} from "@/lib/ai/attachments";
+import { checkRateLimit, clientIpFromRequest } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -20,29 +33,25 @@ const bodySchema = z.object({
   message: z.string().min(1).max(4000),
   content: siteContentSchema,
   locale: z.string().min(2).max(12).optional(),
+  attachments: aiAttachmentsField,
 });
-
-/** Simple in-memory rate limit per user (best-effort; not multi-instance). */
-const hits = new Map<string, { n: number; t: number }>();
-function rateLimit(userId: string, max = 30, windowMs = 60_000): boolean {
-  const now = Date.now();
-  const row = hits.get(userId);
-  if (!row || now - row.t > windowMs) {
-    hits.set(userId, { n: 1, t: now });
-    return true;
-  }
-  if (row.n >= max) return false;
-  row.n += 1;
-  return true;
-}
 
 export async function POST(req: Request) {
   const auth = await requireSession();
   if ("response" in auth) return auth.response;
-  if (!rateLimit(auth.user.id)) return jsonError("Too many requests", 429);
+
+  const ip = clientIpFromRequest(req);
+  const rl = checkRateLimit(`ai:${auth.user.id}:${ip}`, 30, 60_000);
+  if (!rl.ok) return jsonError("Too many requests", 429);
 
   const parsed = await parseJsonBody(req, bodySchema);
   if ("response" in parsed) return parsed.response;
+
+  const attachments = (parsed.data.attachments || []) as AiAttachment[];
+  for (const a of attachments) {
+    const err = validateAttachmentLimits(a);
+    if (err) return jsonError(err, 400);
+  }
 
   const access = await requireSiteAccess(parsed.data.siteId, auth.user);
   if ("response" in access) return access.response;
@@ -76,6 +85,9 @@ export async function POST(req: Request) {
     })),
   };
 
+  const attParts = buildAttachmentPromptParts(attachments);
+  const visionOk = modelLikelySupportsVision(settings.model);
+
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
     async start(controller) {
@@ -89,22 +101,39 @@ export async function POST(req: Request) {
         const adapter = getProviderAdapter(settings.provider as AiProviderId);
         send({ type: "step", step: "calling_model", message: `Calling ${settings.provider}…` });
 
+        const userText = [
+          `Site id: ${parsed.data.siteId}`,
+          `Preferred locale: ${parsed.data.locale || content.defaultLocale}`,
+          `User goal:\n${parsed.data.message}`,
+          attParts.textBlocks.length ? `Attachments:\n${attParts.textBlocks.join("\n\n")}` : "",
+          attParts.mediaUrls.length
+            ? `Site media URLs (prefer these in image blocks): ${attParts.mediaUrls.join(", ")}`
+            : "",
+          `Current draft (JSON):\n${JSON.stringify(compact).slice(0, 120_000)}`,
+        ]
+          .filter(Boolean)
+          .join("\n\n");
+
+        let userContent: string | AiContentPart[] = userText;
+        if (visionOk && attParts.imageDataUrls.length) {
+          userContent = [
+            { type: "text", text: userText },
+            ...attParts.imageDataUrls.map(
+              (url): AiContentPart => ({ type: "image_url", image_url: { url } })
+            ),
+          ];
+        }
+
+        const messages: AiChatMessage[] = [
+          { role: "system", content: AI_SYSTEM_PROMPT },
+          { role: "user", content: userContent },
+        ];
+
         const result = await adapter.complete({
           apiKey,
           model: settings.model,
           maxTokens: settings.maxTokens,
-          messages: [
-            { role: "system", content: AI_SYSTEM_PROMPT },
-            {
-              role: "user",
-              content: [
-                `Site id: ${parsed.data.siteId}`,
-                `Preferred locale: ${parsed.data.locale || content.defaultLocale}`,
-                `User goal:\n${parsed.data.message}`,
-                `Current draft (JSON):\n${JSON.stringify(compact).slice(0, 120_000)}`,
-              ].join("\n\n"),
-            },
-          ],
+          messages,
         });
 
         send({ type: "step", step: "parsing", message: "Parsing patches…" });
@@ -126,7 +155,9 @@ export async function POST(req: Request) {
           send({
             type: "error",
             error: "Model returned invalid patches",
-            raw: result.text.slice(0, 1500),
+            ...(process.env.NODE_ENV === "production"
+              ? {}
+              : { raw: result.text.slice(0, 1500) }),
           });
           controller.close();
           return;
@@ -159,6 +190,7 @@ export async function POST(req: Request) {
         });
       } catch (e) {
         const msg = e instanceof Error ? e.message : "AI failed";
+        console.error(e);
         await prisma.aiUsageLog
           .create({
             data: {
@@ -171,7 +203,11 @@ export async function POST(req: Request) {
             },
           })
           .catch(() => null);
-        send({ type: "error", error: msg });
+        // Never stream stack traces to the client
+        send({
+          type: "error",
+          error: process.env.NODE_ENV === "production" ? "AI request failed" : msg.slice(0, 300),
+        });
       } finally {
         controller.close();
       }
