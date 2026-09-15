@@ -17,7 +17,7 @@ import {
   AI_TEXT_MIMES,
   type AiAttachment,
 } from "@/lib/ai/attachments";
-import { KeyRound, Paperclip, Sparkles, Square, X } from "lucide-react";
+import { KeyRound, Paperclip, RefreshCw, Sparkles, Square, X } from "lucide-react";
 
 type Step = { step: string; message: string; at?: string };
 type AttMeta = {
@@ -37,6 +37,12 @@ type ChatMsg = {
 };
 
 type LocalAttachment = AiAttachment & { id: string; previewUrl?: string };
+
+type FailedSendPayload = {
+  text: string;
+  /** Wire payload for /api/ai/chat (no local preview ids) */
+  attachments: AiAttachment[];
+};
 
 function readFileAsText(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -168,6 +174,8 @@ export function AiEditorPanel({
   openRef.current = open;
   const busyRef = useRef(busy);
   busyRef.current = busy;
+  const lastFailedPayloadRef = useRef<FailedSendPayload | null>(null);
+  const [canResend, setCanResend] = useState(false);
 
   const loadStatus = useCallback(async () => {
     try {
@@ -303,13 +311,15 @@ export function AiEditorPanel({
   }
 
   /** After unexpected disconnect: poll chat + reload draft instead of aiError. */
-  async function recoverAfterDisconnect(assistantId: string | null) {
+  async function recoverAfterDisconnect(
+    assistantId: string | null
+  ): Promise<"ok" | "error" | "cancelled" | null> {
     setMessages((m) => [
       ...m,
       { role: "system", text: t("aiRecovering"), status: "partial" },
     ]);
     for (let i = 0; i < 20; i++) {
-      if (userCancelRef.current) return false;
+      if (userCancelRef.current) return null;
       await new Promise((r) => setTimeout(r, 1000));
       try {
         const res = await fetch(`/api/ai/chat?siteId=${encodeURIComponent(siteId)}`);
@@ -348,7 +358,9 @@ export function AiEditorPanel({
               steps: target.steps,
             },
           ]);
-        } else if (target.status === "error") {
+          return "cancelled";
+        }
+        if (target.status === "error") {
           upsertMessage({
             id: target.id,
             role: "error",
@@ -356,21 +368,21 @@ export function AiEditorPanel({
             status: "error",
             steps: target.steps,
           });
-        } else {
-          upsertMessage({
-            id: target.id,
-            role: "assistant",
-            text: target.text || t("aiNoEdits"),
-            status: "ok",
-            steps: target.steps,
-          });
+          return "error";
         }
-        return true;
+        upsertMessage({
+          id: target.id,
+          role: "assistant",
+          text: target.text || t("aiNoEdits"),
+          status: "ok",
+          steps: target.steps,
+        });
+        return "ok";
       } catch {
         /* retry */
       }
     }
-    return false;
+    return null;
   }
 
   async function loadOlder() {
@@ -508,38 +520,105 @@ export function AiEditorPanel({
     }
   }
 
-  async function send() {
-    const message = input.trim();
-    if ((!message && !attachments.length) || busy) return;
+  function markSendFailed() {
+    setCanResend(Boolean(lastFailedPayloadRef.current));
+  }
+
+  function markSendSucceeded() {
+    lastFailedPayloadRef.current = null;
+    setCanResend(false);
+  }
+
+  /** Drop trailing error / partial / cancelled assistant bubbles after the last user turn. */
+  function clearTrailingFailureBubbles() {
+    setMessages((m) => {
+      let lastUser = -1;
+      for (let i = m.length - 1; i >= 0; i--) {
+        if (m[i].role === "user") {
+          lastUser = i;
+          break;
+        }
+      }
+      if (lastUser < 0) return m;
+      const kept = m.slice(0, lastUser + 1);
+      const rest = m.slice(lastUser + 1).filter(
+        (x) =>
+          !(
+            x.role === "error" ||
+            x.status === "error" ||
+            x.status === "partial" ||
+            x.status === "cancelled"
+          )
+      );
+      return [...kept, ...rest];
+    });
+  }
+
+  async function send(opts?: { resend?: boolean }) {
+    const isResend = Boolean(opts?.resend);
+    if (busy) return;
+
+    let message = "";
+    let payloadAttachments: AiAttachment[] = [];
+    let localAtts: AttMeta[] = [];
+
+    if (isResend) {
+      const failed = lastFailedPayloadRef.current;
+      if (!failed) return;
+      message = failed.text.trim();
+      payloadAttachments = failed.attachments;
+      if (!message && !payloadAttachments.length) return;
+      clearTrailingFailureBubbles();
+    } else {
+      message = input.trim();
+      if ((!message && !attachments.length) || busy) return;
+      localAtts = attachments.map((a) => ({
+        id: a.id,
+        name: a.name,
+        type: a.type,
+        previewUrl: a.previewUrl || a.mediaUrl || a.dataUrl || null,
+      }));
+      payloadAttachments = attachments.map((a) => {
+        const { id, previewUrl, ...rest } = a;
+        void id;
+        void previewUrl;
+        return rest;
+      });
+    }
+
     if (!aiAvailable) {
       setKeyOpen(true);
       return;
     }
+
+    const wireMessage =
+      message ||
+      (lang === "ar"
+        ? "راجع المرفقات وطبق التعديلات المناسبة."
+        : "Review attachments and apply suitable edits.");
+
+    lastFailedPayloadRef.current = {
+      text: message,
+      attachments: payloadAttachments,
+    };
+    setCanResend(false);
+
     setBusy(true);
     setDisabledReason(null);
     setSteps([]);
-    const localAtts = attachments.map((a) => ({
-      id: a.id,
-      name: a.name,
-      type: a.type,
-      previewUrl: a.previewUrl || a.mediaUrl || a.dataUrl || null,
-    }));
-    setMessages((m) => [
-      ...m,
-      {
-        role: "user",
-        text: message || (lang === "ar" ? "مرفقات" : "Attachments"),
-        attachmentMeta: localAtts,
-      },
-    ]);
-    setInput("");
-    const payloadAttachments = attachments.map((a) => {
-      const { id, previewUrl, ...rest } = a;
-      void id;
-      void previewUrl;
-      return rest;
-    });
-    setAttachments([]);
+
+    if (!isResend) {
+      setMessages((m) => [
+        ...m,
+        {
+          role: "user",
+          text: message || (lang === "ar" ? "مرفقات" : "Attachments"),
+          attachmentMeta: localAtts,
+        },
+      ]);
+      setInput("");
+      setAttachments([]);
+    }
 
     const ac = new AbortController();
     abortRef.current = ac;
@@ -552,13 +631,10 @@ export function AiEditorPanel({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           siteId,
-          message:
-            message ||
-            (lang === "ar"
-              ? "راجع المرفقات وطبق التعديلات المناسبة."
-              : "Review attachments and apply suitable edits."),
+          message: wireMessage,
           content: contentRef.current,
           locale: contentRef.current.defaultLocale,
+          platformLang: lang === "ar" ? "ar" : "en",
           attachments: payloadAttachments,
         }),
         signal: ac.signal,
@@ -568,6 +644,7 @@ export function AiEditorPanel({
         const data = await res.json().catch(() => ({}));
         setDisabledReason(data.error === "AI_DISABLED" ? t("aiNeedKey") : t("aiError"));
         setAiAvailable(false);
+        markSendFailed();
         setBusy(false);
         return;
       }
@@ -579,8 +656,10 @@ export function AiEditorPanel({
             role: "error",
             text:
               data.error === "QUOTA_EXCEEDED" ? t("aiQuotaExceeded") : data.error || t("aiError"),
+            status: "error",
           },
         ]);
+        markSendFailed();
         setBusy(false);
         return;
       }
@@ -589,6 +668,7 @@ export function AiEditorPanel({
       const decoder = new TextDecoder();
       let buf = "";
       let liveSteps: Step[] = [];
+      let sawTerminal = false;
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
@@ -645,6 +725,9 @@ export function AiEditorPanel({
                 status: appliedN === 0 ? "error" : "ok",
                 steps: finalSteps,
               });
+              if (appliedN === 0) markSendFailed();
+              else markSendSucceeded();
+              sawTerminal = true;
               setBusy(false);
               if (evt.quota) {
                 setQuotaLabel(
@@ -667,6 +750,7 @@ export function AiEditorPanel({
                 status: "cancelled",
                 steps: evt.steps || liveSteps,
               });
+              sawTerminal = true;
               setBusy(false);
             } else if (evt.type === "error") {
               // Prefer clean server error text immediately; keep steps on the bubble.
@@ -678,6 +762,8 @@ export function AiEditorPanel({
                 status: "error",
                 steps: evt.steps || liveSteps,
               });
+              markSendFailed();
+              sawTerminal = true;
               setBusy(false);
               // Keep timeline steps visible with the error message (do not wipe yet)
               if ((evt.steps || liveSteps)?.length) {
@@ -688,6 +774,10 @@ export function AiEditorPanel({
             /* ignore bad SSE */
           }
         }
+      }
+      if (!sawTerminal && !userCancelRef.current) {
+        // Stream ended without result/error — treat as soft failure for resend.
+        markSendFailed();
       }
     } catch (e) {
       const isAbort = (e as Error)?.name === "AbortError";
@@ -708,6 +798,11 @@ export function AiEditorPanel({
             text: t("aiError"),
             status: "error",
           });
+          markSendFailed();
+        } else if (recovered === "ok") {
+          markSendSucceeded();
+        } else if (recovered === "error") {
+          markSendFailed();
         }
       } else {
         const detail =
@@ -749,6 +844,7 @@ export function AiEditorPanel({
             status: "error",
           });
         }
+        markSendFailed();
       }
     } finally {
       abortRef.current = null;
@@ -897,6 +993,24 @@ export function AiEditorPanel({
                   ))}
                 </ol>
               ) : null}
+              {canResend &&
+              !busy &&
+              (m.role === "error" || m.status === "error") &&
+              i === messages.length - 1 ? (
+                <div className="mt-2 flex justify-start">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-8 rounded-full border-rose-500/40 bg-white/70 text-rose-800 hover:bg-white dark:bg-rose-950/40 dark:text-rose-100"
+                    disabled={busy || !aiAvailable}
+                    onClick={() => void send({ resend: true })}
+                  >
+                    <RefreshCw className="h-3.5 w-3.5" aria-hidden />
+                    {t("aiResend")}
+                  </Button>
+                </div>
+              ) : null}
             </div>
           ))}
 
@@ -1036,10 +1150,13 @@ export function AiEditorPanel({
             className="min-h-[88px] rounded-2xl text-sm"
             disabled={busy}
             onKeyDown={(e) => {
-              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-                e.preventDefault();
-                void send();
-              }
+              if (e.key !== "Enter") return;
+              // IME composition: ignore Enter while composing
+              if (e.nativeEvent.isComposing || e.keyCode === 229) return;
+              if (e.shiftKey) return; // newline
+              e.preventDefault();
+              if ((!input.trim() && !attachments.length) || busy) return;
+              void send();
             }}
           />
           <div className="mt-2 flex items-center justify-between gap-2">

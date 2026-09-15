@@ -20,7 +20,10 @@ import {
   type AiContentPart,
   type AiProviderId,
 } from "@/lib/ai/providers";
-import { toUserFacingAiError } from "@/lib/ai/provider-errors";
+import {
+  resolveProviderErrorLang,
+  toUserFacingAiError,
+} from "@/lib/ai/provider-errors";
 import { consumeQuota, getQuotaStatus } from "@/lib/ai/quota";
 import {
   aiAttachmentsField,
@@ -48,6 +51,8 @@ const bodySchema = z.object({
   message: z.string().min(1).max(4000),
   content: siteContentSchema,
   locale: z.string().min(2).max(12).optional(),
+  /** Platform UI language (ar|en) — used for provider error text */
+  platformLang: z.enum(["ar", "en"]).optional(),
   attachments: aiAttachmentsField,
   /** Client message id for cancel/partial tracking */
   clientMessageId: z.string().max(64).optional(),
@@ -138,6 +143,7 @@ export async function POST(req: Request) {
 
   const content = parsed.data.content as SiteContent;
   const locale = parsed.data.locale || content.defaultLocale;
+  const platformLang = resolveProviderErrorLang(parsed.data.platformLang);
   const compact = compactSiteForModel(content, locale);
 
   const thread = await getOrCreateThread(auth.user.id, parsed.data.siteId);
@@ -477,7 +483,7 @@ export async function POST(req: Request) {
         const isAbort =
           (e instanceof Error && e.name === "AbortError") ||
           isAiChatCancelled(assistantPartial.id);
-        const facing = toUserFacingAiError(e, { maxLen: 300 });
+        const facing = toUserFacingAiError(e, { maxLen: 300, lang: platformLang });
         const msg = facing.message;
         if (!isAbort) console.error(e, facing.code || "", facing.raw?.slice(0, 200));
         await prisma.aiUsageLog

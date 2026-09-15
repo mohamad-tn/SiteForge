@@ -1,14 +1,23 @@
 /**
  * Parse provider HTTP errors into short user-facing messages.
  * Never dump raw JSON bodies to the UI.
+ * Messages follow the current platform language (ar | en); English is the default.
  */
+
+import {
+  isPlatformLang,
+  tPlatform,
+  type PlatformLang,
+} from "@/lib/platform-i18n";
 
 export type AiProviderId = "openai" | "anthropic" | "google" | "xai";
 
+export type ProviderErrorLang = PlatformLang;
+
 export type ParsedProviderError = {
-  /** Short bilingual (or locale-aware) message for the UI */
+  /** Short locale-aware message for the UI */
   message: string;
-  /** Stable code for logs */
+  /** Stable code for logs / re-formatting */
   code: string;
   status: number;
   /** Provider message field only, stripped of noise */
@@ -39,6 +48,14 @@ export class ProviderError extends Error {
 
 const MAX_USER_MSG = 300;
 
+const CODE_TO_I18N: Record<string, string> = {
+  key_invalid: "aiErrKeyInvalid",
+  quota_exceeded: "aiErrQuota",
+  rate_limited: "aiErrRateLimit",
+  bad_request: "aiErrBadRequest",
+  provider_unavailable: "aiErrProviderUnavailable",
+};
+
 function stripNoise(s: string): string {
   return s
     .replace(/https?:\/\/\S+/gi, "")
@@ -47,72 +64,57 @@ function stripNoise(s: string): string {
     .slice(0, 220);
 }
 
-function bilingual(en: string, ar: string, detail?: string): string {
-  const d = detail ? ` (${stripNoise(detail)})` : "";
-  const msg = `${en}${d} / ${ar}${d}`;
+export function resolveProviderErrorLang(
+  lang?: string | null
+): ProviderErrorLang {
+  return isPlatformLang(lang) ? lang : "en";
+}
+
+/**
+ * Format a stable provider error code into a single-language UI string.
+ * Prefer this over bilingual inline maps.
+ */
+export function formatProviderError(
+  code: string,
+  opts?: {
+    lang?: string | null;
+    status?: number;
+    detail?: string;
+  }
+): string {
+  const lang = resolveProviderErrorLang(opts?.lang);
+  const i18nKey = CODE_TO_I18N[code] || "aiErrGeneric";
+  let base = tPlatform(lang, i18nKey);
+  if (i18nKey === "aiErrGeneric") {
+    const status = opts?.status ?? (code.startsWith("http_") ? Number(code.slice(5)) : 0);
+    base = base.replace("{status}", String(status || "?"));
+  }
+  const detail = opts?.detail ? stripNoise(opts.detail) : "";
+  const msg = detail ? `${base} (${detail})` : base;
   return msg.slice(0, MAX_USER_MSG);
 }
 
 function mapStatusCode(
   status: number,
   providerMessage?: string
-): { code: string; message: string } {
+): { code: string } {
   if (status === 401 || status === 403) {
-    return {
-      code: "key_invalid",
-      message: bilingual(
-        "API key invalid or unauthorized",
-        "مفتاح API غير صالح أو غير مصرّح",
-        providerMessage
-      ),
-    };
+    return { code: "key_invalid" };
   }
   if (status === 429) {
     const quotaLike =
       /quota|exceeded|billing|rate.?limit|resource.?exhausted/i.test(
         providerMessage || ""
       );
-    return {
-      code: quotaLike ? "quota_exceeded" : "rate_limited",
-      message: bilingual(
-        quotaLike
-          ? "Quota or rate limit exceeded"
-          : "Too many requests — try again shortly",
-        quotaLike
-          ? "تم تجاوز الحصة أو حد المعدل"
-          : "طلبات كثيرة — أعد المحاولة بعد قليل",
-        providerMessage
-      ),
-    };
+    return { code: quotaLike ? "quota_exceeded" : "rate_limited" };
   }
   if (status === 400 || status === 422) {
-    return {
-      code: "bad_request",
-      message: bilingual(
-        "Bad request to the AI provider",
-        "طلب غير صالح لمزوّد الذكاء الاصطناعي",
-        providerMessage
-      ),
-    };
+    return { code: "bad_request" };
   }
   if (status >= 500 && status < 600) {
-    return {
-      code: "provider_unavailable",
-      message: bilingual(
-        "AI provider temporarily unavailable",
-        "مزوّد الذكاء الاصطناعي غير متاح مؤقتاً",
-        providerMessage
-      ),
-    };
+    return { code: "provider_unavailable" };
   }
-  return {
-    code: `http_${status}`,
-    message: bilingual(
-      `AI provider error (${status})`,
-      `خطأ من مزوّد الذكاء الاصطناعي (${status})`,
-      providerMessage
-    ),
-  };
+  return { code: `http_${status}` };
 }
 
 /** Extract human message from known provider JSON shapes. */
@@ -120,6 +122,7 @@ export function extractProviderMessage(
   provider: AiProviderId | string,
   body: string
 ): string | undefined {
+  void provider;
   const trimmed = (body || "").trim();
   if (!trimmed) return undefined;
   try {
@@ -131,8 +134,7 @@ export function extractProviderMessage(
         return stripNoise(err.message);
       }
     }
-    // Anthropic: { type, error: { type, message } } — same nested path often
-    // OpenAI / xAI: { error: { message, type, code } }
+    // Anthropic / OpenAI / xAI nested or flat message
     if (typeof json.message === "string" && json.message.trim()) {
       return stripNoise(json.message);
     }
@@ -151,13 +153,19 @@ export function extractProviderMessage(
 export function parseProviderError(
   provider: AiProviderId | string,
   status: number,
-  body: string
+  body: string,
+  lang: string | null = "en"
 ): ParsedProviderError {
   const raw = (body || "").slice(0, 2000);
   const providerMessage = extractProviderMessage(provider, body);
   const mapped = mapStatusCode(status, providerMessage);
+  const message = formatProviderError(mapped.code, {
+    lang,
+    status,
+    detail: providerMessage,
+  });
   return {
-    message: mapped.message.slice(0, MAX_USER_MSG),
+    message: message.slice(0, MAX_USER_MSG),
     code: mapped.code,
     status,
     providerMessage,
@@ -169,38 +177,47 @@ export function parseProviderError(
 export function throwProviderHttpError(
   provider: AiProviderId | string,
   status: number,
-  body: string
+  body: string,
+  lang: string | null = "en"
 ): never {
-  const parsed = parseProviderError(provider, status, body);
+  const parsed = parseProviderError(provider, status, body, lang);
   throw new ProviderError(parsed, provider);
 }
 
 /** Normalize any thrown value into a short UI-safe string (+ optional code for logs). */
 export function toUserFacingAiError(
   err: unknown,
-  opts?: { maxLen?: number }
+  opts?: { maxLen?: number; lang?: string | null }
 ): { message: string; code?: string; raw?: string } {
   const max = opts?.maxLen ?? MAX_USER_MSG;
+  const lang = resolveProviderErrorLang(opts?.lang);
   if (err instanceof ProviderError) {
+    const message = formatProviderError(err.code, {
+      lang,
+      status: err.status,
+      detail: err.providerMessage,
+    });
     return {
-      message: err.message.slice(0, max),
+      message: message.slice(0, max),
       code: err.code,
       raw: err.raw,
     };
   }
   if (err instanceof Error) {
     // Already-clean Error (adapters may set .message to user string)
-    const msg = err.message || "AI request failed";
+    const msg = err.message || formatProviderError("generic", { lang, status: 500 });
     // If message still looks like dumped JSON, scrub it
     if (/^\s*\{[\s\S]*"error"/.test(msg) || /error\s+\d+:\s*\{/.test(msg)) {
       const statusMatch = /(?:error|status)\s+(\d{3})/i.exec(msg);
       const status = statusMatch ? Number(statusMatch[1]) : 500;
       const bodyStart = msg.indexOf("{");
       const body = bodyStart >= 0 ? msg.slice(bodyStart) : msg;
-      const parsed = parseProviderError("unknown", status, body);
+      const parsed = parseProviderError("unknown", status, body, lang);
       return { message: parsed.message.slice(0, max), code: parsed.code, raw: msg.slice(0, 2000) };
     }
     return { message: msg.slice(0, max) };
   }
-  return { message: "AI request failed / تعذّر طلب الذكاء الاصطناعي".slice(0, max) };
+  return {
+    message: formatProviderError("generic", { lang, status: 500 }).slice(0, max),
+  };
 }
