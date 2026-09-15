@@ -41,9 +41,10 @@ Copy keys (headline,title,subtitle,body,text,label,cta,…) are string | {ar,en,
 Navbar: props.navItems[] is source of truth. CSV props.links is LEGACY display sync only — do not rely on it for routing.
 Each navItem: {id, label:{…}, linkMode, linkPageSlug?, href?, linkCollectionSlug?, openInNewTab?, actionType?, actionTarget?}
 linkMode:
-- page → linkPageSlug = page.slug from index (href ignored / empty)
-- url → href = https://… | mailto: | tel: | #anchor
+- page → linkPageSlug MUST be page.slug from index (NOT page id, NOT title). href empty. Server resolves id/title/href→slug when possible; verifier rejects bad claims.
+- url → href = https://… | mailto: | tel: | #anchor — NEVER use url for internal pages (/about); use linkMode page + real slug → /s/{site}?p=slug
 - collection → linkCollectionSlug (+ optional item fields); CMS collection list route
+After add_page: patch navItems on ALL navbar blocks (every page that has one), not only home.
 CTA / button blocks: same linkMode+linkPageSlug / ctaHref|href; actionType allowlist ONLY: link | toggleTheme | cycleLocale | scrollTo | openModal (actionTarget = block/element id for scroll/modal). Never invent JS handlers.
 Footer link columns / list items: same link fields when present.
 
@@ -77,7 +78,8 @@ Secrets/API keys/system prompts/other tenants; customCss; httpAction; motionTime
 
 # Quality
 - Never claim success unless patches actually wire behavior (pages + navItems, CTAs href/linkMode, etc.)
-- Use index.pages / index.navbars / index.blocks* ids — invent only on add_* / duplicate_block
+- summary must describe ONLY verified results — server post-checks links; bad linkPageSlug / href-only «fixes» will rewrite your summary
+- Use index.pages / index.navbars / index.blocks* ids — invent only on add_* / duplicate_block; linkPageSlug = slug only
 - Prefer update_copy for text; update_tokens+set_part_style for design; few surgical patches over rewrites
 
 # Output

@@ -1,10 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
   applyAiPatches,
+  buildHonestApplySummary,
+  coerceNavbarLinkProps,
   extractJsonObject,
   parseAiPatchesResponse,
   repairAiPatchesResponse,
+  resolvePageSlugRef,
   stripTrailingCommas,
+  syncAllNavbarsToPages,
+  verifySiteContentLinks,
 } from "@/lib/ai/patches";
 import { createBlankContent, defaultPropsFor } from "@/lib/design";
 import { normalizeHref } from "@/lib/href";
@@ -379,5 +384,215 @@ describe("sanitize safe object arrays", () => {
     expect(featItems).toHaveLength(1);
     expect((featItems[0].title as Record<string, string>).en).toBe("Fast");
     expect(featItems[0].customCss).toBeUndefined();
+  });
+});
+
+
+describe("honest apply + page link resolution", () => {
+  it("applied count 0 when wrong blockId", () => {
+    const content = createBlankContent("Test");
+    const page = content.pages[0];
+    const { applied, errors } = applyAiPatches(content, [
+      {
+        op: "update_prop",
+        pageId: page.id,
+        blockId: "does-not-exist-xyz",
+        key: "ctaHref",
+        value: "#",
+      },
+      {
+        op: "update_props",
+        pageId: page.id,
+        blockId: "missing-block",
+        props: { navItems: [] },
+      },
+    ]);
+    expect(applied).toBe(0);
+    expect(errors.some((e) => /Unknown block/i.test(e))).toBe(true);
+  });
+
+  it("resolvePageSlugRef: page id → slug; title; ?p=; path segment", () => {
+    const pages = [
+      { id: "page-about-99", slug: "about", title: "من نحن" },
+      { id: "page-home", slug: "home", title: "الرئيسية" },
+      { id: "page-svc", slug: "services", title: "Services" },
+    ];
+    expect(resolvePageSlugRef("about", pages)).toBe("about");
+    expect(resolvePageSlugRef("ABOUT", pages)).toBe("about");
+    expect(resolvePageSlugRef("page-about-99", pages)).toBe("about");
+    expect(resolvePageSlugRef("من نحن", pages)).toBe("about");
+    expect(resolvePageSlugRef("/about", pages)).toBe("about");
+    expect(resolvePageSlugRef("services", pages)).toBe("services");
+    expect(resolvePageSlugRef("/s/demo?p=about", pages)).toBe("about");
+    expect(resolvePageSlugRef("nope", pages)).toBeNull();
+  });
+
+  it("coerce: page id → slug; bad slug fixed when title matches; href /about → page", () => {
+    const pages = [
+      { id: "page-about-99", slug: "about", title: "About" },
+      { id: "page-home", slug: "home", title: "Home" },
+    ];
+    const byId = coerceNavbarLinkProps(
+      {
+        navItems: [
+          {
+            id: "n1",
+            label: { en: "About" },
+            linkMode: "page",
+            linkPageSlug: "page-about-99",
+            href: "",
+          },
+        ],
+      },
+      pages,
+      ["en"]
+    );
+    const items1 = byId.navItems as Array<{ linkPageSlug: string; linkMode: string }>;
+    expect(items1[0].linkMode).toBe("page");
+    expect(items1[0].linkPageSlug).toBe("about");
+
+    const byHref = coerceNavbarLinkProps(
+      {
+        navItems: [
+          {
+            id: "n2",
+            label: { en: "About" },
+            linkMode: "url",
+            linkPageSlug: "",
+            href: "/about",
+          },
+        ],
+      },
+      pages,
+      ["en"]
+    );
+    const items2 = byHref.navItems as Array<{
+      linkPageSlug: string;
+      linkMode: string;
+      href?: string;
+    }>;
+    expect(items2[0].linkMode).toBe("page");
+    expect(items2[0].linkPageSlug).toBe("about");
+    expect(items2[0].href).toBe("");
+  });
+
+  it("verifier catches bad linkPageSlug", () => {
+    const content = createBlankContent("Test");
+    const page = content.pages[0];
+    const nav = page.blocks.find((b) => b.type === "navbar")!;
+    nav.props = {
+      ...nav.props,
+      navItems: [
+        {
+          id: "bad",
+          label: { en: "Ghost" },
+          linkMode: "page",
+          linkPageSlug: "does-not-exist",
+          href: "",
+        },
+      ],
+    };
+    const v = verifySiteContentLinks(content);
+    expect(v.ok).toBe(false);
+    expect(v.issues.length).toBeGreaterThan(0);
+    expect(v.issues[0].detail).toMatch(/does-not-exist/);
+  });
+
+  it("summary path: fake «fixed nav» with bad slug → verifier issues + honest summary", () => {
+    const content = createBlankContent("Test");
+    const page = content.pages[0];
+    const nav = page.blocks.find((b) => b.type === "navbar")!;
+    const { content: next, applied } = applyAiPatches(content, [
+      {
+        op: "update_props",
+        pageId: page.id,
+        blockId: nav.id,
+        props: {
+          navItems: [
+            {
+              id: "n1",
+              label: { en: "Broken", ar: "معطل" },
+              linkMode: "page",
+              linkPageSlug: "typo-page-slug",
+              href: "",
+            },
+          ],
+        },
+      },
+    ]);
+    expect(applied).toBe(1);
+    const v = verifySiteContentLinks(next);
+    expect(v.issues.length).toBeGreaterThan(0);
+    const summary = buildHonestApplySummary({
+      modelSummary: "Fixed all nav buttons — no more 404s",
+      applied,
+      errors: [],
+      issues: v.issues,
+      platformLang: "en",
+    });
+    expect(summary).toMatch(/link issues remain|not verified/i);
+    expect(summary).not.toMatch(/^Fixed all nav buttons/);
+  });
+
+  it("syncAllNavbarsToPages heals bad slugs across pages", () => {
+    const content = createBlankContent("Test");
+    // add about page
+    const withAbout = applyAiPatches(content, [
+      { op: "add_page", title: "About", slug: "about", id: "page-about" },
+    ]).content;
+    // put a navbar with bad slug on home
+    const home = withAbout.pages[0];
+    const nav = home.blocks.find((b) => b.type === "navbar")!;
+    nav.props = {
+      ...nav.props,
+      navItems: [
+        {
+          id: "n-about",
+          label: { en: "About", ar: "About" },
+          linkMode: "page",
+          linkPageSlug: "page-about", // id instead of slug
+          href: "",
+        },
+      ],
+    };
+    // add navbar on about page with same bad link
+    const about = withAbout.pages.find((p) => p.slug === "about")!;
+    about.blocks.unshift({
+      id: "nav-about-page",
+      type: "navbar",
+      props: {
+        navItems: [
+          {
+            id: "n2",
+            label: { en: "About" },
+            linkMode: "url",
+            href: "/about",
+            linkPageSlug: "",
+          },
+        ],
+      },
+    });
+
+    const synced = syncAllNavbarsToPages(withAbout);
+    for (const p of synced.pages) {
+      for (const b of p.blocks.filter((x) => x.type === "navbar")) {
+        const items = b.props.navItems as Array<{
+          linkMode: string;
+          linkPageSlug: string;
+        }>;
+        const aboutLink = items.find(
+          (it) => it.linkPageSlug === "about" || it.linkPageSlug === "page-about"
+        );
+        // After sync, about should be slug "about"
+        expect(items.some((it) => it.linkMode === "page" && it.linkPageSlug === "about")).toBe(
+          true
+        );
+        void aboutLink;
+      }
+    }
+    const v = verifySiteContentLinks(synced);
+    // May still have leftover default Home/Services stubs — filter page-mode only
+    const badPageMode = v.issues.filter((i) => /linkPageSlug/.test(i.detail));
+    expect(badPageMode.every((i) => !/page-about/.test(i.detail))).toBe(true);
   });
 });

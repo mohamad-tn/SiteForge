@@ -198,66 +198,211 @@ function sanitizeNavItem(item: unknown, index: number): NavItem | null {
   return nav;
 }
 
-/** If model only set CSV `links`, merge into navItems; match page slugs → linkMode page. */
+export type PageSlugRef = { id: string; slug: string; title: string };
+
+/** Normalize title/label for fuzzy page matching (ar/en). */
+export function normalizePageTitleKey(raw: string): string {
+  return raw
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^\p{L}\p{N}]+/gu, "")
+    .trim();
+}
+
+/**
+ * Resolve a model-supplied page target to a real page.slug.
+ * Matches: exact slug (ci), page id, normalized title, href path last segment / ?p= query.
+ */
+export function resolvePageSlugRef(
+  raw: string | null | undefined,
+  pages: PageSlugRef[]
+): string | null {
+  if (raw == null || typeof raw !== "string") return null;
+  let candidate = raw.trim();
+  if (!candidate) return null;
+
+  // ?p=slug (absolute or relative)
+  if (/[?&]p=/.test(candidate)) {
+    try {
+      const u = candidate.includes("://")
+        ? new URL(candidate)
+        : new URL(candidate, "https://siteforge.local");
+      const q = u.searchParams.get("p");
+      if (q) candidate = q;
+    } catch {
+      const m = /[?&]p=([^&/#]+)/.exec(candidate);
+      if (m) candidate = decodeURIComponent(m[1]);
+    }
+  } else if (candidate.includes("/") || candidate.startsWith("/")) {
+    const path = candidate.split(/[?#]/)[0];
+    const segs = path.split("/").filter(Boolean);
+    // /s/{siteSlug} alone is not a page slug
+    if (segs.length === 2 && segs[0] === "s") {
+      /* keep as-is; unlikely a page ref */
+    } else if (segs.length) {
+      candidate = segs[segs.length - 1];
+    }
+  }
+
+  const lower = candidate.toLowerCase();
+  const bySlug = pages.find((p) => p.slug.toLowerCase() === lower);
+  if (bySlug) return bySlug.slug;
+
+  const byId = pages.find(
+    (p) => p.id === candidate || p.id.toLowerCase() === lower
+  );
+  if (byId) return byId.slug;
+
+  const norm = normalizePageTitleKey(candidate);
+  if (norm) {
+    const byTitle = pages.find(
+      (p) => normalizePageTitleKey(p.title) === norm
+    );
+    if (byTitle) return byTitle.slug;
+  }
+
+  return null;
+}
+
+/** Relative / bare paths that look like internal page targets (not mailto/https/#). */
+export function looksLikeInternalPagePath(href: string): boolean {
+  const h = (href || "").trim();
+  if (!h || h === "#") return false;
+  if (h.startsWith("#")) return false;
+  if (/^(https?:|mailto:|tel:|javascript:)/i.test(h)) return false;
+  if (h.startsWith("/s/")) return /[?&]p=/.test(h) ? false : true;
+  if (h.startsWith("/")) return true;
+  // bare word / slug-like
+  return /^[\w\u0600-\u06ff-]+$/i.test(h);
+}
+
+function pagesAsRefs(
+  pages: Array<{ id: string; slug: string; title: string }>
+): PageSlugRef[] {
+  return pages.map((p) => ({ id: p.id, slug: p.slug, title: p.title }));
+}
+
+function coerceOneNavItem(it: NavItem, pages: PageSlugRef[]): NavItem {
+  const slugRaw = (it.linkPageSlug || "").trim();
+  const hrefRaw = (it.href || "").trim();
+  const linkMode = (it.linkMode || "url").trim() || "url";
+
+  if (linkMode === "page") {
+    const resolved =
+      resolvePageSlugRef(slugRaw, pages) ||
+      resolvePageSlugRef(hrefRaw, pages);
+    if (resolved) {
+      return { ...it, linkMode: "page", linkPageSlug: resolved, href: "" };
+    }
+    // Keep but unresolved — verifier will warn
+    return { ...it, linkMode: "page", linkPageSlug: slugRaw, href: hrefRaw };
+  }
+
+  // url / empty: promote internal href or slug-like targets to page mode
+  const resolved =
+    resolvePageSlugRef(slugRaw, pages) ||
+    (looksLikeInternalPagePath(hrefRaw)
+      ? resolvePageSlugRef(hrefRaw, pages)
+      : null);
+  if (resolved) {
+    return { ...it, linkMode: "page", linkPageSlug: resolved, href: "" };
+  }
+  return it;
+}
+
+/**
+ * Coerce navbar navItems/links to SiteForge page routing.
+ * Accepts full pages (preferred) or legacy string[] of slugs.
+ */
 export function coerceNavbarLinkProps(
   props: Record<string, unknown>,
-  pageSlugs: string[],
+  pagesOrSlugs: PageSlugRef[] | string[],
   locales: string[]
 ): Record<string, unknown> {
-  const slugSet = new Set(pageSlugs.map((s) => s.toLowerCase()));
+  const pages: PageSlugRef[] = Array.isArray(pagesOrSlugs) &&
+    pagesOrSlugs.length > 0 &&
+    typeof pagesOrSlugs[0] === "string"
+    ? (pagesOrSlugs as string[]).map((slug) => ({
+        id: slug,
+        slug,
+        title: slug,
+      }))
+    : pagesAsRefs(pagesOrSlugs as PageSlugRef[]);
   const out = { ...props };
   const locs = locales.length ? locales : ["ar"];
 
-  if (Array.isArray(out.navItems)) {
-    const items = (out.navItems as unknown[])
+  // Also coerce navbar CTA fields
+  const withCta = coerceBlockLinkFields(out, pages);
+
+  if (Array.isArray(withCta.navItems)) {
+    const items = (withCta.navItems as unknown[])
       .map((it, i) => sanitizeNavItem(it, i))
       .filter((x): x is NavItem => !!x)
-      .map((it) => {
-        const slug = (it.linkPageSlug || "").trim();
-        const hrefSlug = (it.href || "").replace(/^\//, "").split(/[?#]/)[0];
-        let linkMode = it.linkMode || "url";
-        let linkPageSlug = slug;
-        if (linkMode === "page" && linkPageSlug) {
-          return { ...it, linkMode: "page" as const, linkPageSlug, href: it.href || "" };
-        }
-        const candidate = linkPageSlug || hrefSlug;
-        if (candidate && slugSet.has(candidate.toLowerCase())) {
-          linkMode = "page";
-          linkPageSlug =
-            pageSlugs.find((s) => s.toLowerCase() === candidate.toLowerCase()) ||
-            candidate;
-          return { ...it, linkMode, linkPageSlug, href: "" };
-        }
-        return it;
-      });
-    out.navItems = items;
-    out.links = syncLinksCsvFromNavItems(items, locs);
-    return out;
+      .map((it) => coerceOneNavItem(it, pages));
+    withCta.navItems = items;
+    withCta.links = syncLinksCsvFromNavItems(items, locs);
+    return withCta;
   }
 
-  if (out.links != null && !Array.isArray(out.navItems)) {
-    const items = ensureNavItems(out, locs).map((it) => {
+  if (withCta.links != null && !Array.isArray(withCta.navItems)) {
+    const items = ensureNavItems(withCta, locs).map((it) => {
+      const healed = coerceOneNavItem(it, pages);
+      if (healed.linkMode === "page" && healed.linkPageSlug) return healed;
       const labelStr =
         typeof it.label === "string"
           ? it.label
           : Object.values(it.label || {})[0] || "";
-      const guess = String(labelStr)
-        .toLowerCase()
-        .replace(/\s+/g, "-")
-        .replace(/[^a-z0-9\u0600-\u06ff-]/g, "");
-      const match = pageSlugs.find(
-        (s) =>
-          s.toLowerCase() === guess ||
-          s.toLowerCase().includes(guess) ||
-          (guess.length > 2 && guess.includes(s.toLowerCase()))
+      const byTitle = pages.find(
+        (p) =>
+          normalizePageTitleKey(p.title) ===
+          normalizePageTitleKey(String(labelStr))
       );
-      if (match) {
-        return { ...it, linkMode: "page", linkPageSlug: match, href: "" };
+      if (byTitle) {
+        return { ...it, linkMode: "page", linkPageSlug: byTitle.slug, href: "" };
       }
-      return it;
+      return healed;
     });
-    out.navItems = items;
-    out.links = syncLinksCsvFromNavItems(items, locs);
+    withCta.navItems = items;
+    withCta.links = syncLinksCsvFromNavItems(items, locs);
+  }
+  return withCta;
+}
+
+/** Rewrite CTA/button linkMode+slug/href onto SiteForge page routing when possible. */
+export function coerceBlockLinkFields(
+  props: Record<string, unknown>,
+  pages: PageSlugRef[]
+): Record<string, unknown> {
+  const out = { ...props };
+  const mode = typeof out.linkMode === "string" ? out.linkMode : "";
+  const slugRaw =
+    typeof out.linkPageSlug === "string" ? out.linkPageSlug.trim() : "";
+  const hrefKeys = ["href", "ctaHref", "buttonHref"] as const;
+  let hrefRaw = "";
+  for (const k of hrefKeys) {
+    if (typeof out[k] === "string" && (out[k] as string).trim()) {
+      hrefRaw = (out[k] as string).trim();
+      break;
+    }
+  }
+
+  const wantsPage =
+    mode === "page" ||
+    !!slugRaw ||
+    looksLikeInternalPagePath(hrefRaw);
+
+  if (!wantsPage) return out;
+
+  const resolved =
+    resolvePageSlugRef(slugRaw, pages) ||
+    resolvePageSlugRef(hrefRaw, pages);
+  if (resolved) {
+    out.linkMode = "page";
+    out.linkPageSlug = resolved;
+    for (const k of hrefKeys) {
+      if (k in out) out[k] = "";
+    }
   }
   return out;
 }
@@ -408,6 +553,49 @@ function mergeTokens(base: DesignTokens, patch: Record<string, unknown>): Design
   return designTokensSchema.parse(next);
 }
 
+
+function findBlock(
+  content: SiteContent,
+  pageId: string,
+  blockId: string
+): Block | undefined {
+  const page = content.pages.find((p) => p.id === pageId);
+  return page?.blocks.find((b) => b.id === blockId);
+}
+
+function blockPropsSnapshot(
+  content: SiteContent,
+  pageId: string,
+  blockId: string
+): string | null {
+  const b = findBlock(content, pageId, blockId);
+  return b ? JSON.stringify(b.props) : null;
+}
+
+function pageSnapshot(content: SiteContent, pageId: string): string | null {
+  const p = content.pages.find((x) => x.id === pageId);
+  return p ? JSON.stringify(p) : null;
+}
+
+function finalizeBlockLinkProps(
+  blockType: string,
+  props: Record<string, unknown>,
+  pages: PageSlugRef[],
+  locales: string[]
+): Record<string, unknown> {
+  let next = props;
+  if (
+    blockType === "navbar" ||
+    "navItems" in props ||
+    "links" in props
+  ) {
+    next = coerceNavbarLinkProps(next, pages, locales);
+  } else {
+    next = coerceBlockLinkFields(next, pages);
+  }
+  return next;
+}
+
 export function applyAiPatches(
   content: SiteContent,
   patches: AiPatch[]
@@ -435,46 +623,76 @@ export function applyAiPatches(
       }
 
       if (parsed.op === "update_prop") {
+        if (!findBlock(next, parsed.pageId, parsed.blockId)) {
+          errors.push(`Unknown block ${parsed.blockId}`);
+          continue;
+        }
         const clean = sanitizePropValue(parsed.key, parsed.value);
         if (clean === undefined) {
           errors.push(`Blocked prop ${parsed.key}`);
           continue;
         }
-        const pageSlugs = next.pages.map((p) => p.slug);
+        const before = blockPropsSnapshot(next, parsed.pageId, parsed.blockId);
+        const pageRefs = pagesAsRefs(next.pages);
+        const locs = next.locales || ["ar"];
         next = mapBlock(next, parsed.pageId, parsed.blockId, (b) => {
           let props: Record<string, unknown> = { ...b.props, [parsed.key]: clean };
+          const linkKeys = new Set([
+            "navItems",
+            "links",
+            "linkMode",
+            "linkPageSlug",
+            "href",
+            "ctaHref",
+            "buttonHref",
+          ]);
           if (
-            b.type === "navbar" &&
-            (parsed.key === "navItems" || parsed.key === "links")
+            b.type === "navbar" ||
+            linkKeys.has(parsed.key) ||
+            "navItems" in props ||
+            "links" in props
           ) {
-            props = coerceNavbarLinkProps(props, pageSlugs, next.locales || ["ar"]);
+            props = finalizeBlockLinkProps(b.type, props, pageRefs, locs);
           }
           return { ...b, props };
         });
+        const after = blockPropsSnapshot(next, parsed.pageId, parsed.blockId);
+        if (before === after) {
+          errors.push(`Skipped update_prop on ${parsed.blockId}: no effective change`);
+          continue;
+        }
         applied += 1;
       } else if (parsed.op === "update_props") {
-        const props = {
-          ...(((page!).blocks.find((b) => b.id === parsed.blockId)?.props ||
-            {}) as Record<string, unknown>),
-        };
+        const blk = findBlock(next, parsed.pageId, parsed.blockId);
+        if (!blk) {
+          errors.push(`Unknown block ${parsed.blockId}`);
+          continue;
+        }
+        const before = blockPropsSnapshot(next, parsed.pageId, parsed.blockId);
+        const props = { ...(blk.props as Record<string, unknown>) };
         for (const [k, v] of Object.entries(parsed.props)) {
           const clean = sanitizePropValue(k, v);
           if (clean !== undefined) props[k] = clean;
         }
-        const blk = page!.blocks.find((b) => b.id === parsed.blockId);
-        const pageSlugs = next.pages.map((p) => p.slug);
-        const finalProps =
-          blk?.type === "navbar" ||
-          "navItems" in parsed.props ||
-          "links" in parsed.props
-            ? coerceNavbarLinkProps(props, pageSlugs, next.locales || ["ar"])
-            : props;
+        const pageRefs = pagesAsRefs(next.pages);
+        const locs = next.locales || ["ar"];
+        const finalProps = finalizeBlockLinkProps(blk.type, props, pageRefs, locs);
         next = mapBlock(next, parsed.pageId, parsed.blockId, (b) => ({
           ...b,
           props: finalProps,
         }));
+        const after = blockPropsSnapshot(next, parsed.pageId, parsed.blockId);
+        if (before === after) {
+          errors.push(`Skipped update_props on ${parsed.blockId}: no effective change`);
+          continue;
+        }
         applied += 1;
       } else if (parsed.op === "set_part_style") {
+        if (!findBlock(next, parsed.pageId, parsed.blockId)) {
+          errors.push(`Unknown block ${parsed.blockId}`);
+          continue;
+        }
+        const before = blockPropsSnapshot(next, parsed.pageId, parsed.blockId);
         const styles: PartStyle = {};
         for (const [k, v] of Object.entries(parsed.styles)) {
           if (typeof v === "string") (styles as Record<string, string>)[k] = v.slice(0, 120);
@@ -483,6 +701,11 @@ export function applyAiPatches(
           ...b,
           props: setPartStyles(b.props as Record<string, unknown>, parsed.part, styles),
         }));
+        const after = blockPropsSnapshot(next, parsed.pageId, parsed.blockId);
+        if (before === after) {
+          errors.push(`Skipped set_part_style on ${parsed.blockId}: no effective change`);
+          continue;
+        }
         applied += 1;
       } else if (parsed.op === "add_block") {
         const type = parsed.type as BlockType;
@@ -490,13 +713,19 @@ export function applyAiPatches(
           parsed.id && /^[a-zA-Z0-9_-]{4,40}$/.test(parsed.id)
             ? parsed.id
             : `ai-${Math.random().toString(36).slice(2, 10)}`;
-        const props = { ...defaultPropsFor(type) };
+        let props = { ...defaultPropsFor(type) };
         if (parsed.props) {
           for (const [k, v] of Object.entries(parsed.props)) {
             const clean = sanitizePropValue(k, v);
             if (clean !== undefined) props[k] = clean;
           }
         }
+        props = finalizeBlockLinkProps(
+          type,
+          props,
+          pagesAsRefs(next.pages),
+          next.locales || ["ar"]
+        );
         const block = blockSchema.parse({ id, type, props });
         next = {
           ...next,
@@ -562,6 +791,11 @@ export function applyAiPatches(
         };
         applied += 1;
       } else if (parsed.op === "update_copy") {
+        if (!findBlock(next, parsed.pageId, parsed.blockId)) {
+          errors.push(`Unknown block ${parsed.blockId}`);
+          continue;
+        }
+        const before = blockPropsSnapshot(next, parsed.pageId, parsed.blockId);
         next = mapBlock(next, parsed.pageId, parsed.blockId, (b) => {
           const props = { ...(b.props as Record<string, unknown>) };
           const prev = props[parsed.key];
@@ -575,6 +809,11 @@ export function applyAiPatches(
           props[parsed.key] = map;
           return { ...b, props };
         });
+        const after = blockPropsSnapshot(next, parsed.pageId, parsed.blockId);
+        if (before === after) {
+          errors.push(`Skipped update_copy on ${parsed.blockId}: no effective change`);
+          continue;
+        }
         applied += 1;
       } else if (parsed.op === "add_page") {
         const slug = sanitizeSlug(parsed.slug);
@@ -628,12 +867,18 @@ export function applyAiPatches(
         next = { ...next, pages: next.pages.filter((p) => p.id !== parsed.pageId) };
         applied += 1;
       } else if (parsed.op === "rename_page") {
+        const before = pageSnapshot(next, parsed.pageId);
         next = {
           ...next,
           pages: next.pages.map((p) =>
             p.id === parsed.pageId ? { ...p, title: parsed.title.slice(0, 120) } : p
           ),
         };
+        const after = pageSnapshot(next, parsed.pageId);
+        if (before === after) {
+          errors.push(`Skipped rename_page on ${parsed.pageId}: no effective change`);
+          continue;
+        }
         applied += 1;
       } else if (parsed.op === "set_page_slug") {
         const slug = sanitizeSlug(parsed.slug);
@@ -734,6 +979,11 @@ export function applyAiPatches(
         next = { ...next, defaultLocale: loc };
         applied += 1;
       } else if (parsed.op === "set_block_flags") {
+        if (!findBlock(next, parsed.pageId, parsed.blockId)) {
+          errors.push(`Unknown block ${parsed.blockId}`);
+          continue;
+        }
+        const before = blockPropsSnapshot(next, parsed.pageId, parsed.blockId);
         next = mapBlock(next, parsed.pageId, parsed.blockId, (b) => {
           const props = { ...(b.props as Record<string, unknown>) };
           if (typeof parsed.locked === "boolean") props.locked = parsed.locked;
@@ -752,6 +1002,11 @@ export function applyAiPatches(
           }
           return { ...b, props };
         });
+        const after = blockPropsSnapshot(next, parsed.pageId, parsed.blockId);
+        if (before === after) {
+          errors.push(`Skipped set_block_flags on ${parsed.blockId}: no effective change`);
+          continue;
+        }
         applied += 1;
       } else if (parsed.op === "propose_domain") {
         const domain = parsed.domain
@@ -786,6 +1041,296 @@ export function applyAiPatches(
   }
 
   return { content: next, applied, errors };
+}
+
+export type LinkVerifyIssue = {
+  pageId: string;
+  blockId: string;
+  detail: string;
+};
+
+export type LinkVerifyResult = { ok: boolean; issues: LinkVerifyIssue[] };
+
+/** Post-apply: every page-mode link must resolve; flag unwired internal URLs. */
+export function verifySiteContentLinks(content: SiteContent): LinkVerifyResult {
+  const issues: LinkVerifyIssue[] = [];
+  const slugSet = new Set(content.pages.map((p) => p.slug.toLowerCase()));
+  const refs = pagesAsRefs(content.pages);
+
+  const checkPageMode = (
+    pageId: string,
+    blockId: string,
+    label: string,
+    slug: string
+  ) => {
+    const s = (slug || "").trim();
+    if (!s || !slugSet.has(s.toLowerCase())) {
+      issues.push({
+        pageId,
+        blockId,
+        detail: `${label} linkPageSlug "${s || "(empty)"}" not in pages`,
+      });
+    }
+  };
+
+  const checkUrlHref = (
+    pageId: string,
+    blockId: string,
+    label: string,
+    href: string
+  ) => {
+    const h = (href || "").trim();
+    if (!looksLikeInternalPagePath(h)) return;
+    const resolved = resolvePageSlugRef(h, refs);
+    issues.push({
+      pageId,
+      blockId,
+      detail: resolved
+        ? `${label} href "${h}" should use linkMode page + slug "${resolved}"`
+        : `${label} href "${h}" looks internal but no matching page`,
+    });
+  };
+
+  for (const page of content.pages) {
+    for (const block of page.blocks) {
+      const props = block.props as Record<string, unknown>;
+
+      if (Array.isArray(props.navItems)) {
+        for (const raw of props.navItems as NavItem[]) {
+          const it = raw;
+          const label = `navItem "${it.id || "?"}"`;
+          const mode = (it.linkMode || "url").trim() || "url";
+          if (mode === "page") {
+            checkPageMode(page.id, block.id, label, it.linkPageSlug || "");
+          } else {
+            checkUrlHref(page.id, block.id, label, it.href || "");
+          }
+        }
+      }
+
+      const mode = typeof props.linkMode === "string" ? props.linkMode : "";
+      if (mode === "page") {
+        checkPageMode(
+          page.id,
+          block.id,
+          `block ${block.type}`,
+          typeof props.linkPageSlug === "string" ? props.linkPageSlug : ""
+        );
+      }
+      for (const key of ["href", "ctaHref", "buttonHref"] as const) {
+        if (typeof props[key] === "string") {
+          // When already page mode with good slug, empty href is fine
+          if (mode === "page") continue;
+          checkUrlHref(page.id, block.id, key, props[key] as string);
+        }
+      }
+    }
+  }
+
+  return { ok: issues.length === 0, issues };
+}
+
+function navItemLabelText(it: NavItem): string {
+  if (typeof it.label === "string") return it.label;
+  if (it.label && typeof it.label === "object") {
+    return Object.values(it.label).filter(Boolean).join(" ");
+  }
+  return "";
+}
+
+/**
+ * Conservative navbar sync across all pages:
+ * - coerce/heal existing navItems with bad slugs when a page matches
+ * - ensure one navItem per page (match by label/title first; append missing non-home sparingly)
+ */
+export function syncAllNavbarsToPages(content: SiteContent): SiteContent {
+  const refs = pagesAsRefs(content.pages);
+  const locs = content.locales?.length ? content.locales : ["ar"];
+
+  return {
+    ...content,
+    pages: content.pages.map((page) => ({
+      ...page,
+      blocks: page.blocks.map((block) => {
+        if (block.type !== "navbar") return block;
+        let props = coerceNavbarLinkProps(
+          { ...(block.props as Record<string, unknown>) },
+          refs,
+          locs
+        );
+        const items: NavItem[] = Array.isArray(props.navItems)
+          ? [...(props.navItems as NavItem[])]
+          : [];
+
+        // Heal existing items against all pages
+        for (let i = 0; i < items.length; i++) {
+          items[i] = coerceOneNavItem(items[i], refs);
+          // Match by label → page title when still unresolved
+          if (
+            items[i].linkMode === "page" &&
+            items[i].linkPageSlug &&
+            !refs.some(
+              (p) =>
+                p.slug.toLowerCase() ===
+                (items[i].linkPageSlug || "").toLowerCase()
+            )
+          ) {
+            const byLabel = refs.find(
+              (p) =>
+                normalizePageTitleKey(p.title) ===
+                normalizePageTitleKey(navItemLabelText(items[i]))
+            );
+            if (byLabel) {
+              items[i] = {
+                ...items[i],
+                linkMode: "page",
+                linkPageSlug: byLabel.slug,
+                href: "",
+              };
+            }
+          }
+        }
+
+        // Ensure each page has a matching nav item (prefer label match; else append)
+        for (const p of refs) {
+          const has = items.some((it) => {
+            if (
+              it.linkMode === "page" &&
+              (it.linkPageSlug || "").toLowerCase() === p.slug.toLowerCase()
+            ) {
+              return true;
+            }
+            return (
+              normalizePageTitleKey(navItemLabelText(it)) ===
+              normalizePageTitleKey(p.title)
+            );
+          });
+          if (has) {
+            // Fix label-matched item to correct slug
+            for (let i = 0; i < items.length; i++) {
+              if (
+                normalizePageTitleKey(navItemLabelText(items[i])) ===
+                  normalizePageTitleKey(p.title) &&
+                (items[i].linkPageSlug || "").toLowerCase() !== p.slug.toLowerCase()
+              ) {
+                items[i] = {
+                  ...items[i],
+                  linkMode: "page",
+                  linkPageSlug: p.slug,
+                  href: "",
+                };
+              }
+            }
+            continue;
+          }
+          // Append missing (skip inventing home if already many url stubs — still add for real pages)
+          const labelMap: Record<string, string> = {};
+          for (const loc of locs) labelMap[loc] = p.title;
+          items.push({
+            id: `nav-${p.slug}`.slice(0, 64),
+            label: labelMap,
+            linkMode: "page",
+            linkPageSlug: p.slug,
+            href: "",
+            actionType: "link",
+          });
+        }
+
+        props = {
+          ...props,
+          navItems: items,
+          links: syncLinksCsvFromNavItems(items, locs),
+        };
+        return { ...block, props };
+      }),
+    })),
+  };
+}
+
+/** True when user asked about pages/nav/links or patches added a page. */
+export function shouldAutoHealNavbars(
+  userMessage: string,
+  patches: AiPatch[]
+): boolean {
+  if (patches.some((p) => p.op === "add_page")) return true;
+  if (
+    patches.some(
+      (p) =>
+        (p.op === "update_prop" || p.op === "update_props") &&
+        (("key" in p &&
+          (p.key === "navItems" ||
+            p.key === "links" ||
+            p.key === "linkMode" ||
+            p.key === "linkPageSlug")) ||
+          ("props" in p &&
+            p.props &&
+            ("navItems" in p.props ||
+              "links" in p.props ||
+              "linkMode" in p.props ||
+              "linkPageSlug" in p.props)))
+    )
+  ) {
+    return true;
+  }
+  const m = (userMessage || "").toLowerCase();
+  return /صفحات|روابط|هيدر|قائمة|تنقل|navbar|nav\b|header|menu|links?|pages?|404|تنقّل/.test(
+    m
+  );
+}
+
+/** Rewrite model summary when verifier finds broken links — never trust «nav fixed» claims. */
+export function buildHonestApplySummary(opts: {
+  modelSummary?: string;
+  applied: number;
+  errors: string[];
+  issues: LinkVerifyIssue[];
+  healed?: boolean;
+  platformLang: "ar" | "en";
+}): string {
+  const { modelSummary, applied, issues, healed, platformLang } = opts;
+  const ar = platformLang === "ar";
+  const issueBits = issues
+    .slice(0, 4)
+    .map((i) => i.detail)
+    .join("; ");
+
+  if (applied === 0 && !healed) {
+    return (
+      modelSummary && !/fixed|تم إصلاح|أصلحت|all links/i.test(modelSummary)
+        ? modelSummary
+        : undefined
+    ) || (ar
+      ? "لم يُطبَّق أي تعديل فعّال — تحقق من معرّفات الكتل والروابط."
+      : "No effective edits applied — check block ids and links.");
+  }
+
+  if (issues.length === 0) {
+    const base =
+      modelSummary?.trim() ||
+      (ar ? `تم تطبيق ${applied} تعديلاً.` : `Applied ${applied} change(s).`);
+    if (healed) {
+      return ar
+        ? `${base} (تمت مزامنة شريط التنقل مع الصفحات)`
+        : `${base} (navbars synced to pages)`;
+    }
+    return base.slice(0, 500);
+  }
+
+  // Issues remain — never echo unverified «fixed nav» claims
+  if (ar) {
+    return (
+      `طُبّق ${applied} تعديلاً` +
+      (healed ? " مع إصلاح تلقائي للقائمة" : "") +
+      `، لكن ما زالت مشاكل في الروابط: ${issueBits}. ` +
+      `لا يُعتمد ادعاء النموذج بأن التنقل أُصلح بالكامل.`
+    ).slice(0, 500);
+  }
+  return (
+    `Applied ${applied} change(s)` +
+    (healed ? " with navbar auto-heal" : "") +
+    `, but link issues remain: ${issueBits}. ` +
+    `Model claim that nav is fully fixed is not verified.`
+  ).slice(0, 500);
 }
 
 /** Light trailing-comma cleanup safe for model JSON (objects/arrays only). */

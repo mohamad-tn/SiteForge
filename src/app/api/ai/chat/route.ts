@@ -7,7 +7,11 @@ import {
   AI_SYSTEM_PROMPT,
   applyAiPatches,
   buildAiRepairUserPrompt,
+  buildHonestApplySummary,
   parseAiPatchesResponse,
+  shouldAutoHealNavbars,
+  syncAllNavbarsToPages,
+  verifySiteContentLinks,
 } from "@/lib/ai/patches";
 import {
   clearAiChatCancelled,
@@ -387,13 +391,42 @@ export async function POST(req: Request) {
           `Applying ${patchCount} patch(es)… / تطبيق ${patchCount} تعديلاً…`
         );
         const applied = applyAiPatches(content, parsedPatches.data.patches);
+        let resultContent = applied.content;
+        const applyErrors = [...applied.errors];
+        let healed = false;
+
+        if (
+          shouldAutoHealNavbars(
+            parsed.data.message,
+            parsedPatches.data.patches
+          )
+        ) {
+          const synced = syncAllNavbarsToPages(resultContent);
+          if (JSON.stringify(synced) !== JSON.stringify(resultContent)) {
+            resultContent = synced;
+            healed = true;
+            pushStep(
+              "nav-sync",
+              "Synced navbars to pages… / مزامنة شريط التنقل مع الصفحات…"
+            );
+          }
+        }
+
+        const linkCheck = verifySiteContentLinks(resultContent);
+        if (linkCheck.issues.length) {
+          for (const issue of linkCheck.issues.slice(0, 12)) {
+            applyErrors.push(
+              `link: ${issue.pageId}/${issue.blockId}: ${issue.detail}`
+            );
+          }
+        }
 
         // Persist draft on server so tab-disconnect does not lose applied edits.
-        if (applied.applied > 0) {
+        if (applied.applied > 0 || healed) {
           await prisma.site
             .update({
               where: { id: parsed.data.siteId },
-              data: { draftContent: ensureContentDefaults(applied.content) as object },
+              data: { draftContent: ensureContentDefaults(resultContent) as object },
             })
             .catch((e) => console.error("AI draft persist failed", e));
         }
@@ -406,33 +439,46 @@ export async function POST(req: Request) {
             model: resolved.model,
             tokensIn: result.tokensIn || 0,
             tokensOut: result.tokensOut || 0,
-            ok: applied.applied > 0,
-            error: applied.errors.length ? applied.errors.join("; ").slice(0, 500) : null,
+            ok: applied.applied > 0 || healed,
+            error: applyErrors.length
+              ? applyErrors.join("; ").slice(0, 500)
+              : null,
             keySource: resolved.source,
           },
         });
 
         const emptySoft =
           applied.applied === 0 &&
+          !healed &&
           (patchCount === 0 || applied.errors.length > 0);
+
         const summary = emptySoft
           ? AI_EMPTY_PATCHES_HINT
-          : parsedPatches.data.summary ||
-            (applied.applied > 0
-              ? `Applied ${applied.applied} patch(es)`
-              : AI_EMPTY_PATCHES_HINT);
+          : buildHonestApplySummary({
+              modelSummary: parsedPatches.data.summary,
+              applied: applied.applied,
+              errors: applyErrors,
+              issues: linkCheck.issues,
+              healed,
+              platformLang,
+            });
 
         pushStep(
           "done",
-          applied.applied > 0
-            ? `Done — ${applied.applied} applied / تم — ${applied.applied} تعديلاً`
+          applied.applied > 0 || healed
+            ? `Done — ${applied.applied} applied` +
+                (healed ? " (+nav sync)" : "") +
+                (linkCheck.issues.length
+                  ? ` · ${linkCheck.issues.length} link issue(s)`
+                  : "") +
+                ` / تم — ${applied.applied} تعديلاً`
             : "Done — nothing applied / تم — بلا تعديلات"
         );
 
         const status =
           isAiChatCancelled(assistantPartial.id)
             ? "cancelled"
-            : emptySoft || (applied.errors.length && !applied.applied)
+            : emptySoft || (applyErrors.length && !applied.applied && !healed)
               ? "error"
               : "ok";
 
@@ -469,8 +515,9 @@ export async function POST(req: Request) {
             type: "result",
             summary,
             applied: applied.applied,
-            errors: applied.errors,
-            content: applied.content,
+            errors: applyErrors,
+            content: resultContent,
+            linkIssues: linkCheck.issues,
             quota: nextQuota,
             messageId: assistantPartial.id,
             userMessageId: userMsg.id,
