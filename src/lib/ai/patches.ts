@@ -139,6 +139,40 @@ export const aiPatchSchema = z.discriminatedUnion("op", [
     op: z.literal("propose_domain"),
     domain: z.string().min(3).max(255),
   }),
+  z.object({
+    op: z.literal("set_nav_items"),
+    pageId: z.string().min(1),
+    blockId: z.string().min(1),
+    items: z
+      .array(
+        z.object({
+          label: z.union([
+            z.string().min(1).max(200),
+            z.record(z.string(), z.string()),
+          ]),
+          linkPageSlug: z.string().max(80).optional(),
+          href: z.string().max(500).optional(),
+          linkMode: z.string().max(32).optional(),
+          id: z.string().max(64).optional(),
+        })
+      )
+      .min(1)
+      .max(40),
+  }),
+  z.object({
+    op: z.literal("wire_nav_to_pages"),
+    pageId: z.string().min(1).optional(),
+  }),
+  z.object({
+    op: z.literal("set_button_link"),
+    pageId: z.string().min(1),
+    blockId: z.string().min(1),
+    linkMode: z.enum(["page", "url", "collection"]),
+    linkPageSlug: z.string().max(80).optional(),
+    href: z.string().max(500).optional(),
+    linkCollectionSlug: z.string().max(80).optional(),
+    key: z.enum(["ctaHref", "href", "buttonHref"]).optional(),
+  }),
 ]);
 
 export type AiPatch = z.infer<typeof aiPatchSchema>;
@@ -612,7 +646,8 @@ export function applyAiPatches(
         parsed.op !== "propose_domain" &&
         parsed.op !== "update_tokens" &&
         parsed.op !== "set_locales" &&
-        parsed.op !== "set_default_locale";
+        parsed.op !== "set_default_locale" &&
+        parsed.op !== "wire_nav_to_pages";
       const page =
         needsPage && "pageId" in parsed
           ? next.pages.find((p) => p.id === (parsed as { pageId: string }).pageId)
@@ -1008,6 +1043,165 @@ export function applyAiPatches(
           continue;
         }
         applied += 1;
+      } else if (parsed.op === "set_nav_items") {
+        const blk = findBlock(next, parsed.pageId, parsed.blockId);
+        if (!blk) {
+          errors.push(`Unknown block ${parsed.blockId}`);
+          continue;
+        }
+        const pageRefs = pagesAsRefs(next.pages);
+        const locs = next.locales?.length ? next.locales : ["ar"];
+        const before = blockPropsSnapshot(next, parsed.pageId, parsed.blockId);
+        const built: NavItem[] = [];
+        for (let i = 0; i < parsed.items.length; i++) {
+          const raw = parsed.items[i];
+          const label = raw.label;
+          const modeHint = (raw.linkMode || "").trim();
+          const slugRaw = (raw.linkPageSlug || "").trim();
+          const hrefRaw = (raw.href || "").trim();
+          let linkMode = modeHint || (slugRaw ? "page" : hrefRaw ? "url" : "page");
+          let linkPageSlug = "";
+          let href = "";
+          if (linkMode === "page" || (!modeHint && (slugRaw || looksLikeInternalPagePath(hrefRaw)))) {
+            const resolved =
+              resolvePageSlugRef(slugRaw, pageRefs) ||
+              resolvePageSlugRef(hrefRaw, pageRefs);
+            if (resolved) {
+              linkMode = "page";
+              linkPageSlug = resolved;
+              href = "";
+            } else {
+              linkMode = "page";
+              linkPageSlug = slugRaw;
+              href = hrefRaw;
+            }
+          } else if (linkMode === "collection") {
+            linkPageSlug = "";
+            href = hrefRaw ? normalizeHref(hrefRaw) : "";
+          } else {
+            linkMode = "url";
+            href = hrefRaw ? normalizeHref(hrefRaw) : "";
+            const promoted = looksLikeInternalPagePath(href)
+              ? resolvePageSlugRef(href, pageRefs)
+              : null;
+            if (promoted) {
+              linkMode = "page";
+              linkPageSlug = promoted;
+              href = "";
+            }
+          }
+          const nav: NavItem = {
+            id:
+              typeof raw.id === "string" && raw.id
+                ? raw.id.slice(0, 64)
+                : `nav-${i}`,
+            label:
+              typeof label === "string" || (label && typeof label === "object")
+                ? (label as NavItem["label"])
+                : `Link ${i + 1}`,
+            href,
+            linkMode,
+            linkPageSlug,
+            actionType: "link",
+          };
+          built.push(nav);
+        }
+        next = mapBlock(next, parsed.pageId, parsed.blockId, (b) => {
+          const props = {
+            ...(b.props as Record<string, unknown>),
+            navItems: built,
+            links: syncLinksCsvFromNavItems(built, locs),
+          };
+          return {
+            ...b,
+            props: finalizeBlockLinkProps(b.type, props, pageRefs, locs),
+          };
+        });
+        const after = blockPropsSnapshot(next, parsed.pageId, parsed.blockId);
+        if (before === after) {
+          errors.push(`Skipped set_nav_items on ${parsed.blockId}: no effective change`);
+          continue;
+        }
+        applied += 1;
+      } else if (parsed.op === "wire_nav_to_pages") {
+        if (parsed.pageId) {
+          if (!next.pages.some((p) => p.id === parsed.pageId)) {
+            errors.push(`Unknown page ${parsed.pageId}`);
+            continue;
+          }
+        }
+        const before = JSON.stringify(next);
+        next = syncAllNavbarsToPages(next, parsed.pageId);
+        if (before === JSON.stringify(next)) {
+          errors.push("Skipped wire_nav_to_pages: no effective change");
+          continue;
+        }
+        applied += 1;
+      } else if (parsed.op === "set_button_link") {
+        const blk = findBlock(next, parsed.pageId, parsed.blockId);
+        if (!blk) {
+          errors.push(`Unknown block ${parsed.blockId}`);
+          continue;
+        }
+        const pageRefs = pagesAsRefs(next.pages);
+        const before = blockPropsSnapshot(next, parsed.pageId, parsed.blockId);
+        const hrefKey = parsed.key || "ctaHref";
+        next = mapBlock(next, parsed.pageId, parsed.blockId, (b) => {
+          const props: Record<string, unknown> = {
+            ...(b.props as Record<string, unknown>),
+          };
+          const mode = parsed.linkMode;
+          const slug = (parsed.linkPageSlug || "").trim();
+          const href = (parsed.href || "").trim();
+          if (mode === "page") {
+            const resolved =
+              resolvePageSlugRef(slug, pageRefs) ||
+              resolvePageSlugRef(href, pageRefs);
+            if (resolved) {
+              props.linkMode = "page";
+              props.linkPageSlug = resolved;
+              props[hrefKey] = "";
+              if ("href" in props && hrefKey !== "href") props.href = props.href || "";
+              if ("ctaHref" in props && hrefKey !== "ctaHref") props.ctaHref = "";
+              if ("buttonHref" in props && hrefKey !== "buttonHref") props.buttonHref = "";
+            } else {
+              props.linkMode = "page";
+              props.linkPageSlug = slug;
+              props[hrefKey] = href ? normalizeHref(href) : "";
+            }
+          } else if (mode === "collection") {
+            props.linkMode = "collection";
+            props.linkPageSlug = "";
+            if (parsed.linkCollectionSlug) {
+              props.linkCollectionSlug = parsed.linkCollectionSlug.slice(0, 80);
+            }
+            props[hrefKey] = href ? normalizeHref(href) : "";
+          } else {
+            // url — promote internal paths
+            const promoted = looksLikeInternalPagePath(href)
+              ? resolvePageSlugRef(href, pageRefs)
+              : null;
+            if (promoted) {
+              props.linkMode = "page";
+              props.linkPageSlug = promoted;
+              props[hrefKey] = "";
+            } else {
+              props.linkMode = "url";
+              props.linkPageSlug = "";
+              props[hrefKey] = href ? normalizeHref(href) : "";
+            }
+          }
+          return {
+            ...b,
+            props: coerceBlockLinkFields(props, pageRefs),
+          };
+        });
+        const after = blockPropsSnapshot(next, parsed.pageId, parsed.blockId);
+        if (before === after) {
+          errors.push(`Skipped set_button_link on ${parsed.blockId}: no effective change`);
+          continue;
+        }
+        applied += 1;
       } else if (parsed.op === "propose_domain") {
         const domain = parsed.domain
           .trim()
@@ -1143,13 +1337,18 @@ function navItemLabelText(it: NavItem): string {
  * - coerce/heal existing navItems with bad slugs when a page matches
  * - ensure one navItem per page (match by label/title first; append missing non-home sparingly)
  */
-export function syncAllNavbarsToPages(content: SiteContent): SiteContent {
+export function syncAllNavbarsToPages(
+  content: SiteContent,
+  pageId?: string
+): SiteContent {
   const refs = pagesAsRefs(content.pages);
   const locs = content.locales?.length ? content.locales : ["ar"];
 
   return {
     ...content,
-    pages: content.pages.map((page) => ({
+    pages: content.pages.map((page) => {
+      if (pageId && page.id !== pageId) return page;
+      return {
       ...page,
       blocks: page.blocks.map((block) => {
         if (block.type !== "navbar") return block;
@@ -1243,7 +1442,8 @@ export function syncAllNavbarsToPages(content: SiteContent): SiteContent {
         };
         return { ...block, props };
       }),
-    })),
+    };
+    }),
   };
 }
 
@@ -1252,7 +1452,17 @@ export function shouldAutoHealNavbars(
   userMessage: string,
   patches: AiPatch[]
 ): boolean {
-  if (patches.some((p) => p.op === "add_page")) return true;
+  if (
+    patches.some(
+      (p) =>
+        p.op === "add_page" ||
+        p.op === "set_nav_items" ||
+        p.op === "wire_nav_to_pages" ||
+        p.op === "set_button_link"
+    )
+  ) {
+    return true;
+  }
   if (
     patches.some(
       (p) =>
@@ -1273,9 +1483,276 @@ export function shouldAutoHealNavbars(
     return true;
   }
   const m = (userMessage || "").toLowerCase();
-  return /صفحات|روابط|هيدر|قائمة|تنقل|navbar|nav\b|header|menu|links?|pages?|404|تنقّل/.test(
+  return /صفحات|صفحة|روابط|رابط|هيدر|قائمة|تنقل|تنقّل|نافبار|navbar|nav\b|header|menu|links?|pages?|404|slug/.test(
     m
   );
+}
+
+/** Intent classes for a lightweight focus hint (token-tight). */
+export type AiIntentClass =
+  | "nav_pages"
+  | "design_tokens"
+  | "copy_i18n"
+  | "layout_blocks"
+  | "seo"
+  | "media";
+
+/** Detect coarse intent from user message (ar/en). Order is stable for hints. */
+export function detectAiIntentClasses(message: string): AiIntentClass[] {
+  const m = (message || "").toLowerCase();
+  const out: AiIntentClass[] = [];
+  const add = (c: AiIntentClass) => {
+    if (!out.includes(c)) out.push(c);
+  };
+  if (
+    /صفحات|صفحة|روابط|رابط|هيدر|قائمة|تنقل|تنقّل|نافبار|navbar|nav\b|header|menu|links?|pages?|404|slug|cta\b|زر/.test(
+      m
+    )
+  ) {
+    add("nav_pages");
+  }
+  if (
+    /تصميم|ألوان|لون|ثيم|خط|خطوط|radius|theme|token|design|color|font|spacing|dark|light|تركواز|teal/.test(
+      m
+    )
+  ) {
+    add("design_tokens");
+  }
+  if (
+    /ترجم|نص|نصوص|لغة|لغات|locale|i18n|copy|translate|headline|عنوان|وصف|كتابة/.test(
+      m
+    )
+  ) {
+    add("copy_i18n");
+  }
+  if (
+    /قسم|أقسام|كتلة|كتل|block|section|layout|canvas|reorder|ترتيب|أضف|احذف|duplicate|كرّر/.test(
+      m
+    )
+  ) {
+    add("layout_blocks");
+  }
+  if (/seo|meta|og\b|محركات|بحث|seoTitle|description/.test(m)) {
+    add("seo");
+  }
+  if (/صورة|صور|فيديو|media|image|video|gallery|مرفق|attachment/.test(m)) {
+    add("media");
+  }
+  return out;
+}
+
+/** 4–8 line focus hint injected into the user payload (not a second system prompt). */
+export function buildIntentFocusHint(classes: AiIntentClass[]): string {
+  if (!classes.length) {
+    return "Focus: prefer few precise patches; use real pageId/blockId from index; verify linkMode page + slug.";
+  }
+  const lines: string[] = ["Focus:"];
+  if (classes.includes("nav_pages")) {
+    lines.push(
+      "- Wire ALL navbars with set_nav_items and/or wire_nav_to_pages; linkMode page + real slug (not id/title/href)."
+    );
+    lines.push("- After add_page: set_nav_items or wire_nav_to_pages on every navbar.");
+  }
+  if (classes.includes("design_tokens")) {
+    lines.push(
+      "- Prefer update_tokens (+ set_part_style); styles values must be strings."
+    );
+  }
+  if (classes.includes("copy_i18n")) {
+    lines.push(
+      "- Prefer update_copy per locale; cover all content.locales when translating."
+    );
+  }
+  if (classes.includes("layout_blocks")) {
+    lines.push(
+      "- Use add_block/remove_block/reorder_blocks/duplicate_block with real ids from index."
+    );
+  }
+  if (classes.includes("seo")) {
+    lines.push("- Use set_seo on the target pageId.");
+  }
+  if (classes.includes("media")) {
+    lines.push("- Prefer attachment/media URLs from context; never invent hosts.");
+  }
+  return lines.slice(0, 8).join("\n");
+}
+
+/** Slim draft index for semantic repair prompts (token-cheap). */
+export function buildCompactRepairIndex(content: SiteContent): {
+  pages: Array<{ id: string; slug: string; title: string }>;
+  navbars: Array<{
+    pageId: string;
+    blockId: string;
+    items: Array<{
+      id: string;
+      linkMode?: string;
+      linkPageSlug?: string;
+      href?: string;
+    }>;
+  }>;
+  ctas: Array<{
+    pageId: string;
+    blockId: string;
+    type: string;
+    linkMode?: string;
+    linkPageSlug?: string;
+    href?: string;
+  }>;
+} {
+  const pages = content.pages.map((p) => ({
+    id: p.id,
+    slug: p.slug,
+    title: p.title,
+  }));
+  const navbars: Array<{
+    pageId: string;
+    blockId: string;
+    items: Array<{
+      id: string;
+      linkMode?: string;
+      linkPageSlug?: string;
+      href?: string;
+    }>;
+  }> = [];
+  const ctas: Array<{
+    pageId: string;
+    blockId: string;
+    type: string;
+    linkMode?: string;
+    linkPageSlug?: string;
+    href?: string;
+  }> = [];
+  for (const p of content.pages) {
+    for (const b of p.blocks) {
+      const props = b.props as Record<string, unknown>;
+      if (b.type === "navbar") {
+        const items = Array.isArray(props.navItems)
+          ? (props.navItems as NavItem[]).slice(0, 24).map((it) => ({
+              id: it.id || "?",
+              linkMode: it.linkMode,
+              linkPageSlug: it.linkPageSlug,
+              href: it.href,
+            }))
+          : [];
+        navbars.push({ pageId: p.id, blockId: b.id, items });
+      }
+      if (b.type === "hero" || b.type === "cta" || b.type === "button") {
+        const href =
+          (typeof props.ctaHref === "string" && props.ctaHref) ||
+          (typeof props.href === "string" && props.href) ||
+          (typeof props.buttonHref === "string" && props.buttonHref) ||
+          "";
+        ctas.push({
+          pageId: p.id,
+          blockId: b.id,
+          type: b.type,
+          linkMode: typeof props.linkMode === "string" ? props.linkMode : undefined,
+          linkPageSlug:
+            typeof props.linkPageSlug === "string" ? props.linkPageSlug : undefined,
+          href: href || undefined,
+        });
+      }
+    }
+  }
+  return { pages, navbars: navbars.slice(0, 20), ctas: ctas.slice(0, 20) };
+}
+
+/**
+ * Deterministic healers before any semantic model repair:
+ * sync navbars + coerce CTA/button/hero link fields.
+ */
+export function runDeterministicLinkHeal(
+  content: SiteContent,
+  pageId?: string
+): SiteContent {
+  let next = syncAllNavbarsToPages(content, pageId);
+  const refs = pagesAsRefs(next.pages);
+  next = {
+    ...next,
+    pages: next.pages.map((page) => {
+      if (pageId && page.id !== pageId) return page;
+      return {
+        ...page,
+        blocks: page.blocks.map((block) => {
+          if (block.type === "navbar") return block;
+          if (
+            block.type !== "hero" &&
+            block.type !== "cta" &&
+            block.type !== "button" &&
+            block.type !== "footer"
+          ) {
+            return block;
+          }
+          const props = coerceBlockLinkFields(
+            { ...(block.props as Record<string, unknown>) },
+            refs
+          );
+          // Footer column/list link-ish objects
+          if (block.type === "footer") {
+            for (const key of ["columns", "links", "items"] as const) {
+              if (!Array.isArray(props[key])) continue;
+              props[key] = (props[key] as unknown[]).map((item) => {
+                if (!item || typeof item !== "object" || Array.isArray(item)) {
+                  return item;
+                }
+                return coerceBlockLinkFields(
+                  { ...(item as Record<string, unknown>) },
+                  refs
+                );
+              });
+            }
+          }
+          return { ...block, props };
+        }),
+      };
+    }),
+  };
+  return next;
+}
+
+/** When to run the self-check repair pass (deterministic ± one model call). */
+export function shouldRunSemanticRepair(opts: {
+  userMessage: string;
+  issues: LinkVerifyIssue[];
+  applied: number;
+  patchCount: number;
+}): boolean {
+  if (opts.issues.length > 0) return true;
+  const classes = detectAiIntentClasses(opts.userMessage);
+  const structural = classes.some(
+    (c) =>
+      c === "nav_pages" || c === "design_tokens" || c === "layout_blocks"
+  );
+  if (structural && opts.patchCount > 0 && opts.applied < opts.patchCount) {
+    return true;
+  }
+  return false;
+}
+
+/** Semantic repair prompt: failed issues + compact index (not vague prose). */
+export function buildSemanticRepairUserPrompt(opts: {
+  issues: LinkVerifyIssue[];
+  index: ReturnType<typeof buildCompactRepairIndex>;
+  userMessage: string;
+  appliedPartial?: boolean;
+}): string {
+  const issueLines = opts.issues
+    .slice(0, 16)
+    .map((i) => `- ${i.pageId}/${i.blockId}: ${i.detail}`)
+    .join("\n");
+  return `SiteForge semantic link/nav repair. Return ONLY {"summary":"...","patches":[...]} — allowlisted ops.
+Prefer set_nav_items, wire_nav_to_pages, set_button_link (then update_props if needed).
+Fix EVERY listed issue. Use real pageId/blockId/slug from the index. Max 24 patches. No markdown.
+
+User goal (context):
+${(opts.userMessage || "").slice(0, 800)}
+
+Failed verifier issues:
+${issueLines || "(none — repair partial apply / missing nav wire)"}
+${opts.appliedPartial ? "\nApply was partial — finish wiring nav/pages/design.\n" : ""}
+Current draft index (compact JSON):
+${JSON.stringify(opts.index).slice(0, 8000)}
+`;
 }
 
 /** Rewrite model summary when verifier finds broken links — never trust «nav fixed» claims. */
@@ -1426,6 +1903,9 @@ const KNOWN_OPS = new Set([
   "set_default_locale",
   "set_block_flags",
   "propose_domain",
+  "set_nav_items",
+  "wire_nav_to_pages",
+  "set_button_link",
 ]);
 
 /** Map common model aliases → allowlisted ops. */
@@ -1480,6 +1960,24 @@ function normalizeOpName(op: unknown): string | null {
     set_flags: "set_block_flags",
     proposedomain: "propose_domain",
     suggest_domain: "propose_domain",
+    set_nav_items: "set_nav_items",
+    set_nav: "set_nav_items",
+    set_navbar_items: "set_nav_items",
+    update_nav: "set_nav_items",
+    update_nav_items: "set_nav_items",
+    setnavitems: "set_nav_items",
+    wire_nav_to_pages: "wire_nav_to_pages",
+    wire_nav: "wire_nav_to_pages",
+    sync_nav: "wire_nav_to_pages",
+    sync_navbars: "wire_nav_to_pages",
+    sync_navbar: "wire_nav_to_pages",
+    wirenavtopages: "wire_nav_to_pages",
+    set_button_link: "set_button_link",
+    set_cta_link: "set_button_link",
+    set_link: "set_button_link",
+    wire_button: "set_button_link",
+    wire_cta: "set_button_link",
+    setbuttonlink: "set_button_link",
   };
   if (KNOWN_OPS.has(lower)) return lower;
   if (aliases[lower]) return aliases[lower];
@@ -1571,6 +2069,41 @@ function coercePatch(raw: unknown): unknown | null {
   }
   if (op === "set_locales" && Array.isArray(p.locale) && !p.locales) {
     p.locales = p.locale;
+  }
+  if (op === "set_nav_items") {
+    if (!p.items && Array.isArray(p.navItems)) p.items = p.navItems;
+    if (!p.items && Array.isArray(p.links)) p.items = p.links;
+    if (!p.items && p.props && typeof p.props === "object" && !Array.isArray(p.props)) {
+      const props = p.props as Record<string, unknown>;
+      if (Array.isArray(props.navItems)) p.items = props.navItems;
+    }
+  }
+  if (op === "set_button_link") {
+    if (!p.linkMode && typeof p.mode === "string") p.linkMode = p.mode;
+    if (!p.href && typeof p.url === "string") p.href = p.url;
+    if (!p.linkPageSlug && typeof p.slug === "string") p.linkPageSlug = p.slug;
+    if (!p.key && typeof p.hrefKey === "string") p.key = p.hrefKey;
+  }
+  // Close-shape: update_props with only navItems → set_nav_items
+  if (
+    op === "update_props" &&
+    p.props &&
+    typeof p.props === "object" &&
+    !Array.isArray(p.props)
+  ) {
+    const props = p.props as Record<string, unknown>;
+    const keys = Object.keys(props);
+    if (
+      keys.length === 1 &&
+      keys[0] === "navItems" &&
+      Array.isArray(props.navItems) &&
+      typeof p.pageId === "string" &&
+      typeof p.blockId === "string"
+    ) {
+      p.op = "set_nav_items";
+      p.items = props.navItems;
+      delete p.props;
+    }
   }
   return p;
 }
@@ -1722,7 +2255,10 @@ export const AI_SCHEMA_RULES = `Concrete schema rules:
 - set_part_style.styles values MUST be strings (paddingX:"24", borderRadius:"999") — never bare numbers.
 - update_tokens.tokens.radius may be number; spacing values numbers; colors/fonts string maps.
 - Every page/block patch needs real pageId + blockId from the draft JSON (never invent except add_*).
-- Prefer op names: update_tokens, set_part_style, update_copy, update_prop, update_props.`;
+- Prefer: set_nav_items, wire_nav_to_pages, set_button_link, update_tokens, set_part_style, update_copy, update_prop, update_props.
+- set_nav_items {pageId,blockId,items:[{label,linkPageSlug|href,linkMode?}]} — server resolves slugs + syncs CSV.
+- wire_nav_to_pages {pageId?} syncs navbar(s) to all site pages.
+- set_button_link {pageId,blockId,linkMode,linkPageSlug?,href?,key?} for hero/cta/button.`;
 
 export const AI_REPAIR_PROMPT = `Your previous reply was not valid SiteForge patch JSON.
 Return ONLY a JSON object: {"summary":"...","patches":[...]} with allowlisted ops.

@@ -7,9 +7,15 @@ import {
   AI_SYSTEM_PROMPT,
   applyAiPatches,
   buildAiRepairUserPrompt,
+  buildCompactRepairIndex,
   buildHonestApplySummary,
+  buildIntentFocusHint,
+  buildSemanticRepairUserPrompt,
+  detectAiIntentClasses,
   parseAiPatchesResponse,
+  runDeterministicLinkHeal,
   shouldAutoHealNavbars,
+  shouldRunSemanticRepair,
   syncAllNavbarsToPages,
   verifySiteContentLinks,
 } from "@/lib/ai/patches";
@@ -235,11 +241,15 @@ export async function POST(req: Request) {
 
         const adapter = getProviderAdapter(resolved.provider as AiProviderId);
 
+        const intentClasses = detectAiIntentClasses(parsed.data.message);
+        const focusHint = buildIntentFocusHint(intentClasses);
+
         const userText = [
           `Site id: ${parsed.data.siteId}`,
           `Preferred locale: ${locale}`,
           `Enabled locales: ${(content.locales || []).join(", ")}`,
           `Default locale: ${content.defaultLocale}`,
+          focusHint,
           `User goal:\n${parsed.data.message}`,
           attParts.textBlocks.length ? `Attachments:\n${attParts.textBlocks.join("\n\n")}` : "",
           attParts.mediaUrls.length
@@ -392,8 +402,10 @@ export async function POST(req: Request) {
         );
         const applied = applyAiPatches(content, parsedPatches.data.patches);
         let resultContent = applied.content;
-        const applyErrors = [...applied.errors];
+        let applyErrors = [...applied.errors];
         let healed = false;
+        let totalApplied = applied.applied;
+        let modelSummary = parsedPatches.data.summary;
 
         if (
           shouldAutoHealNavbars(
@@ -412,7 +424,104 @@ export async function POST(req: Request) {
           }
         }
 
-        const linkCheck = verifySiteContentLinks(resultContent);
+        pushStep(
+          "verifying",
+          "Verifying links… / التحقق من الروابط…"
+        );
+        let linkCheck = verifySiteContentLinks(resultContent);
+
+        const wantsRepair = shouldRunSemanticRepair({
+          userMessage: parsed.data.message,
+          issues: linkCheck.issues,
+          applied: totalApplied,
+          patchCount,
+        });
+
+        if (wantsRepair) {
+          pushStep(
+            "repairing_links",
+            "Repairing links… / إصلاح الروابط…"
+          );
+          const beforeHeal = JSON.stringify(resultContent);
+          resultContent = runDeterministicLinkHeal(resultContent);
+          if (JSON.stringify(resultContent) !== beforeHeal) {
+            healed = true;
+          }
+          linkCheck = verifySiteContentLinks(resultContent);
+
+          // At most one semantic repair model call per request
+          if (linkCheck.issues.length > 0 || totalApplied < patchCount) {
+            throwIfUserCancelled();
+            try {
+              const repairIndex = buildCompactRepairIndex(resultContent);
+              const semanticPrompt = buildSemanticRepairUserPrompt({
+                issues: linkCheck.issues,
+                index: repairIndex,
+                userMessage: parsed.data.message,
+                appliedPartial: totalApplied < patchCount,
+              });
+              const semanticResult = await adapter.complete({
+                apiKey: resolved.apiKey,
+                model: resolved.model,
+                maxTokens: Math.min(resolved.maxTokens, 2048),
+                messages: [
+                  { role: "system", content: AI_SYSTEM_PROMPT },
+                  { role: "user", content: semanticPrompt },
+                ],
+              });
+              result = {
+                text: semanticResult.text,
+                tokensIn: (result.tokensIn || 0) + (semanticResult.tokensIn || 0),
+                tokensOut:
+                  (result.tokensOut || 0) + (semanticResult.tokensOut || 0),
+              };
+              const semanticParsed = parseAiPatchesResponse(semanticResult.text);
+              if (semanticParsed.data?.patches.length) {
+                const reApplied = applyAiPatches(
+                  resultContent,
+                  semanticParsed.data.patches
+                );
+                resultContent = reApplied.content;
+                totalApplied += reApplied.applied;
+                applyErrors = [...applyErrors, ...reApplied.errors];
+                if (semanticParsed.data.summary) {
+                  modelSummary = semanticParsed.data.summary;
+                }
+                if (
+                  shouldAutoHealNavbars(
+                    parsed.data.message,
+                    semanticParsed.data.patches
+                  )
+                ) {
+                  const synced2 = syncAllNavbarsToPages(resultContent);
+                  if (
+                    JSON.stringify(synced2) !== JSON.stringify(resultContent)
+                  ) {
+                    resultContent = synced2;
+                    healed = true;
+                  }
+                }
+              }
+            } catch (semErr) {
+              if (
+                semErr instanceof Error &&
+                semErr.name === "AbortError"
+              ) {
+                throw semErr;
+              }
+              // keep deterministic heal result
+            }
+          }
+
+          pushStep(
+            "rechecking",
+            "Rechecking links… / إعادة التحقق…"
+          );
+          linkCheck = verifySiteContentLinks(resultContent);
+        }
+
+        // Refresh link errors from FINAL verifier state only
+        applyErrors = applyErrors.filter((e) => !e.startsWith("link: "));
         if (linkCheck.issues.length) {
           for (const issue of linkCheck.issues.slice(0, 12)) {
             applyErrors.push(
@@ -422,7 +531,7 @@ export async function POST(req: Request) {
         }
 
         // Persist draft on server so tab-disconnect does not lose applied edits.
-        if (applied.applied > 0 || healed) {
+        if (totalApplied > 0 || healed) {
           await prisma.site
             .update({
               where: { id: parsed.data.siteId },
@@ -439,7 +548,7 @@ export async function POST(req: Request) {
             model: resolved.model,
             tokensIn: result.tokensIn || 0,
             tokensOut: result.tokensOut || 0,
-            ok: applied.applied > 0 || healed,
+            ok: totalApplied > 0 || healed,
             error: applyErrors.length
               ? applyErrors.join("; ").slice(0, 500)
               : null,
@@ -448,15 +557,15 @@ export async function POST(req: Request) {
         });
 
         const emptySoft =
-          applied.applied === 0 &&
+          totalApplied === 0 &&
           !healed &&
           (patchCount === 0 || applied.errors.length > 0);
 
         const summary = emptySoft
           ? AI_EMPTY_PATCHES_HINT
           : buildHonestApplySummary({
-              modelSummary: parsedPatches.data.summary,
-              applied: applied.applied,
+              modelSummary,
+              applied: totalApplied,
               errors: applyErrors,
               issues: linkCheck.issues,
               healed,
@@ -465,20 +574,20 @@ export async function POST(req: Request) {
 
         pushStep(
           "done",
-          applied.applied > 0 || healed
-            ? `Done — ${applied.applied} applied` +
+          totalApplied > 0 || healed
+            ? `Done — ${totalApplied} applied` +
                 (healed ? " (+nav sync)" : "") +
                 (linkCheck.issues.length
                   ? ` · ${linkCheck.issues.length} link issue(s)`
-                  : "") +
-                ` / تم — ${applied.applied} تعديلاً`
+                  : " · links ok") +
+                ` / تم — ${totalApplied} تعديلاً`
             : "Done — nothing applied / تم — بلا تعديلات"
         );
 
         const status =
           isAiChatCancelled(assistantPartial.id)
             ? "cancelled"
-            : emptySoft || (applyErrors.length && !applied.applied && !healed)
+            : emptySoft || (applyErrors.length && !totalApplied && !healed)
               ? "error"
               : "ok";
 
@@ -514,10 +623,11 @@ export async function POST(req: Request) {
           send({
             type: "result",
             summary,
-            applied: applied.applied,
+            applied: totalApplied,
             errors: applyErrors,
             content: resultContent,
             linkIssues: linkCheck.issues,
+            linksOk: linkCheck.ok,
             quota: nextQuota,
             messageId: assistantPartial.id,
             userMessageId: userMsg.id,

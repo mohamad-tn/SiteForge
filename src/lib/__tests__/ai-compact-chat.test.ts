@@ -258,6 +258,10 @@ describe("siteforge playbook / AI_SYSTEM_PROMPT", () => {
       "actionType",
       "set_block_flags",
       "propose_domain",
+      "set_nav_items",
+      "wire_nav_to_pages",
+      "set_button_link",
+      "Capabilities",
     ]) {
       expect(AI_SYSTEM_PROMPT).toContain(kw);
     }

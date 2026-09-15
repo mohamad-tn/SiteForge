@@ -2,11 +2,15 @@ import { describe, expect, it } from "vitest";
 import {
   applyAiPatches,
   buildHonestApplySummary,
+  buildIntentFocusHint,
   coerceNavbarLinkProps,
+  detectAiIntentClasses,
   extractJsonObject,
   parseAiPatchesResponse,
   repairAiPatchesResponse,
   resolvePageSlugRef,
+  runDeterministicLinkHeal,
+  shouldRunSemanticRepair,
   stripTrailingCommas,
   syncAllNavbarsToPages,
   verifySiteContentLinks,
@@ -594,5 +598,218 @@ describe("honest apply + page link resolution", () => {
     // May still have leftover default Home/Services stubs — filter page-mode only
     const badPageMode = v.issues.filter((i) => /linkPageSlug/.test(i.detail));
     expect(badPageMode.every((i) => !/page-about/.test(i.detail))).toBe(true);
+  });
+});
+
+
+describe("high-reliability nav ops", () => {
+  it("set_nav_items resolves slugs and syncs CSV", () => {
+    const content = createBlankContent("Test");
+    const withAbout = applyAiPatches(content, [
+      { op: "add_page", title: "About", slug: "about", id: "page-about" },
+    ]).content;
+    const home = withAbout.pages[0];
+    const nav = home.blocks.find((b) => b.type === "navbar")!;
+    const { content: next, applied, errors } = applyAiPatches(withAbout, [
+      {
+        op: "set_nav_items",
+        pageId: home.id,
+        blockId: nav.id,
+        items: [
+          { label: { en: "Home", ar: "الرئيسية" }, linkPageSlug: "home" },
+          { label: { en: "About" }, linkPageSlug: "page-about" }, // id → slug
+        ],
+      },
+    ]);
+    expect(errors).toEqual([]);
+    expect(applied).toBe(1);
+    const items = next.pages[0].blocks.find((b) => b.id === nav.id)!.props
+      .navItems as Array<{ linkMode: string; linkPageSlug: string; actionType?: string }>;
+    expect(items).toHaveLength(2);
+    expect(items[0].linkMode).toBe("page");
+    expect(items[0].linkPageSlug).toBe("home");
+    expect(items[1].linkPageSlug).toBe("about");
+    expect(items[0].actionType).toBe("link");
+    expect(next.pages[0].blocks.find((b) => b.id === nav.id)!.props.links).toBeTruthy();
+    expect(verifySiteContentLinks(next).ok).toBe(true);
+  });
+
+  it("wire_nav_to_pages syncs all navbars", () => {
+    const content = createBlankContent("Test");
+    const withAbout = applyAiPatches(content, [
+      { op: "add_page", title: "About", slug: "about", id: "page-about" },
+    ]).content;
+    const about = withAbout.pages.find((p) => p.slug === "about")!;
+    about.blocks.unshift({
+      id: "nav-about",
+      type: "navbar",
+      props: { navItems: [] },
+    });
+    const { content: next, applied, errors } = applyAiPatches(withAbout, [
+      { op: "wire_nav_to_pages" },
+    ]);
+    expect(errors).toEqual([]);
+    expect(applied).toBe(1);
+    for (const p of next.pages) {
+      const nav = p.blocks.find((b) => b.type === "navbar");
+      if (!nav) continue;
+      const items = nav.props.navItems as Array<{ linkPageSlug: string }>;
+      expect(items.some((it) => it.linkPageSlug === "about")).toBe(true);
+      expect(items.some((it) => it.linkPageSlug === "home" || it.linkPageSlug === p.slug)).toBe(
+        true
+      );
+    }
+  });
+
+  it("set_button_link wires hero CTA to page slug", () => {
+    const content = createBlankContent("Test");
+    const withAbout = applyAiPatches(content, [
+      { op: "add_page", title: "About", slug: "about" },
+    ]).content;
+    const home = withAbout.pages[0];
+    const hero = home.blocks.find((b) => b.type === "hero") || home.blocks[0];
+    const { content: next, applied, errors } = applyAiPatches(withAbout, [
+      {
+        op: "set_button_link",
+        pageId: home.id,
+        blockId: hero.id,
+        linkMode: "page",
+        linkPageSlug: "about",
+        key: "ctaHref",
+      },
+    ]);
+    expect(errors).toEqual([]);
+    expect(applied).toBe(1);
+    const props = next.pages[0].blocks.find((b) => b.id === hero.id)!.props as Record<
+      string,
+      unknown
+    >;
+    expect(props.linkMode).toBe("page");
+    expect(props.linkPageSlug).toBe("about");
+  });
+
+  it("coerces update_nav alias and navItems-only update_props to set_nav_items", () => {
+    const content = createBlankContent("Test");
+    const page = content.pages[0];
+    const nav = page.blocks.find((b) => b.type === "navbar")!;
+    const repaired = repairAiPatchesResponse({
+      patches: [
+        {
+          operation: "update_nav",
+          pageId: page.id,
+          blockId: nav.id,
+          items: [{ label: "Home", linkPageSlug: "home" }],
+        },
+        {
+          op: "update_props",
+          pageId: page.id,
+          blockId: nav.id,
+          props: {
+            navItems: [{ label: { en: "Home" }, linkPageSlug: "home" }],
+          },
+        },
+      ],
+    });
+    expect(repaired!.patches.every((p) => p.op === "set_nav_items")).toBe(true);
+  });
+});
+
+describe("self-heal + honest summary + intent", () => {
+  it("bad page-mode slug becomes good after coerce/sync heal", () => {
+    const content = createBlankContent("Test");
+    const withAbout = applyAiPatches(content, [
+      { op: "add_page", title: "About", slug: "about", id: "page-about" },
+    ]).content;
+    const home = withAbout.pages[0];
+    const nav = home.blocks.find((b) => b.type === "navbar")!;
+    nav.props = {
+      ...nav.props,
+      navItems: [
+        {
+          id: "n1",
+          label: { en: "About" },
+          linkMode: "page",
+          linkPageSlug: "page-about",
+          href: "",
+        },
+      ],
+    };
+    expect(verifySiteContentLinks(withAbout).ok).toBe(false);
+    const healed = runDeterministicLinkHeal(withAbout);
+    const items = healed.pages[0].blocks.find((b) => b.id === nav.id)!.props
+      .navItems as Array<{ linkPageSlug: string; linkMode: string }>;
+    expect(items.some((it) => it.linkMode === "page" && it.linkPageSlug === "about")).toBe(
+      true
+    );
+    const bad = verifySiteContentLinks(healed).issues.filter((i) =>
+      /page-about/.test(i.detail)
+    );
+    expect(bad).toEqual([]);
+  });
+
+  it("honest summary when issues remain after apply", () => {
+    const content = createBlankContent("Test");
+    const page = content.pages[0];
+    const nav = page.blocks.find((b) => b.type === "navbar")!;
+    const { content: next, applied } = applyAiPatches(content, [
+      {
+        op: "set_nav_items",
+        pageId: page.id,
+        blockId: nav.id,
+        items: [
+          { label: "Ghost", linkMode: "page", linkPageSlug: "no-such-page" },
+        ],
+      },
+    ]);
+    const issues = verifySiteContentLinks(next).issues;
+    expect(issues.length).toBeGreaterThan(0);
+    const summary = buildHonestApplySummary({
+      modelSummary: "All nav links fixed perfectly",
+      applied,
+      errors: [],
+      issues,
+      platformLang: "en",
+    });
+    expect(summary).toMatch(/link issues remain|not verified/i);
+    expect(summary).not.toMatch(/^All nav links fixed/);
+  });
+
+  it("intent hint helper covers nav and design", () => {
+    const classes = detectAiIntentClasses("أضف صفحة about واربط النافبار");
+    expect(classes).toContain("nav_pages");
+    const hint = buildIntentFocusHint(classes);
+    expect(hint).toMatch(/set_nav_items|wire_nav_to_pages/);
+    expect(hint.split("\n").length).toBeLessThanOrEqual(8);
+
+    const design = detectAiIntentClasses("improve design colors to teal");
+    expect(design).toContain("design_tokens");
+    expect(buildIntentFocusHint(design)).toMatch(/update_tokens/);
+  });
+
+  it("shouldRunSemanticRepair when issues or partial nav intent", () => {
+    expect(
+      shouldRunSemanticRepair({
+        userMessage: "fix nav",
+        issues: [{ pageId: "p", blockId: "b", detail: "bad" }],
+        applied: 1,
+        patchCount: 1,
+      })
+    ).toBe(true);
+    expect(
+      shouldRunSemanticRepair({
+        userMessage: "add about page to navbar",
+        issues: [],
+        applied: 1,
+        patchCount: 3,
+      })
+    ).toBe(true);
+    expect(
+      shouldRunSemanticRepair({
+        userMessage: "hello",
+        issues: [],
+        applied: 1,
+        patchCount: 1,
+      })
+    ).toBe(false);
   });
 });

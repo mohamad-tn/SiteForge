@@ -34,6 +34,8 @@ type ChatMsg = {
   status?: string;
   attachmentMeta?: AttMeta[] | null;
   steps?: Step[] | null;
+  linkIssues?: Array<{ pageId: string; blockId: string; detail: string }> | null;
+  linksOk?: boolean;
 };
 
 type LocalAttachment = AiAttachment & { id: string; previewUrl?: string };
@@ -74,6 +76,10 @@ function stepLabel(
     repairing: t("aiStepRepairing"),
     repaired: t("aiStepRepaired"),
     applying: t("aiStepApplying"),
+    "nav-sync": t("aiStepNavSync"),
+    verifying: t("aiStepVerifying"),
+    repairing_links: t("aiStepRepairingLinks"),
+    rechecking: t("aiStepRechecking"),
     done: t("aiStepDone"),
   };
   return map[step] || step;
@@ -693,6 +699,8 @@ export function AiEditorPanel({
               rawSnippet?: string;
               messageId?: string;
               steps?: Step[];
+              linkIssues?: Array<{ pageId: string; blockId: string; detail: string }>;
+              linksOk?: boolean;
               quota?: { remaining: number; dailyLimit: number; usedToday: number };
             };
             if (evt.type === "started" && evt.messageId) {
@@ -724,6 +732,8 @@ export function AiEditorPanel({
                 text: summary,
                 status: appliedN === 0 ? "error" : "ok",
                 steps: finalSteps,
+                linkIssues: evt.linkIssues || null,
+                linksOk: evt.linksOk,
               });
               if (appliedN === 0) markSendFailed();
               else markSendSucceeded();
@@ -739,7 +749,10 @@ export function AiEditorPanel({
               if (evt.errors?.length) {
                 setMessages((m) => [
                   ...m,
-                  { role: "system", text: evt.errors!.slice(0, 3).join(" · ") },
+                  {
+                    role: "system",
+                    text: `${t("aiWarnings")}: ${evt.errors!.slice(0, 5).join(" · ")}`,
+                  },
                 ]);
               }
             } else if (evt.type === "cancelled") {
@@ -953,7 +966,8 @@ export function AiEditorPanel({
 
           {messages.length === 0 && !disabledReason && historyLoaded ? (
             <div className="rounded-2xl border border-dashed border-[var(--border)] bg-[var(--surface)] p-4 text-sm leading-6 text-[var(--muted)]">
-              {t("aiEmptyHint")}
+              <p>{t("aiEmptyHint")}</p>
+              <p className="mt-2 text-[11px] opacity-90">{t("aiCapabilityTip")}</p>
             </div>
           ) : null}
 
@@ -971,6 +985,25 @@ export function AiEditorPanel({
               }`}
             >
               {m.text}
+              {m.role === "assistant" && m.linksOk === true ? (
+                <div className="mt-2">
+                  <span className="inline-flex items-center rounded-full border border-teal-500/35 bg-teal-50/80 px-2 py-0.5 text-[10px] font-semibold text-teal-900 dark:bg-teal-950/40 dark:text-teal-100">
+                    {t("aiLinksVerified")}
+                  </span>
+                </div>
+              ) : null}
+              {m.role === "assistant" &&
+              m.linksOk === false &&
+              (m.linkIssues?.length || 0) > 0 ? (
+                <div className="mt-2">
+                  <span className="inline-flex items-center rounded-full border border-amber-500/40 bg-amber-50/80 px-2 py-0.5 text-[10px] font-semibold text-amber-950 dark:bg-amber-950/40 dark:text-amber-50">
+                    {t("aiLinksIssues").replace(
+                      "{n}",
+                      String(m.linkIssues!.length)
+                    )}
+                  </span>
+                </div>
+              ) : null}
               {m.attachmentMeta?.length ? (
                 <AttChips
                   items={(m.attachmentMeta || []).map((a, idx) => ({
