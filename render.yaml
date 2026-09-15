@@ -14,7 +14,7 @@ services:
     region: frankfurt
     rootDir: .
     buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm build
-    startCommand: pnpm start
+    startCommand: pnpm exec next start --hostname 0.0.0.0 --port $PORT
     healthCheckPath: /login
     autoDeployTrigger: commit
     envVars:
