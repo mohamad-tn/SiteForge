@@ -1541,12 +1541,65 @@ export function detectAiIntentClasses(message: string): AiIntentClass[] {
   return out;
 }
 
+/** Rich multi-goal intents (redesign / branding / school / nav+pages / forms). */
+export function isRichAiIntent(message: string): boolean {
+  const m = (message || "").toLowerCase();
+  if (
+    /redesign|re-?design|إعادة\s*هيكل|اعادة\s*هيكل|إعادة\s*تصميم|اعادة\s*تصميم|تجديد|احتراف|professional|brand(ing)?|هوية|مدرسة|روض|school|kindergarten|nursery|نموذج|\bforms?\b|contact\s*form|روابط|صفحات|صفحة|wire\s*nav|navbar|set_nav|ألوان\s*و\s*صور|صور\s*و|images?\s*and|and\s*images|اسم\s*(الموقع|المدرسة|الروضة)|site\s*name|school\s*name|update.?copy|\bhero\b|full\s*site|كامل/.test(
+      m
+    )
+  ) {
+    return true;
+  }
+  const classes = detectAiIntentClasses(message);
+  return classes.length >= 2;
+}
+
+/** True when the user only asked for colors/theme tokens (safe for prose hex synth). */
+export function isColorOnlyAiIntent(message: string): boolean {
+  if (isRichAiIntent(message)) return false;
+  const classes = detectAiIntentClasses(message);
+  if (classes.length === 1 && classes[0] === "design_tokens") return true;
+  if (classes.length === 0) {
+    return /#(?:[0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})\b|لون|ألوان|color|colours?|palette|ثيم|theme|token/i.test(
+      message || ""
+    );
+  }
+  return false;
+}
+
+/** Under-applied: rich intent but too few / tokens-only patches. */
+export function isUnderAppliedForIntent(
+  userMessage: string,
+  patches: AiPatch[],
+  applied: number
+): boolean {
+  if (!isRichAiIntent(userMessage)) return false;
+  if (patches.length <= 2) return true;
+  if (patches.length > 0 && patches.every((p) => p.op === "update_tokens")) {
+    return true;
+  }
+  if (applied < 3) return true;
+  return false;
+}
+
 /** 4–8 line focus hint injected into the user payload (not a second system prompt). */
-export function buildIntentFocusHint(classes: AiIntentClass[]): string {
-  if (!classes.length) {
+export function buildIntentFocusHint(
+  classes: AiIntentClass[],
+  userMessage?: string
+): string {
+  if (!classes.length && !(userMessage && isRichAiIntent(userMessage))) {
     return "Focus: prefer few precise patches; use real pageId/blockId from index; verify linkMode page + slug.";
   }
   const lines: string[] = ["Focus:"];
+  if (
+    (userMessage && isRichAiIntent(userMessage)) ||
+    classes.length >= 2
+  ) {
+    lines.push(
+      "- Broad redesign/branding: return at least 8 patches covering update_tokens, update_copy (hero/navbar), wire_nav_to_pages/set_nav_items, set_button_link, form styles, set_seo."
+    );
+  }
   if (classes.includes("nav_pages")) {
     lines.push(
       "- Wire ALL navbars with set_nav_items and/or wire_nav_to_pages; linkMode page + real slug (not id/title/href)."
@@ -1755,6 +1808,33 @@ ${JSON.stringify(opts.index).slice(0, 8000)}
 `;
 }
 
+/** Expansion pass when rich intent was under-applied (tokens-only / too few patches). */
+export function buildExpansionUserPrompt(opts: {
+  userMessage: string;
+  index: ReturnType<typeof buildCompactRepairIndex>;
+  existingPatches?: AiPatch[];
+}): string {
+  const ops = (opts.existingPatches || []).map((p) => p.op).join(", ") || "(none)";
+  return `SiteForge expansion: previous reply under-applied a rich redesign/branding request.
+Return ONLY {"summary":"...","patches":[...]} — allowlisted ops. You MUST return many patches (≥8) covering this checklist:
+1) update_tokens (colors/fonts/radius) matching the brand
+2) update_copy on hero + navbar brand/name (all locales in draft)
+3) wire_nav_to_pages and/or set_nav_items with real page slugs from the index
+4) set_button_link on hero/CTA buttons
+5) form labels/fields styles (update_copy / set_part_style on form blocks)
+6) set_seo titles/descriptions on main pages
+Use REAL pageId/blockId/slug from the index. Max 24 patches. No markdown fences.
+
+User goal:
+${(opts.userMessage || "").slice(0, 1200)}
+
+Already applied ops (do not stop at tokens alone): ${ops}
+
+Current draft index (compact JSON):
+${JSON.stringify(opts.index).slice(0, 8000)}
+`;
+}
+
 /** Rewrite model summary when verifier finds broken links — never trust «nav fixed» claims. */
 export function buildHonestApplySummary(opts: {
   modelSummary?: string;
@@ -1763,13 +1843,46 @@ export function buildHonestApplySummary(opts: {
   issues: LinkVerifyIssue[];
   healed?: boolean;
   platformLang: "ar" | "en";
+  userMessage?: string;
+  patches?: AiPatch[];
+  underApplied?: boolean;
+  synthesizedOnly?: boolean;
 }): string {
-  const { modelSummary, applied, issues, healed, platformLang } = opts;
+  const {
+    modelSummary,
+    applied,
+    issues,
+    healed,
+    platformLang,
+    userMessage,
+    patches,
+    underApplied,
+    synthesizedOnly,
+  } = opts;
   const ar = platformLang === "ar";
   const issueBits = issues
     .slice(0, 4)
     .map((i) => i.detail)
     .join("; ");
+  const tokensOnly =
+    !!patches?.length && patches.every((p) => p.op === "update_tokens");
+  const rich = userMessage ? isRichAiIntent(userMessage) : false;
+
+  if (synthesizedOnly || (rich && tokensOnly)) {
+    return (
+      ar
+        ? `طُبّقت ألوان/رموز فقط (${applied}) — طلبك كان أوسع (إعادة تصميم/هوية/صفحات/نماذج). الرد لم يكن تعديلات JSON كاملة.`
+        : `Only token/color changes applied (${applied}) — your request was broader (redesign/brand/pages/forms). Model reply was not full valid patches.`
+    ).slice(0, 500);
+  }
+
+  if (underApplied && issues.length === 0) {
+    return (
+      ar
+        ? `طُبّق ${applied} تعديلاً فقط — قد يكون ناقصاً لطلب إعادة التصميم؛ يُفضّل إعادة المحاولة إن لم يظهر التوسيع.`
+        : `Only ${applied} change(s) applied — may be incomplete for a redesign request; retry if expansion did not run.`
+    ).slice(0, 500);
+  }
 
   if (applied === 0 && !healed) {
     return (
@@ -2184,7 +2297,10 @@ export function repairAiPatchesResponse(raw: unknown): AiPatchesResponse | null 
   return { summary, patches };
 }
 
-/** Last-resort: pull hex colors from prose into a safe update_tokens patch. */
+/**
+ * Last-resort: pull hex colors from prose into a safe update_tokens patch.
+ * Must NOT be treated as success for rich redesign intents — see parseAiPatchesResponse.
+ */
 export function synthesizeTokensFromProse(text: string): AiPatchesResponse | null {
   const hexes = text.match(/#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})\b/g);
   if (!hexes?.length) return null;
@@ -2208,14 +2324,66 @@ export type ParseAiPatchesResult = {
   raw: unknown | null;
   /** Truncated zod / repair notes for repair prompt + UI */
   validationIssues?: string;
+  /** True when `data` came solely from prose hex synthesis */
+  synthesizedFromProse?: boolean;
+  /** Hex colors found but not promoted to successful patches */
+  colorHint?: AiPatchesResponse;
 };
 
+export type ParseAiPatchesOptions = {
+  /** Explicit override; default derived from userMessage via isColorOnlyAiIntent */
+  allowColorSynth?: boolean;
+  /** User goal — required to decide whether color synth may count as success */
+  userMessage?: string;
+};
+
+const COLOR_SYNTH_BLOCKED_HINT =
+  "Model reply was not valid patch JSON; colors in prose were NOT applied as success for this (non-color-only) intent — retry or expand. / الرد لم يكن تعديلات JSON صالحة؛ لن تُعتمد الألوان المستخرجة كنجاح لهذا الطلب — أعد المحاولة أو توسيع.";
+
 /** Parse + validate model text; applies deterministic repair when needed. */
-export function parseAiPatchesResponse(text: string): ParseAiPatchesResult {
+export function parseAiPatchesResponse(
+  text: string,
+  opts?: ParseAiPatchesOptions
+): ParseAiPatchesResult {
+  const allowSynth =
+    opts?.allowColorSynth ??
+    (opts?.userMessage ? isColorOnlyAiIntent(opts.userMessage) : false);
+
+  const attachBlockedSynth = (
+    base: ParseAiPatchesResult,
+    synth: AiPatchesResponse
+  ): ParseAiPatchesResult => ({
+    ...base,
+    colorHint: synth,
+    validationIssues: base.validationIssues
+      ? `${base.validationIssues} | ${COLOR_SYNTH_BLOCKED_HINT}`
+      : COLOR_SYNTH_BLOCKED_HINT,
+  });
+
   const raw = extractJsonObject(text);
   if (raw == null) {
     const synth = synthesizeTokensFromProse(text);
-    if (synth) return { data: synth, repaired: true, raw: null, validationIssues: "no JSON; synthesized colors" };
+    if (synth && allowSynth) {
+      return {
+        data: synth,
+        repaired: true,
+        raw: null,
+        synthesizedFromProse: true,
+        validationIssues: "no JSON; synthesized colors",
+      };
+    }
+    if (synth) {
+      return attachBlockedSynth(
+        {
+          data: null,
+          repaired: false,
+          raw: null,
+          validationIssues:
+            "No JSON object found. styles values must be strings; required pageId/blockId from draft. / لم يُعثر على JSON — قيم styles نصوص، وpageId/blockId من المسودة.",
+        },
+        synth
+      );
+    }
     return {
       data: null,
       repaired: false,
@@ -2244,8 +2412,20 @@ export function parseAiPatchesResponse(text: string): ParseAiPatchesResult {
     }
   }
   const synth = synthesizeTokensFromProse(text);
+  if (synth && allowSynth) {
+    return {
+      data: synth,
+      repaired: true,
+      raw,
+      synthesizedFromProse: true,
+      validationIssues: directIssues,
+    };
+  }
   if (synth) {
-    return { data: synth, repaired: true, raw, validationIssues: directIssues };
+    return attachBlockedSynth(
+      { data: null, repaired: false, raw, validationIssues: directIssues },
+      synth
+    );
   }
   return { data: null, repaired: false, raw, validationIssues: directIssues };
 }

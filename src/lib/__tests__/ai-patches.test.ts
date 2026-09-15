@@ -1,11 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
   applyAiPatches,
+  buildCompactRepairIndex,
+  buildExpansionUserPrompt,
   buildHonestApplySummary,
   buildIntentFocusHint,
   coerceNavbarLinkProps,
   detectAiIntentClasses,
   extractJsonObject,
+  isRichAiIntent,
+  isUnderAppliedForIntent,
   parseAiPatchesResponse,
   repairAiPatchesResponse,
   resolvePageSlugRef,
@@ -13,6 +17,7 @@ import {
   shouldRunSemanticRepair,
   stripTrailingCommas,
   syncAllNavbarsToPages,
+  synthesizeTokensFromProse,
   verifySiteContentLinks,
 } from "@/lib/ai/patches";
 import { createBlankContent, defaultPropsFor } from "@/lib/design";
@@ -811,5 +816,81 @@ describe("self-heal + honest summary + intent", () => {
         patchCount: 1,
       })
     ).toBe(false);
+  });
+
+  it("does not treat color synth as success for school redesign prose", () => {
+    const redesign =
+      "أعد تصميم موقع مدرسة الورود الصغار بالكامل: غيّر الاسم والألوان والصور واربط الأزرار وأضف نموذج تواصل";
+    expect(isRichAiIntent(redesign)).toBe(true);
+    const prose =
+      "Sure! Use primary #e11d48 and accent #fb7185 for the school brand. I updated everything.";
+    const synth = synthesizeTokensFromProse(prose);
+    expect(synth).not.toBeNull();
+    expect(synth!.patches).toHaveLength(1);
+    expect(synth!.patches[0].op).toBe("update_tokens");
+
+    const blocked = parseAiPatchesResponse(prose, { userMessage: redesign });
+    expect(blocked.data).toBeNull();
+    expect(blocked.synthesizedFromProse).toBeFalsy();
+    expect(blocked.colorHint?.patches[0].op).toBe("update_tokens");
+    expect(blocked.validationIssues || "").toMatch(/not valid patch JSON|لم يكن تعديلات/i);
+
+    const colorOnly = parseAiPatchesResponse(prose, {
+      userMessage: "change colors to #e11d48 and #fb7185",
+    });
+    expect(colorOnly.data).not.toBeNull();
+    expect(colorOnly.synthesizedFromProse).toBe(true);
+    expect(colorOnly.data!.patches[0].op).toBe("update_tokens");
+  });
+
+  it("isUnderAppliedForIntent for Arabic school redesign + 1 update_tokens", () => {
+    const msg =
+      "إعادة تصميم مدرسة الورود الصغار — اسم احترافي، ألوان، صور، روابط، نموذج";
+    expect(
+      isUnderAppliedForIntent(
+        msg,
+        [{ op: "update_tokens", tokens: { colors: { primary: "#e11d48" } } }],
+        1
+      )
+    ).toBe(true);
+    expect(
+      isUnderAppliedForIntent(
+        "change primary color to teal",
+        [{ op: "update_tokens", tokens: { colors: { primary: "#0d9488" } } }],
+        1
+      )
+    ).toBe(false);
+  });
+
+  it("expansion prompt builder includes non-empty checklist", () => {
+    const content = createBlankContent("School");
+    const index = buildCompactRepairIndex(content);
+    const prompt = buildExpansionUserPrompt({
+      userMessage: "إعادة تصميم مدرسة الورود الصغار",
+      index,
+      existingPatches: [
+        { op: "update_tokens", tokens: { colors: { primary: "#e11d48" } } },
+      ],
+    });
+    expect(prompt.length).toBeGreaterThan(80);
+    expect(prompt).toMatch(/update_tokens/);
+    expect(prompt).toMatch(/update_copy/);
+    expect(prompt).toMatch(/wire_nav_to_pages|set_nav_items/);
+    expect(prompt).toMatch(/set_button_link/);
+    expect(prompt).toMatch(/set_seo/);
+    expect(prompt).toMatch(/≥8|>=8|at least 8|checklist/i);
+  });
+
+  it("honest summary flags tokens-only vs rich redesign", () => {
+    const summary = buildHonestApplySummary({
+      modelSummary: "Extracted colors from reply / ألوان مستخرجة من الرد",
+      applied: 1,
+      errors: [],
+      issues: [],
+      platformLang: "ar",
+      userMessage: "إعادة تصميم مدرسة الورود الصغار مع نموذج وروابط",
+      patches: [{ op: "update_tokens", tokens: { colors: { primary: "#e11d48" } } }],
+    });
+    expect(summary).toMatch(/ألوان|رموز|أوسع/);
   });
 });

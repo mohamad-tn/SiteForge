@@ -8,10 +8,12 @@ import {
   applyAiPatches,
   buildAiRepairUserPrompt,
   buildCompactRepairIndex,
+  buildExpansionUserPrompt,
   buildHonestApplySummary,
   buildIntentFocusHint,
   buildSemanticRepairUserPrompt,
   detectAiIntentClasses,
+  isUnderAppliedForIntent,
   parseAiPatchesResponse,
   runDeterministicLinkHeal,
   shouldAutoHealNavbars,
@@ -242,7 +244,7 @@ export async function POST(req: Request) {
         const adapter = getProviderAdapter(resolved.provider as AiProviderId);
 
         const intentClasses = detectAiIntentClasses(parsed.data.message);
-        const focusHint = buildIntentFocusHint(intentClasses);
+        const focusHint = buildIntentFocusHint(intentClasses, parsed.data.message);
 
         const userText = [
           `Site id: ${parsed.data.siteId}`,
@@ -298,7 +300,9 @@ export async function POST(req: Request) {
         const clientGone = !sseOpen || disconnectSignal.aborted;
 
         pushStep("parsing", "Parsing patches… / تحليل التعديلات…");
-        let parsedPatches = parseAiPatchesResponse(result.text);
+        let parsedPatches = parseAiPatchesResponse(result.text, {
+          userMessage: parsed.data.message,
+        });
 
         if (!parsedPatches.data) {
           pushStep(
@@ -329,7 +333,9 @@ export async function POST(req: Request) {
               tokensIn: (result.tokensIn || 0) + (repairResult.tokensIn || 0),
               tokensOut: (result.tokensOut || 0) + (repairResult.tokensOut || 0),
             };
-            parsedPatches = parseAiPatchesResponse(result.text);
+            parsedPatches = parseAiPatchesResponse(result.text, {
+              userMessage: parsed.data.message,
+            });
           } catch (repairErr) {
             if (
               repairErr instanceof Error &&
@@ -430,11 +436,109 @@ export async function POST(req: Request) {
         );
         let linkCheck = verifySiteContentLinks(resultContent);
 
+        let underApplied = isUnderAppliedForIntent(
+          parsed.data.message,
+          parsedPatches.data.patches,
+          totalApplied
+        );
+        const synthesizedOnly = !!parsedPatches.synthesizedFromProse;
+
+        // Expansion: rich intent under-applied even when links look ok
+        if (underApplied && !synthesizedOnly) {
+          pushStep(
+            "expanding",
+            "Expanding edits… / توسيع التعديلات…"
+          );
+          throwIfUserCancelled();
+          try {
+            const expandIndex = buildCompactRepairIndex(resultContent);
+            const expandPrompt = buildExpansionUserPrompt({
+              userMessage: parsed.data.message,
+              index: expandIndex,
+              existingPatches: parsedPatches.data.patches,
+            });
+            const expandResult = await adapter.complete({
+              apiKey: resolved.apiKey,
+              model: resolved.model,
+              maxTokens: resolved.maxTokens,
+              messages: [
+                { role: "system", content: AI_SYSTEM_PROMPT },
+                { role: "user", content: expandPrompt },
+              ],
+            });
+            result = {
+              text: expandResult.text,
+              tokensIn: (result.tokensIn || 0) + (expandResult.tokensIn || 0),
+              tokensOut:
+                (result.tokensOut || 0) + (expandResult.tokensOut || 0),
+            };
+            const expandParsed = parseAiPatchesResponse(expandResult.text, {
+              userMessage: parsed.data.message,
+            });
+            if (expandParsed.data?.patches.length) {
+              const reApplied = applyAiPatches(
+                resultContent,
+                expandParsed.data.patches
+              );
+              resultContent = reApplied.content;
+              totalApplied += reApplied.applied;
+              applyErrors = [...applyErrors, ...reApplied.errors];
+              if (expandParsed.data.summary) {
+                modelSummary = expandParsed.data.summary;
+              }
+              // Merge patch list for under-apply re-check / honest summary
+              parsedPatches = {
+                ...parsedPatches,
+                data: {
+                  summary: modelSummary || parsedPatches.data.summary,
+                  patches: [
+                    ...parsedPatches.data.patches,
+                    ...expandParsed.data.patches,
+                  ],
+                },
+                synthesizedFromProse: false,
+              };
+              if (
+                shouldAutoHealNavbars(
+                  parsed.data.message,
+                  expandParsed.data.patches
+                )
+              ) {
+                const syncedE = syncAllNavbarsToPages(resultContent);
+                if (
+                  JSON.stringify(syncedE) !== JSON.stringify(resultContent)
+                ) {
+                  resultContent = syncedE;
+                  healed = true;
+                }
+              }
+              pushStep(
+                "verifying",
+                "Verifying links after expansion… / التحقق بعد التوسيع…"
+              );
+              linkCheck = verifySiteContentLinks(resultContent);
+            }
+          } catch (expandErr) {
+            if (
+              expandErr instanceof Error &&
+              expandErr.name === "AbortError"
+            ) {
+              throw expandErr;
+            }
+            // keep prior apply result
+          }
+          underApplied = isUnderAppliedForIntent(
+            parsed.data.message,
+            parsedPatches.data?.patches || [],
+            totalApplied
+          );
+        }
+
         const wantsRepair = shouldRunSemanticRepair({
           userMessage: parsed.data.message,
           issues: linkCheck.issues,
           applied: totalApplied,
-          patchCount,
+          patchCount: parsedPatches.data?.patches.length ?? patchCount,
         });
 
         if (wantsRepair) {
@@ -475,7 +579,9 @@ export async function POST(req: Request) {
                 tokensOut:
                   (result.tokensOut || 0) + (semanticResult.tokensOut || 0),
               };
-              const semanticParsed = parseAiPatchesResponse(semanticResult.text);
+              const semanticParsed = parseAiPatchesResponse(semanticResult.text, {
+                userMessage: parsed.data.message,
+              });
               if (semanticParsed.data?.patches.length) {
                 const reApplied = applyAiPatches(
                   resultContent,
@@ -561,6 +667,12 @@ export async function POST(req: Request) {
           !healed &&
           (patchCount === 0 || applied.errors.length > 0);
 
+        const finalUnderApplied = isUnderAppliedForIntent(
+          parsed.data.message,
+          parsedPatches.data?.patches || [],
+          totalApplied
+        );
+
         const summary = emptySoft
           ? AI_EMPTY_PATCHES_HINT
           : buildHonestApplySummary({
@@ -570,19 +682,25 @@ export async function POST(req: Request) {
               issues: linkCheck.issues,
               healed,
               platformLang,
+              userMessage: parsed.data.message,
+              patches: parsedPatches.data?.patches,
+              underApplied: finalUnderApplied,
+              synthesizedOnly: !!parsedPatches.synthesizedFromProse,
             });
 
-        pushStep(
-          "done",
-          totalApplied > 0 || healed
-            ? `Done — ${totalApplied} applied` +
-                (healed ? " (+nav sync)" : "") +
-                (linkCheck.issues.length
-                  ? ` · ${linkCheck.issues.length} link issue(s)`
-                  : " · links ok") +
-                ` / تم — ${totalApplied} تعديلاً`
-            : "Done — nothing applied / تم — بلا تعديلات"
-        );
+        const doneNote = parsedPatches.synthesizedFromProse
+          ? `Incomplete — color synth only (${totalApplied}) / ناقص — ألوان مستخرجة فقط`
+          : finalUnderApplied
+            ? `Partial — ${totalApplied} applied (under-applied for intent) / جزئي — ${totalApplied} (أقل من المطلوب)`
+            : totalApplied > 0 || healed
+              ? `Done — ${totalApplied} applied` +
+                  (healed ? " (+nav sync)" : "") +
+                  (linkCheck.issues.length
+                    ? ` · ${linkCheck.issues.length} link issue(s)`
+                    : " · links ok") +
+                  ` / تم — ${totalApplied} تعديلاً`
+              : "Done — nothing applied / تم — بلا تعديلات";
+        pushStep("done", doneNote);
 
         const status =
           isAiChatCancelled(assistantPartial.id)

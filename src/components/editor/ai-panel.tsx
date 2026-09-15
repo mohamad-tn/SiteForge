@@ -80,6 +80,7 @@ function stepLabel(
     verifying: t("aiStepVerifying"),
     repairing_links: t("aiStepRepairingLinks"),
     rechecking: t("aiStepRechecking"),
+    expanding: t("aiStepExpanding"),
     done: t("aiStepDone"),
   };
   return map[step] || step;

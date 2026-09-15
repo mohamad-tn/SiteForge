@@ -195,18 +195,40 @@ export const googleAdapter: AiProviderAdapter = {
       .filter((m) => m.role === "system")
       .map((m) => asPlainText(m.content))
       .join("\n");
-    const res = await fetch(url, {
+    const buildBody = (jsonMime: boolean) => ({
+      contents,
+      systemInstruction: system ? { parts: [{ text: system }] } : undefined,
+      generationConfig: {
+        maxOutputTokens: opts.maxTokens,
+        temperature: 0.2,
+        ...(jsonMime ? { responseMimeType: "application/json" as const } : {}),
+      },
+    });
+
+    // Prefer JSON mime for reliable patch objects; retry without if API rejects it.
+    let res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents,
-        systemInstruction: system ? { parts: [{ text: system }] } : undefined,
-        generationConfig: { maxOutputTokens: opts.maxTokens, temperature: 0.2 },
-      }),
+      body: JSON.stringify(buildBody(true)),
     });
     if (!res.ok) {
       const body = await res.text().catch(() => "");
-      throwProviderHttpError("google", res.status, body);
+      const mimeRejected =
+        res.status === 400 ||
+        /mime|responseMimeType|application\/json|invalid.*config/i.test(body);
+      if (mimeRejected) {
+        res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(buildBody(false)),
+        });
+        if (!res.ok) {
+          const body2 = await res.text().catch(() => "");
+          throwProviderHttpError("google", res.status, body2 || body);
+        }
+      } else {
+        throwProviderHttpError("google", res.status, body);
+      }
     }
     const data = (await res.json()) as {
       candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
